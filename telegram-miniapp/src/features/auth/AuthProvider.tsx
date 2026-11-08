@@ -205,6 +205,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     };
   }, [checkAuth]);
 
+  // Refresca perfil al volver a la app (Bunz, Hops, nivel, visitas) para que los
+  // resets y cambios de saldo se reflejen sin cerrar sesión.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkAuth();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [checkAuth]);
+
   // Push Notifications native registration (iOS APNs / Android FCM)
   // Gate: respeta los ajustes del usuario (settings → push nativo).
   const [pushSettingVersion, setPushSettingVersion] = useState(0);

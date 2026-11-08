@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface TabsProps {
@@ -56,12 +55,7 @@ export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, is
             {tab}
           </span>
           {activeTab === tab && (
-            <motion.div
-              layoutId="active-tab"
-              className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#E91E63]"
-              initial={false}
-              transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-            />
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#E91E63]" />
           )}
         </button>
       ))}

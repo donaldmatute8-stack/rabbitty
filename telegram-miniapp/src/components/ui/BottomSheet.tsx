@@ -16,6 +16,8 @@ interface BottomSheetProps {
   maxHeight?: string;
   /** Glassmorphism para menús de contactos/settings del chat. */
   glass?: boolean;
+  /** Ocupa toda la pantalla en lugar de una hoja inferior. */
+  fullScreen?: boolean;
 }
 
 export function BottomSheet({
@@ -28,6 +30,7 @@ export function BottomSheet({
   showCloseButton = true,
   maxHeight = '80vh',
   glass = false,
+  fullScreen = false,
 }: BottomSheetProps) {
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
@@ -68,26 +71,34 @@ export function BottomSheet({
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={cn(
-              'fixed bottom-0 left-0 right-0 z-[200]',
-              'bg-[var(--bg-elevated)] rounded-t-[var(--radius-xl)]',
+              'fixed z-[200]',
+              fullScreen ? 'inset-0 rounded-none' : 'bottom-0 left-0 right-0 rounded-t-[var(--radius-xl)]',
+              'bg-[var(--bg-elevated)]',
               'flex flex-col',
               className
             )}
             style={{
-              maxHeight,
+              maxHeight: fullScreen ? '100dvh' : maxHeight,
+              height: fullScreen ? '100dvh' : undefined,
+              ...(fullScreen
+                ? {
+                    paddingTop: 'var(--safe-top, 0px)',
+                    paddingBottom: 'var(--safe-bottom, 0px)',
+                  }
+                : {}),
               ...(glass
                 ? {
                     background: 'var(--glass-bg)',
                     backdropFilter: 'blur(28px) saturate(160%)',
                     WebkitBackdropFilter: 'blur(28px) saturate(160%)',
-                    borderTop: '1px solid var(--glass-border)',
-                    boxShadow: '0 -24px 60px rgba(0,0,0,0.45)',
+                    borderTop: fullScreen ? 'none' : '1px solid var(--glass-border)',
+                    boxShadow: fullScreen ? 'none' : '0 -24px 60px rgba(0,0,0,0.45)',
                   }
                 : {}),
             }}
           >
             {/* Handle */}
-            {showHandle && (
+            {showHandle && !fullScreen && (
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full bg-[var(--border-strong)]" />
               </div>

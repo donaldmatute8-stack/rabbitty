@@ -12,7 +12,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { BunzyUpdateCard } from '@/components/chat/BunzyUpdateCard';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
-import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone, Newspaper } from 'lucide-react';
+import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone, Newspaper, Paperclip, FileText } from 'lucide-react';
 
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
 import { ensureIdentity, getDeviceId } from '@/lib/e2e/identity';
@@ -1601,8 +1601,9 @@ export default function ChatRoomPage() {
   const uploadChatMedia = async (
     blob: Blob,
     durationMs: number,
-    kind: 'voice' | 'image',
+    kind: 'voice' | 'image' | 'file',
     encrypt = false,
+    fileName?: string,
   ): Promise<{ key: string } | null> => {
     try {
       const id = conversationIdRef.current;
@@ -1623,7 +1624,11 @@ export default function ChatRoomPage() {
         if (k.toLowerCase() !== 'content-type') clean[k] = String(v);
       }
       const form = new FormData();
-      form.append('file', outgoing, kind === 'voice' ? 'voice.webm' : 'image.webp');
+      form.append(
+        'file',
+        outgoing,
+        fileName || (kind === 'voice' ? 'voice.webm' : kind === 'image' ? 'image.webp' : 'archivo')
+      );
       form.append('conversationId', id);
       form.append('durationMs', String(Math.round(durationMs || 0)));
       const res = await fetch('/api/chat/media', { method: 'POST', headers: clean, body: form });
@@ -2129,6 +2134,7 @@ export default function ChatRoomPage() {
   // Borrador de foto: se elige, se previsualiza y AHÍ se decide "una vez".
   // Por defecto va normal (como WhatsApp).
   const [photoDraft, setPhotoDraft] = useState<{ file: File; url: string; viewOnce: boolean } | null>(null);
+  const [fileDraft, setFileDraft] = useState<{ file: File } | null>(null);
   // Menú de acciones por mensaje (reaccionar / editar / eliminar)
   const [msgMenu, setMsgMenu] = useState<Message | null>(null);
   const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2167,6 +2173,71 @@ export default function ChatRoomPage() {
   const discardPhotoDraft = () => {
     if (photoDraft?.url) { try { URL.revokeObjectURL(photoDraft.url); } catch { /* noop */ } }
     setPhotoDraft(null);
+  };
+
+  const pickFile = (file: File | null) => {
+    if (!file || !conversationId) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('El archivo es muy grande (máx 5 MB)', 'error');
+      return;
+    }
+    PlatformBridge.hapticFeedback('light');
+    setFileDraft({ file });
+  };
+
+  const sendFileDraft = async () => {
+    if (!fileDraft || !conversationId || sending) return;
+    const file = fileDraft.file;
+    setFileDraft(null);
+    PlatformBridge.hapticFeedback('medium');
+    setSending(true);
+    try {
+      const uploaded = await uploadChatMedia(file, 0, 'file', Boolean(e2eKey), file.name);
+      if (!uploaded) { showToast('No se pudo subir el archivo', 'error'); return; }
+
+      tempCounterRef.current += 1;
+      const tempId = `temp-${tempCounterRef.current}`;
+      const meta = {
+        kind: 'FILE',
+        key: uploaded.key,
+        name: file.name,
+        mime: file.type,
+        size: file.size,
+        e2e: Boolean(e2eKey),
+      } as unknown as MessageMetadata;
+      const optimistic: Message = {
+        id: tempId,
+        senderId: myParticipantId || user?.id || '',
+        content: `📎 ${file.name}`,
+        createdAt: new Date().toISOString(),
+        type: 'FILE',
+        metadata: meta,
+      };
+      setMessages((prev) => [...prev, optimistic]);
+
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId, targetId,
+          content: `📎 ${file.name}`,
+          type: 'FILE', metadata: meta,
+          clientMessageId: `file_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success && data.message) {
+        const real = data.message as Message;
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? real : m)));
+      } else {
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, content: `📎 ${file.name} (no enviado)` } : m)));
+      }
+    } catch {
+      showToast('No se pudo enviar el archivo', 'error');
+    } finally {
+      setSending(false);
+    }
   };
 
   const sendPhotoDraft = async () => {
@@ -2362,6 +2433,52 @@ export default function ChatRoomPage() {
           />
         );
       }
+      // ── Archivos (PDF, Word, Excel, TXT) ──
+      if (m.kind === 'FILE' && typeof m.key === 'string') {
+        const key = m.key as string;
+        const fileName = typeof m.name === 'string' && m.name ? m.name : 'Archivo';
+        const fileSize = typeof m.size === 'number' ? m.size : 0;
+        const fileMime = typeof m.mime === 'string' ? m.mime : '';
+        const src = `/api/chat/media/${key.split('/').map(encodeURIComponent).join('/')}`;
+        const sizeLabel = fileSize > 1024 * 1024
+          ? `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
+          : `${Math.max(1, Math.round(fileSize / 1024))} KB`;
+        return (
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            download={fileName}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              minWidth: 210,
+              maxWidth: 280,
+              padding: '11px 12px',
+              borderRadius: 14,
+              background: isMe ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.18)',
+              border: '1px solid rgba(255,255,255,0.16)',
+              color: '#fff',
+              textDecoration: 'none',
+            }}
+          >
+            <span style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <FileText size={17} />
+            </span>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 12.5, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fileName}
+              </span>
+              <span style={{ display: 'block', fontSize: 10, opacity: 0.65, marginTop: 1 }}>
+                {sizeLabel}{fileMime ? ` · ${fileMime.split('/')[1]?.toUpperCase() || fileMime}` : ''}
+              </span>
+            </span>
+            <Paperclip size={15} style={{ opacity: 0.65, flexShrink: 0 }} />
+          </a>
+        );
+      }
+
       // ── Fotos (con "ver una vez") ──
       if (m.kind === 'IMAGE' && typeof m.key === 'string') {
         const key = m.key as string;
@@ -4049,6 +4166,45 @@ export default function ChatRoomPage() {
           </div>
         )}
 
+        {fileDraft && (
+          <div
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              margin: '0 0 8px', padding: '10px 12px', borderRadius: 14,
+              background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <span style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(233,30,99,0.15)', color: '#E91E63', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <FileText size={17} />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fileDraft.file.name}
+              </p>
+              <p style={{ margin: 0, fontSize: 10, color: 'var(--text-muted)' }}>
+                {fileDraft.file.size > 1024 * 1024
+                  ? `${(fileDraft.file.size / (1024 * 1024)).toFixed(1)} MB`
+                  : `${Math.max(1, Math.round(fileDraft.file.size / 1024))} KB`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFileDraft(null)}
+              style={{ height: 32, padding: '0 12px', borderRadius: 999, border: '1px solid var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void sendFileDraft()}
+              disabled={sending}
+              style={{ height: 32, padding: '0 14px', borderRadius: 999, border: 'none', background: 'linear-gradient(135deg,#FF2E93,#E11D74)', color: '#fff', fontSize: 11, fontWeight: 900, cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.6 : 1 }}
+            >
+              {sending ? '…' : 'Enviar'}
+            </button>
+          </div>
+        )}
+
         {!selectMode && !recording && (
           <form onSubmit={handleSend} style={{ display: 'flex', gap: '7px', alignItems: 'center' }}>
             {/* Botón asistente Bunzy integrado en la fila de Telegram (píldora sin teclado, círculo con teclado) */}
@@ -4183,34 +4339,35 @@ export default function ChatRoomPage() {
               </button>
             ) : (
               <>
-              {/* Fotos: un botón; el "una vez" se elige en la vista previa */}
+              {/* Clip estilo Telegram: foto o archivo */}
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
                 style={{ display: 'none' }}
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   e.currentTarget.value = '';
-                  pickPhoto(file);
+                  if (!file) return;
+                  if (file.type.startsWith('image/')) pickPhoto(file);
+                  else pickFile(file);
                 }}
               />
               <button
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
                 disabled={sending}
-                title="Enviar foto"
-                aria-label="Enviar foto"
+                title="Adjuntar foto o archivo"
+                aria-label="Adjuntar foto o archivo"
                 style={{
                   width: 36, height: 36, background: 'rgba(28, 28, 34, 0.88)',
                   color: 'rgba(255, 255, 255, 0.82)', borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   cursor: sending ? 'not-allowed' : 'pointer', flexShrink: 0,
-                  fontSize: 16,
                 }}
               >
-                📷
+                <Paperclip size={17} />
               </button>
               <button
                 type="button"

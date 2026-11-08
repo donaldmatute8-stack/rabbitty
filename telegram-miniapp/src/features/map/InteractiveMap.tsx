@@ -155,8 +155,11 @@ export default function InteractiveMap({
   const [isListening, setIsListening] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');
   const [copilotReply, setCopilotReply] = useState<string | null>(null);
-  const speechSupported = typeof window !== 'undefined' && 
-    ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window);
+  const speechSupported = typeof window !== 'undefined' && (
+    PlatformBridge.isNative() ||
+    'webkitSpeechRecognition' in window ||
+    'SpeechRecognition' in window
+  );
   const isNativeIos = typeof window !== 'undefined' && PlatformBridge.isIos();
   const [nativeMapActive, setNativeMapActive] = useState(false);
 
@@ -362,6 +365,40 @@ export default function InteractiveMap({
     // búsqueda". Ahora el diagnóstico es por niveles: plugin ausente en este
     // BUILD → mensaje de actualización; permiso negado → mensaje de Ajustes.
     if (PlatformBridge.isNative()) {
+      // 1a. Plugin local iOS (SFSpeechRecognizer). La app usa SPM y el plugin
+      // de la comunidad es CocoaPods-only, por eso no entraba al build.
+      try {
+        const { registerPlugin } = await import('@capacitor/core');
+        const localSpeech = registerPlugin('RabbittySpeech') as unknown as {
+          available?: () => Promise<{ available: boolean }>;
+          start: (opts: { language: string; maxResults: number; prompt?: string }) => Promise<{ matches?: string[] }>;
+        };
+        const available = await localSpeech.available?.();
+        if (!available || available.available !== false) {
+          setIsListening(true);
+          try {
+            const { matches } = await localSpeech.start({ language: 'es-MX', maxResults: 1, prompt: '¿A dónde vamos?' });
+            setIsListening(false);
+            const text = matches?.[0];
+            if (text) handleVoiceCommand(text);
+            return;
+          } catch (speechErr) {
+            setIsListening(false);
+            const msg = speechErr instanceof Error ? speechErr.message : String(speechErr ?? '');
+            if (msg.includes('PERMISSION_DENIED') || msg.includes('MIC_PERMISSION_DENIED')) {
+              copilotInputRef.current?.focus();
+              setCopilotReply('Activa el micrófono y el dictado en Ajustes de iOS, o escribe aquí ✍️');
+              setTimeout(() => setCopilotReply(null), 4000);
+              return;
+            }
+            throw speechErr;
+          }
+        }
+      } catch (localSpeechErr) {
+        console.warn('[SpeechRec] plugin local no disponible, probando comunidad:', localSpeechErr);
+      }
+
+      // 1b. Fallback: plugin de la comunidad (Android / builds viejos)
       try {
         const sr = await import('@capacitor-community/speech-recognition');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -633,8 +670,11 @@ export default function InteractiveMap({
     >
       <style dangerouslySetInnerHTML={{__html: `
         .leaflet-container {
-          background: ${isDark ? '#0D0914' : '#F8F9FA'} !important;
+          background: ${isDark ? '#08050E' : '#F8F9FA'} !important;
           outline: none;
+        }
+        .rabbitty-dark-tiles {
+          filter: brightness(0.72) contrast(1.18) saturate(0.78) hue-rotate(-10deg);
         }
         @keyframes radar-spin {
           from { transform: translate(-50%, -50%) rotate(0deg); }

@@ -7,6 +7,7 @@ import Capacitor
 class RabbittyBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(RabbittyLiveActivityPlugin())
+        bridge?.registerPluginInstance(RabbittySpeechPlugin())
     }
 }
 

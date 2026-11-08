@@ -898,7 +898,7 @@ export default function ScanPage() {
     <div 
       className="page-wrap relative min-h-dvh flex flex-col justify-between transition-colors duration-200" 
       style={{ 
-        paddingTop: activeTab === 'my-code' ? '0px' : 'calc(var(--safe-top, 0px) + 8px)',
+        paddingTop: activeTab === 'my-code' ? 'calc(var(--safe-top, 0px) + 8px)' : 'calc(var(--safe-top, 0px) + 8px)',
         // Mi Código: la hoja llega hasta el fondo real (sin el hueco de la nav)
         paddingBottom: activeTab === 'my-code' ? 0 : undefined,
         background: activeTab === 'scan' ? (isDark ? '#000000' : '#F1F5F9') : 'transparent',

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import qrcode from 'qrcode-generator';
-import { X, Sun, QrCode, Sparkles, Flame, Leaf, Zap } from 'lucide-react';
+import { X, Sun, QrCode, Sparkles, Flame, Leaf, Zap, ArrowLeft } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
@@ -336,8 +336,20 @@ export default function RabbittyCodeSimple({
         />
       )}
 
+      {/* Volver: visible también en Mi QR */}
+      <button
+        type="button"
+        onClick={onClose ?? onScan}
+        className="absolute left-4 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white backdrop-blur-md active:scale-95"
+        style={{ top: 'calc(var(--safe-top, 0px) + 10px)' }}
+        aria-label="Volver"
+        title="Volver"
+      >
+        <ArrowLeft size={20} />
+      </button>
+
       {/* ── ÁREA SUPERIOR: Avatar + Tarjeta Blanca ── */}
-      <div className="relative z-10 flex w-full flex-col items-center pb-2" style={{ paddingTop: 'var(--qr-top-pad, 40px)' }}>
+      <div className="relative z-10 flex w-full flex-col items-center pb-2" style={{ paddingTop: 'var(--qr-top-pad, 24px)' }}>
         {/* Avatar sobresaliente */}
         <div className="relative z-20 -mb-9 h-[70px] w-[70px] overflow-hidden rounded-full border-[3px] border-white bg-neutral-900 shadow-[0_10px_26px_rgba(0,0,0,0.5)]">
           {avatarUrl ? (
@@ -426,7 +438,7 @@ export default function RabbittyCodeSimple({
 
       {/* ── ÁREA INFERIOR: Bottom Sheet ── */}
       <div className="relative z-20 mt-auto flex w-full flex-col rounded-t-[30px] border-t border-white/10 bg-[#1c1c1e]/85 px-4 pt-3 shadow-[0_-10px_36px_rgba(0,0,0,0.65)] backdrop-blur-xl"
-        style={{ paddingBottom: 'calc(80px + max(env(safe-area-inset-bottom, 0px), 12px))' }}
+        style={{ paddingBottom: 'calc(14px + max(env(safe-area-inset-bottom, 0px), 12px))' }}
       >
         {/* Header del sheet */}
         <div className="flex w-full items-center justify-between px-1 py-2">

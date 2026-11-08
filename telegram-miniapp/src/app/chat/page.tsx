@@ -1656,6 +1656,7 @@ export default function ChatInboxPage() {
         onClose={() => setSettingsOpen(false)}
         title="Settings"
         glass
+        fullScreen
       >
         <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
           {/* Identity Switcher Tabs (If affiliate / has business) */}
@@ -2014,6 +2015,7 @@ export default function ChatInboxPage() {
         onClose={() => setContactsModalOpen(false)}
         title="Contactos & Comunidad"
         glass
+        fullScreen
       >
         <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
           {/* Invitar: una sola acción; el share nativo ya incluye WhatsApp/Telegram */}
