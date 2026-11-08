@@ -13,6 +13,7 @@ import {
   Store,
 } from "lucide-react";
 import { capacityScenarios, estimateCapacity, formatBunz } from "@/lib/capacity";
+import { CONTRACT_VERSION } from "@/lib/contractContent";
 
 type ValidateResponse = {
   ok: boolean;
@@ -37,8 +38,6 @@ type ValidateResponse = {
   } | null;
   expiresAt?: string;
 };
-
-const CONTRACT_VERSION = "2026.11-v1.2-draft";
 
 const inputClass =
   "w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white placeholder:text-white/25 outline-none transition-colors focus:border-pink-500/60 focus:bg-white/[0.06]";
@@ -372,7 +371,10 @@ export default function ReonboardingPage() {
               />
               <span>
                 He revisado y acepto el Contrato de Participación {CONTRACT_VERSION}, el Aviso de
-                Privacidad y la capacidad propuesta. Declaro ser el representante legal del negocio.
+                Privacidad y la capacidad propuesta. Declaro ser el representante legal del negocio.{" "}
+                <a href="/contrato" target="_blank" rel="noreferrer" className="text-pink-300 underline">
+                  Leer contrato completo
+                </a>
               </span>
             </label>
           </div>

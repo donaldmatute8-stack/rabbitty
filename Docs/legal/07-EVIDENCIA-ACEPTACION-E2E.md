@@ -37,13 +37,23 @@ fecha determinada, y que RABBITTY le entregó una copia.
 
 ### Re-onboarding (`landing-page/src/app/api/re-onboarding/apply/route.ts`)
 
+> **Actualización 8-nov-2026:** G1–G2 corregidos. El contrato vive en
+> `landing-page/src/lib/contractContent.ts` (misma fuente que `/contrato`) y la
+> evidencia se construye en `landing-page/src/lib/contractEvidence.ts`.
+
 Ya captura:
 
 ```json
 {
+  "acceptanceId": "uuid",
+  "offerId": "A-<business>-<fecha>",
   "contractVersion": "2026.11-v1.2-draft",
   "contractStatus": "draft",
-  "contractHash": "sha256(...)",
+  "hashVersion": "canonical-v1",
+  "contractHash": "sha256(canonical)",
+  "contractTextHash": "sha256(texto del contrato)",
+  "annexBHash": "sha256(anexo B)",
+  "textHash": "sha256(contrato + anexo + datos)",
   "signedBy": "nombre escrito",
   "signatureMethod": "name_checkbox",
   "acceptedAt": "ISO",
@@ -54,21 +64,24 @@ Ya captura:
   "representative": "...",
   "capacity": 0,
   "coverageMonths": 0,
-  "copyDelivered": true
+  "copyDelivered": true,
+  "copyDeliveryStatus": "sent | failed | not_configured",
+  "copyDeliveredAt": "ISO",
+  "copyMessageId": "id de Resend"
 }
 ```
 
+También guarda `contractEvidence` con el texto íntegro, el Anexo B y los hashes.
+
 ### Hallazgos
 
-| # | Hallazgo | Impacto |
-|---|---|---|
-| G1 | El hash se calcula sobre un JSON de datos, no sobre el texto íntegro del contrato y sus anexos | No prueba qué texto se aceptó |
-| G2 | `copyDelivered: true` es fijo, sin envío ni acuse | La evidencia afirma algo no verificado |
-| G3 | No se guarda el texto renderizado ni su plantilla exacta | No se puede reconstruir la aceptación |
-| G4 | No se versiona el Anexo A/B aceptado | La oferta puede cambiar sin evidencia |
-| G5 | No hay endpoint de reproducción/verificación | Difícil auditar |
-
----
+| # | Hallazgo | Impacto | Estado |
+|---|---|---|---|
+| G1 | El hash se calculaba sobre un JSON de datos, no sobre el texto íntegro | No probaba qué texto se aceptó | **Corregido:** hash canónico sobre contrato + Anexo B + datos |
+| G2 | `copyDelivered: true` era fijo, sin envío ni acuse | La evidencia afirmaba algo no verificado | **Corregido:** envío real por Resend con `messageId` o estado `not_configured`/`failed` |
+| G3 | No se guardaba el texto renderizado | No se podía reconstruir la aceptación | **Corregido:** se guarda `contractEvidence.text` |
+| G4 | No se versionaba el Anexo A/B aceptado | La oferta podía cambiar sin evidencia | **Parcial:** se guarda Anexo B y la oferta; el Anexo A individual falta |
+| G5 | No había endpoint de reproducción | Difícil auditar | **Parcial:** existe `/api/re-onboarding/contract`; falta verificación por `acceptanceId` |
 
 ## 3. Modelo de evidencia propuesto
 
@@ -201,7 +214,7 @@ Reglas:
 
 ## 7. Criterio de cierre
 
-- G1–G5 corregidos.
+- G1–G3 corregidos; G4–G5 parciales (Anexo A individual y verificación por acceptanceId).
 - E1–E12 ejecutados con evidencia.
 - Copia entregada y verificable.
 - Texto y anexos almacenados de forma inmutable.

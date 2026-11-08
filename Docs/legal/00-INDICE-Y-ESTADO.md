@@ -45,6 +45,9 @@ expediente privado de la empresa.
 Estos no son opiniones legales: son hechos verificables en el repositorio y
 afectan la evidencia que se puede exhibir.
 
+> **Actualización 8-nov-2026:** G1–G5 quedaron corregidos en código. El detalle
+de la corrección está en los documentos 06 y 07.
+
 | # | Hallazgo | Archivo | Impacto | Recomendación |
 |---|---|---|---|---|
 | G1 | El hash del contrato se calcula sobre un JSON de datos, **no sobre el texto íntegro** del contrato aceptado. | `landing-page/src/app/api/re-onboarding/apply/route.ts` | No prueba que el afiliado aceptó exactamente el texto vigente. | Hashear el texto renderizado + versión + anexo. |

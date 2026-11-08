@@ -1,6 +1,6 @@
 import { z } from "zod";
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { verify as verifyTotp } from "otplib";
 import {
   generateRegistrationOptions,
@@ -10,7 +10,7 @@ import {
 } from "@simplewebauthn/server";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { router, protectedProcedure, publicLimitedProcedure } from "../trpc";
-import { passkeys, users, verificationTokens } from "@rabbitty/database-core";
+import { auditEntries, passkeys, users, verificationTokens } from "@rabbitty/database-core";
 import { TRPCError } from "@trpc/server";
 import { decryptText } from "../services/crypto";
 
@@ -27,7 +27,30 @@ const rpName = process.env.RP_NAME ?? "Rabbitty Admin";
 const rpID = process.env.RP_ID ?? "localhost";
 const origin = process.env.ORIGIN ?? `http://${rpID}:3003`;
 
-const challengeMap = new Map<string, string>();
+const CHALLENGE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Retos persistidos (no en memoria) para que sobrevivan reinicios y varias
+ * instancias. Se consumen con DELETE ... RETURNING: un reto es de un solo uso.
+ */
+async function saveChallenge(coreDb: any, identifier: string, challenge: string) {
+  await coreDb.delete(verificationTokens).where(eq(verificationTokens.identifier, identifier));
+  await coreDb.insert(verificationTokens).values({
+    identifier,
+    token: challenge,
+    expires: new Date(Date.now() + CHALLENGE_TTL_MS),
+  });
+}
+
+async function takeChallenge(coreDb: any, identifier: string): Promise<string | null> {
+  const [row] = await coreDb
+    .delete(verificationTokens)
+    .where(eq(verificationTokens.identifier, identifier))
+    .returning();
+  if (!row) return null;
+  if (new Date(row.expires).getTime() < Date.now()) return null;
+  return row.token as string;
+}
 
 export const passkeysRouter = router({
   generateRegistrationOptions: protectedProcedure.mutation(async ({ ctx }) => {
@@ -48,9 +71,10 @@ export const passkeysRouter = router({
       userDisplayName: displayName,
       attestationType: "none",
       excludeCredentials,
+      authenticatorSelection: { userVerification: "preferred", residentKey: "preferred" },
     });
 
-    challengeMap.set(ctx.userId, options.challenge);
+    await saveChallenge(ctx.coreDb, `pk_reg:${ctx.userId}`, options.challenge);
     return options;
   }),
 
@@ -60,7 +84,7 @@ export const passkeysRouter = router({
       deviceName: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const challenge = challengeMap.get(ctx.userId);
+      const challenge = await takeChallenge(ctx.coreDb, `pk_reg:${ctx.userId}`);
       if (!challenge) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No registration challenge found. Generate one first." });
 
       const verification = await verifyRegistrationResponse({
@@ -69,8 +93,6 @@ export const passkeysRouter = router({
         expectedOrigin: origin,
         expectedRPID: rpID,
       });
-
-      challengeMap.delete(ctx.userId);
 
       if (!verification.verified || !verification.registrationInfo) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Verification failed" });
@@ -85,6 +107,17 @@ export const passkeysRouter = router({
         counter: credential.counter,
         transports: JSON.stringify(credential.transports ?? []),
         deviceName: input.deviceName ?? "Passkey",
+      });
+
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: ctx.userId,
+        action: "PASSKEY_CREATED",
+        resource: "passkeys",
+        resourceId: credential.id,
+        details: JSON.stringify({
+          deviceName: input.deviceName ?? "Passkey",
+          transports: credential.transports ?? [],
+        }),
       });
 
       return { success: true };
@@ -108,17 +141,26 @@ export const passkeysRouter = router({
       userVerification: "preferred",
     });
 
-    challengeMap.set(ctx.userId, options.challenge);
+    await saveChallenge(ctx.coreDb, `pk_auth:${ctx.userId}`, options.challenge);
     return options;
   }),
 
   verifyAuthentication: protectedProcedure
     .input(z.object({ credential: z.any() }))
     .mutation(async ({ ctx, input }) => {
-      const challenge = challengeMap.get(ctx.userId);
+      const challenge = await takeChallenge(ctx.coreDb, `pk_auth:${ctx.userId}`);
       if (!challenge) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "No authentication challenge found" });
 
-      const [cred] = await ctx.coreDb.select().from(passkeys).where(eq(passkeys.userId, ctx.userId)).limit(1);
+      // Localizar la credencial exacta que firmó, no la primera del usuario.
+      const response = input.credential as { id?: string; rawId?: string };
+      const credentialId = response?.id || response?.rawId;
+      if (!credentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Credencial inválida" });
+
+      const [cred] = await ctx.coreDb
+        .select()
+        .from(passkeys)
+        .where(and(eq(passkeys.userId, ctx.userId), eq(passkeys.credentialId, credentialId)))
+        .limit(1);
       if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "No passkey found for this user" });
 
       const verification = await verifyAuthenticationResponse({
@@ -133,8 +175,6 @@ export const passkeysRouter = router({
           transports: JSON.parse(cred.transports) as AuthenticatorTransportFuture[],
         },
       });
-
-      challengeMap.delete(ctx.userId);
 
       if (!verification.verified) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Passkey verification failed" });
@@ -235,6 +275,15 @@ export const passkeysRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
       await ctx.coreDb.delete(passkeys).where(eq(passkeys.id, input.id));
+
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: ctx.userId,
+        action: "PASSKEY_DELETED",
+        resource: "passkeys",
+        resourceId: input.id,
+        details: JSON.stringify({ deviceName: existing.deviceName }),
+      });
+
       return { success: true };
     }),
 });

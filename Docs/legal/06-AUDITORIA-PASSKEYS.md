@@ -55,12 +55,14 @@
 
 ## 3. Hallazgos
 
-| # | Hallazgo | Riesgo | Corrección |
-|---|---|---|---|
-| P1 | Reto de registro/autenticación autenticada en `Map` en memoria | Se pierde al reiniciar o con varias instancias | Persistir en `verificationTokens` con expiración, como en login |
-| P2 | Registro sin `userVerification` explícito | Política dependiente del default | Fijar `"preferred"` o `"required"` y documentarlo |
-| P3 | `verifyAuthentication` toma la primera passkey del usuario (`limit(1)`) | Falla si el usuario tiene 2+ passkeys y usa la segunda | Localizar por `rawId`/`id`, no por usuario |
-| P4 | Sin evento de auditoría al crear/borrar passkey | Difícil reconstruir altas/bajas | Insertar en `auditEntries` |
+> **Actualización 8-nov-2026:** P1–P4 corregidos en `packages/api/src/routers/passkeys.ts`.
+
+| # | Hallazgo | Riesgo | Corrección | Estado |
+|---|---|---|---|---|
+| P1 | Reto de registro/autenticación autenticada en `Map` en memoria | Se pierde al reiniciar o con varias instancias | Persistir en `verificationTokens` con expiración, como en login | **Corregido** |
+| P2 | Registro sin `userVerification` explícito | Política dependiente del default | `authenticatorSelection: { userVerification: "preferred", residentKey: "preferred" }` | **Corregido** |
+| P3 | `verifyAuthentication` toma la primera passkey del usuario (`limit(1)`) | Falla si el usuario tiene 2+ passkeys y usa la segunda | Localizar por `rawId`/`id` + `userId` | **Corregido** |
+| P4 | Sin evento de auditoría al crear/borrar passkey | Difícil reconstruir altas/bajas | Insertar `PASSKEY_CREATED` / `PASSKEY_DELETED` en `auditEntries` | **Corregido** |
 | P5 | `RP_ID`/`ORIGIN` dependen de variables de entorno | Si están mal, el reto falla o acepta origen incorrecto | Verificar producción: `RP_ID=admin.rabbitty.me`, `ORIGIN=https://admin.rabbitty.me` |
 | P6 | Sin prueba de autenticador clonado | El contador debe detectar regresión | Verificar que la librería rechace contador menor o igual |
 | P7 | Borrado exige TOTP solo si está activo | Usuario sin TOTP puede borrar con sesión | Aceptable si la sesión es fuerte; documentar |

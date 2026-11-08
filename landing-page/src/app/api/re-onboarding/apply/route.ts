@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import postgres from "postgres";
 import { estimateCapacity, roundCapacity } from "@/lib/capacity";
+import { buildAcceptanceEvidence, type AcceptanceEvidence } from "@/lib/contractEvidence";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,96 @@ function hashToken(token: string) {
 
 function str(value: unknown) {
   return typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : "";
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function sendContractCopy({
+  to,
+  businessName,
+  evidence,
+  acceptedAt,
+}: {
+  to: string;
+  businessName: string;
+  evidence: AcceptanceEvidence;
+  acceptedAt: Date;
+}): Promise<{
+  delivered: boolean;
+  status: "sent" | "failed" | "not_configured";
+  deliveredAt: string | null;
+  messageId: string | null;
+}> {
+  const key = process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
+  if (!key) {
+    return { delivered: false, status: "not_configured", deliveredAt: null, messageId: null };
+  }
+
+  const safeBusiness = escapeHtml(businessName);
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; color: #0f172a;">
+      <h2 style="margin: 0 0 8px 0;">Copia de tu Contrato de Participación</h2>
+      <p style="margin: 0 0 12px 0; color: #475569;">
+        Adjuntamos la copia íntegra del contrato y el Anexo B que aceptaste para <strong>${safeBusiness}</strong>.
+      </p>
+      <table style="border-collapse: collapse; width: 100%; font-size: 13px;">
+        <tr><td style="padding: 6px 0; color: #64748b;">acceptanceId</td><td style="padding: 6px 0; font-family: monospace;">${evidence.acceptanceId}</td></tr>
+        <tr><td style="padding: 6px 0; color: #64748b;">contractHash</td><td style="padding: 6px 0; font-family: monospace; word-break: break-all;">${evidence.contractHash}</td></tr>
+        <tr><td style="padding: 6px 0; color: #64748b;">textHash</td><td style="padding: 6px 0; font-family: monospace; word-break: break-all;">${evidence.textHash}</td></tr>
+        <tr><td style="padding: 6px 0; color: #64748b;">Aceptado</td><td style="padding: 6px 0;">${acceptedAt.toISOString()}</td></tr>
+      </table>
+      <p style="margin: 16px 0 0 0; color: #475569; font-size: 13px;">
+        También puedes consultar el contrato en
+        <a href="https://rabbitty.me/contrato" style="color: #e11d48;">rabbitty.me/contrato</a>.
+      </p>
+    </div>
+  `;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Rabbitty Legal <legal@rabbitty.me>",
+        to: [to],
+        subject: `Copia de tu contrato Rabbitty · ${businessName}`,
+        html,
+        attachments: [
+          {
+            filename: "contrato-rabbitty.txt",
+            content: Buffer.from(evidence.text, "utf8").toString("base64"),
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[Re-onboarding copy] Resend error", res.status, body.slice(0, 300));
+      return { delivered: false, status: "failed", deliveredAt: null, messageId: null };
+    }
+
+    const json = (await res.json().catch(() => ({}))) as { id?: unknown };
+    return {
+      delivered: true,
+      status: "sent",
+      deliveredAt: acceptedAt.toISOString(),
+      messageId: typeof json.id === "string" ? json.id : null,
+    };
+  } catch (error) {
+    console.error("[Re-onboarding copy] error", error);
+    return { delivered: false, status: "failed", deliveredAt: null, messageId: null };
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -68,23 +159,6 @@ export async function POST(req: NextRequest) {
   const promo = roundCapacity(capacity * 0.4);
   const credit = Math.max(0, capacity - promo);
 
-  const contractHash = crypto
-    .createHash("sha256")
-    .update(
-      JSON.stringify({
-        contractVersion,
-        businessName,
-        legalName,
-        rfc,
-        representative,
-        capacity,
-        coverageMonths,
-        acceptedAt: acceptedAt.toISOString(),
-        signature,
-      })
-    )
-    .digest("hex");
-
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
@@ -113,6 +187,32 @@ export async function POST(req: NextRequest) {
         `;
         if (!biz) throw new Error("business_not_found");
 
+        const acceptanceId = crypto.randomUUID();
+        const offerId = `A-${biz.id.slice(0, 8)}-${acceptedAt.toISOString().slice(0, 10)}`;
+        const evidence = buildAcceptanceEvidence({
+          contractVersion,
+          acceptanceId,
+          offerId,
+          businessName,
+          legalName,
+          rfc,
+          representative,
+          representativePosition: representativePosition || null,
+          address,
+          email,
+          phone,
+          capacity,
+          promo,
+          credit,
+          coverageMonths,
+          acceptedAt: acceptedAt.toISOString(),
+          signedBy: signature,
+          signatureMethod: "name_checkbox",
+          acceptedIp: ip,
+          acceptedUserAgent: userAgent,
+          reonboardingTokenId: tokenRow.id,
+        });
+
         let verification: Record<string, unknown> = {};
         try {
           verification = JSON.parse(biz.verificationData || "{}");
@@ -132,11 +232,17 @@ export async function POST(req: NextRequest) {
         };
 
         const contractSignature = {
-          contractVersion,
-          contractStatus: "draft",
-          contractHash,
+          acceptanceId: evidence.acceptanceId,
+          offerId: evidence.offerId,
+          contractVersion: evidence.contractVersion,
+          contractStatus: "draft" as const,
+          hashVersion: evidence.hashVersion,
+          contractHash: evidence.contractHash,
+          contractTextHash: evidence.contractTextHash,
+          annexBHash: evidence.annexBHash,
+          textHash: evidence.textHash,
           signedBy: signature,
-          signatureMethod: "name_checkbox",
+          signatureMethod: "name_checkbox" as const,
           acceptedAt: acceptedAt.toISOString(),
           acceptedIp: ip,
           acceptedUserAgent: userAgent,
@@ -146,13 +252,29 @@ export async function POST(req: NextRequest) {
           representativePosition: representativePosition || null,
           capacity,
           coverageMonths,
-          copyDelivered: true,
+          copyDelivered: false,
+          copyDeliveryStatus: "pending" as const,
+          copyDeliveredAt: null as string | null,
+          copyMessageId: null as string | null,
         };
 
         const nextVerification = {
           ...verification,
           legalProfile,
           contractSignature,
+          contractEvidence: {
+            acceptanceId: evidence.acceptanceId,
+            offerId: evidence.offerId,
+            contractVersion: evidence.contractVersion,
+            hashVersion: evidence.hashVersion,
+            contractText: evidence.contractText,
+            annexBText: evidence.annexBText,
+            text: evidence.text,
+            contractTextHash: evidence.contractTextHash,
+            annexBHash: evidence.annexBHash,
+            textHash: evidence.textHash,
+            contractHash: evidence.contractHash,
+          },
           reonboardedAt: acceptedAt.toISOString(),
           reonboardingSource: "token_link",
         };
@@ -264,7 +386,9 @@ export async function POST(req: NextRequest) {
               credit,
               coverageMonths,
               contractVersion,
-              contractHash,
+              contractHash: evidence.contractHash,
+              contractTextHash: evidence.contractTextHash,
+              acceptanceId: evidence.acceptanceId,
             })}::jsonb,
             now()
           )
@@ -279,7 +403,9 @@ export async function POST(req: NextRequest) {
               capacity,
               coverageMonths,
               contractVersion,
-              contractHash,
+              contractHash: evidence.contractHash,
+              contractTextHash: evidence.contractTextHash,
+              acceptanceId: evidence.acceptanceId,
               acceptedAt: acceptedAt.toISOString(),
               ip,
               userAgent,
@@ -287,12 +413,53 @@ export async function POST(req: NextRequest) {
           )
         `;
 
-        return { businessId: biz.id, capacity, promo, credit };
+        return {
+          businessId: biz.id,
+          capacity,
+          promo,
+          credit,
+          evidence,
+          nextVerification,
+        };
       });
+
+    const copy = await sendContractCopy({
+      to: email,
+      businessName,
+      evidence: result.evidence,
+      acceptedAt,
+    });
+
+    const updatedVerification = {
+      ...result.nextVerification,
+      contractSignature: {
+        ...result.nextVerification.contractSignature,
+        copyDelivered: copy.delivered,
+        copyDeliveryStatus: copy.status,
+        copyDeliveredAt: copy.deliveredAt,
+        copyMessageId: copy.messageId,
+      },
+    };
+
+    try {
+      await sql`
+        UPDATE "ownedBusinesses"
+        SET "verificationData" = ${JSON.stringify(updatedVerification)}, "updatedAt" = now()
+        WHERE id = ${result.businessId}
+      `;
+    } catch (updateError) {
+      console.error("[Re-onboarding copy] no se pudo actualizar la evidencia", updateError);
+    }
 
     return NextResponse.json({
       ok: true,
-      ...result,
+      businessId: result.businessId,
+      capacity: result.capacity,
+      promo: result.promo,
+      credit: result.credit,
+      acceptanceId: result.evidence.acceptanceId,
+      contractHash: result.evidence.contractHash,
+      copyDeliveryStatus: copy.status,
       adminUrl: process.env.NEXT_PUBLIC_BUSINESS_LOGIN_URL || "https://admin.rabbitty.me/login",
     });
   } catch (error) {
