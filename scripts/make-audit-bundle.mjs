@@ -191,6 +191,25 @@ const GROUPS = [
     ],
   },
   {
+    title: "Privacidad y faltantes legales (borradores)",
+    files: [
+      "Docs/legal/00-INDICE-Y-ESTADO.md",
+      "Docs/legal/01-RAT-REGISTRO-ACTIVIDADES.md",
+      "Docs/legal/02-MATRIZ-CONSERVACION.md",
+      "Docs/legal/03-PROCEDIMIENTO-ARCO.md",
+      "Docs/legal/04-MATRIZ-PROVEEDORES-DPA.md",
+      "Docs/legal/05-CLAUSULAS-DPA-Y-SOLICITUD.md",
+      "Docs/legal/06-AUDITORIA-PASSKEYS.md",
+      "Docs/legal/07-EVIDENCIA-ACEPTACION-E2E.md",
+      "Docs/legal/08-ANEXO-B-CONDICIONES.md",
+      "Docs/legal/09-MEMORANDUM-FISCAL-BORRADOR.md",
+      "Docs/legal/10-BRIEF-FINTECH-ART24.md",
+      "Docs/legal/11-PLAN-DEPURACION-SANDBOX.md",
+      "Docs/legal/12-ANEXO-A-626-PLANTILLA.md",
+      "packages/api/src/routers/passkeys.ts",
+    ],
+  },
+  {
     title: "Pruebas",
     files: [
       "scripts/real-data-spec.test.mjs",
