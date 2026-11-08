@@ -109,7 +109,7 @@ export const analyticsRouter = router({
         );
 
       // Group by date — include tax and base breakdown for fiscal reconciliation
-      type DayBucket = { totalSales: number; taxTotal: number; baseTotal: number };
+      type DayBucket = { totalSales: number; taxTotal: number; baseTotal: number; orderCount: number };
       const dailySalesMap = new Map<string, DayBucket>();
       
       // Initialize daily sales map with all days in range to avoid gaps (solo en modo presets)
@@ -117,17 +117,18 @@ export const analyticsRouter = router({
         for (let i = (input.days ?? 30) - 1; i >= 0; i--) {
           const d = new Date();
           d.setDate(d.getDate() - i);
-          dailySalesMap.set(toLocalDateStr(d), { totalSales: 0, taxTotal: 0, baseTotal: 0 });
+          dailySalesMap.set(toLocalDateStr(d), { totalSales: 0, taxTotal: 0, baseTotal: 0, orderCount: 0 });
         }
       }
 
       for (const order of ordersList) {
         if (!order.createdAt) continue;
         const dateStr = toLocalDateStr(order.createdAt);
-        const bucket = dailySalesMap.get(dateStr) ?? { totalSales: 0, taxTotal: 0, baseTotal: 0 };
+        const bucket = dailySalesMap.get(dateStr) ?? { totalSales: 0, taxTotal: 0, baseTotal: 0, orderCount: 0 };
         bucket.totalSales += Number(order.total) || 0;
         bucket.taxTotal += Number(order.tax) || 0;
         bucket.baseTotal += Number(order.subtotal) || 0;
+        bucket.orderCount += 1;
         dailySalesMap.set(dateStr, bucket);
       }
 
@@ -136,6 +137,7 @@ export const analyticsRouter = router({
         totalSales: Math.round(bucket.totalSales * 100) / 100,
         taxTotal: Math.round(bucket.taxTotal * 100) / 100,
         baseTotal: Math.round(bucket.baseTotal * 100) / 100,
+        orderCount: bucket.orderCount,
       })).sort((a, b) => a.date.localeCompare(b.date));
 
       return trends;
@@ -146,11 +148,12 @@ export const analyticsRouter = router({
       z.object({
         branchId: z.string().optional(),
         days: z.number().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - (input.days ?? 7));
+      const { startDate, endDate } = effectiveDateRange(input);
 
       const ordersList = await ctx.restaurantDb
         .select()
@@ -159,7 +162,8 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
-            gte(orders.createdAt, startDate)
+            gte(orders.createdAt, startDate),
+            ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
         );
 
@@ -257,6 +261,48 @@ export const analyticsRouter = router({
         }))
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, input.limit);
+    }),
+
+  getTopCustomers: protectedProcedure
+    .input(
+      z.object({
+        branchId: z.string(),
+        days: z.number().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        limit: z.number().optional().default(10),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { startDate, endDate } = effectiveDateRange(input);
+
+      const rows = await ctx.restaurantDb
+        .select({
+          customerPhone: orders.customerPhone,
+          customerName: orders.customerName,
+          total: sql<number>`coalesce(sum(${orders.total}), 0)`,
+          orderCount: sql<number>`count(*)::int`,
+          lastVisit: sql<Date>`max(${orders.createdAt})`,
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.branchId, branchId),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
+            gte(orders.createdAt, startDate),
+            ...(endDate ? [lte(orders.createdAt, endDate)] : []),
+            sql`${orders.customerPhone} IS NOT NULL`
+          )
+        )
+        .groupBy(orders.customerPhone, orders.customerName)
+        .orderBy(desc(sql`coalesce(sum(${orders.total}), 0)`))
+        .limit(input.limit);
+
+      return rows.map((r) => ({
+        ...r,
+        total: Math.round(Number(r.total) * 100) / 100,
+      }));
     }),
 
   getPaymentMethods: protectedProcedure

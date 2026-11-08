@@ -5,7 +5,7 @@ import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, cn, Button, toast } from "@rabbitty/ui";
 import { motion } from "framer-motion";
-import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap, Printer, Mail, FileText, Banknote, Coffee, Receipt, X } from "lucide-react";
+import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap, Printer, Mail, FileText, Banknote, Coffee, Receipt, X, Users, Package, Clock, CalendarDays, Percent } from "lucide-react";
 import { useBranch } from "../../../components/DashboardClientWrapper";
 
 /** Teaser del gate: lo que ve el afiliado sin el plan. */
@@ -51,6 +51,7 @@ export default function ReportsPage() {
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+  const [reportTab, setReportTab] = useState<"ventas" | "clientes" | "inventario" | "impuestos" | "mix">("ventas");
   const dateFilter = customRange.from && customRange.to ? { from: customRange.from, to: customRange.to } : { days: daysRange };
   const reportRange = useMemo(() => {
     if (customRange.from && customRange.to) return { from: customRange.from, to: customRange.to };
@@ -76,6 +77,63 @@ export default function ReportsPage() {
     () => (topProducts ?? []).filter((p: any) => !p.isDrink).slice(0, 8),
     [topProducts]
   );
+
+  const { data: hourlySales } = trpc.analytics.getHourlySales.useQuery({ branchId, ...dateFilter });
+  const { data: topCustomers } = trpc.analytics.getTopCustomers.useQuery({
+    branchId,
+    limit: 10,
+    ...dateFilter,
+  });
+  const { data: lowStock } = trpc.inventory.getLowStockItems.useQuery(undefined, { retry: false });
+
+  const totalOrders = useMemo(
+    () => (salesTrends ?? []).reduce((sum: number, d: any) => sum + Number(d.orderCount || 0), 0),
+    [salesTrends]
+  );
+  const totalSalesForAvg = useMemo(
+    () => (salesTrends ?? []).reduce((sum: number, d: any) => sum + Number(d.totalSales || 0), 0),
+    [salesTrends]
+  );
+  const avgTicket = totalOrders > 0 ? totalSalesForAvg / totalOrders : 0;
+
+  const weekdaySales = useMemo(() => {
+    const names = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    const buckets = names.map((name) => ({ name, sales: 0, orders: 0 }));
+    for (const row of salesTrends ?? []) {
+      const date = new Date(`${row.date}T12:00:00`);
+      if (Number.isNaN(date.getTime())) continue;
+      const b = buckets[date.getDay()];
+      if (!b) continue;
+      b.sales += Number(row.totalSales) || 0;
+      b.orders += Number(row.orderCount) || 0;
+    }
+    return buckets;
+  }, [salesTrends]);
+
+  const categoryMix = useMemo(() => {
+    const map = new Map<string, { category: string; revenue: number; quantity: number }>();
+    for (const p of topProducts ?? []) {
+      const current = map.get(p.category) ?? { category: p.category, revenue: 0, quantity: 0 };
+      current.revenue += Number(p.revenue) || 0;
+      current.quantity += Number(p.quantity) || 0;
+      map.set(p.category, current);
+    }
+    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
+  }, [topProducts]);
+
+  const drinkRevenue = useMemo(
+    () => (topProducts ?? []).filter((p: any) => p.isDrink).reduce((s: number, p: any) => s + Number(p.revenue || 0), 0),
+    [topProducts]
+  );
+  const foodRevenue = useMemo(
+    () => (topProducts ?? []).filter((p: any) => !p.isDrink).reduce((s: number, p: any) => s + Number(p.revenue || 0), 0),
+    [topProducts]
+  );
+  const peakHour = useMemo(() => {
+    const rows = hourlySales ?? [];
+    if (!rows.length) return null;
+    return rows.reduce((best: any, row: any) => (Number(row.sales) > Number(best?.sales || 0) ? row : best), rows[0]);
+  }, [hourlySales]);
   const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
   // Propinas (cuenta vs propina separadas — sin gate de plan)
   const { data: tipsSummary } = trpc.analytics.getTipsSummary.useQuery({ branchId, ...dateFilter });
@@ -176,6 +234,63 @@ export default function ReportsPage() {
         Number(p.quantity || 0),
         Number(p.revenue || 0).toFixed(2),
       ])
+    );
+  };
+
+  const handleExportTaxCSV = () => {
+    downloadCSV(
+      `Impuestos_${reportRange.from}_${reportRange.to}.csv`,
+      ["Concepto", "Monto"],
+      [
+        ["Ventas totales", totalRevenue.toFixed(2)],
+        ["Base gravable", displayBase.toFixed(2)],
+        ["IVA trasladado 16%", displayIVA.toFixed(2)],
+        ["Propinas", Number(tipsSummary?.totalTip || 0).toFixed(2)],
+        ["Gastos", Number(pandl?.expenses || 0).toFixed(2)],
+        ["Utilidad neta", Number(pandl?.netProfit || 0).toFixed(2)],
+      ]
+    );
+  };
+
+  const handleExportClientsCSV = () => {
+    if (!topCustomers?.length) {
+      toast.error("No hay clientes identificados en el periodo.");
+      return;
+    }
+    downloadCSV(
+      `Clientes_${reportRange.from}_${reportRange.to}.csv`,
+      ["Cliente", "Teléfono", "Visitas", "Total", "Última visita"],
+      topCustomers.map((c: any) => [
+        c.customerName || "Cliente",
+        c.customerPhone || "",
+        Number(c.orderCount || 0),
+        Number(c.total || 0).toFixed(2),
+        c.lastVisit ? new Date(c.lastVisit).toLocaleDateString("es-MX") : "",
+      ])
+    );
+  };
+
+  const handleExportInventoryCSV = () => {
+    if (!lowStock?.length) {
+      toast.error("No hay insumos bajo stock.");
+      return;
+    }
+    downloadCSV(
+      `Inventario_bajo_${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Insumo", "SKU", "Stock", "Mínimo", "Unidad"],
+      lowStock.map((i: any) => [i.name, i.sku || "", i.stock, i.minStock, i.unit]),
+    );
+  };
+
+  const handleExportMixCSV = () => {
+    if (!categoryMix.length) {
+      toast.error("No hay productos en el periodo.");
+      return;
+    }
+    downloadCSV(
+      `Mix_${reportRange.from}_${reportRange.to}.csv`,
+      ["Categoría", "Cantidad", "Ingresos"],
+      categoryMix.map((c) => [c.category, c.quantity, c.revenue.toFixed(2)])
     );
   };
 
@@ -529,6 +644,187 @@ export default function ReportsPage() {
           <p className="text-[11px] text-emerald-400/60 mt-1">Base + IVA = Total ✓ ({daysRange}D)</p>
         </div>
       </div>
+
+      {/* ── Reportes avanzados con pestañas ── */}
+      <Card className="print-card p-5 border border-(--border-subtle) bg-(--bg-subtle)">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 no-print">
+          <div>
+            <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2">
+              <FileText className="text-pink-500" /> Reportes avanzados
+            </h3>
+            <p className="text-sm text-(--text-muted)">
+              Ventas por hora, clientes, inventario, impuestos y mix de producto.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ["ventas", "Ventas", Clock],
+              ["clientes", "Clientes", Users],
+              ["inventario", "Inventario", Package],
+              ["impuestos", "Impuestos", Percent],
+              ["mix", "Mix producto", Coffee],
+            ] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                onClick={() => setReportTab(id)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-all cursor-pointer",
+                  reportTab === id
+                    ? "bg-pink-500/15 border-pink-500/40 text-pink-300"
+                    : "bg-(--bg-elevated) border-(--border-subtle) text-(--text-muted) hover:text-(--text-primary)"
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {reportTab === "ventas" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Kpi label="Tickets" value={String(totalOrders)} />
+              <Kpi label="Ticket promedio" value={`$${avgTicket.toFixed(2)}`} />
+              <Kpi label="Hora pico" value={peakHour ? `${peakHour.hour}:00` : "—"} hint={peakHour ? `$${Number(peakHour.sales).toFixed(0)}` : undefined} />
+              <Kpi label="Día más fuerte" value={weekdaySales.reduce((best, d) => (d.sales > best.sales ? d : best), weekdaySales[0])?.name ?? "—"} />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-black text-(--text-primary) mb-2">Ventas por hora</h4>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={hourlySales ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} vertical={false} />
+                      <XAxis dataKey="hour" tickFormatter={(h) => `${h}h`} tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="sales" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-(--text-primary) mb-2">Ventas por día de la semana</h4>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={weekdaySales} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} vertical={false} />
+                      <XAxis dataKey="name" tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="sales" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {reportTab === "clientes" && (
+          <div className="space-y-3">
+            <div className="flex justify-end no-print">
+              <Button onClick={handleExportClientsCSV} variant="secondary" className="rounded-xl text-xs">
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Clientes CSV
+              </Button>
+            </div>
+            <DataTable
+              headers={["Cliente", "Teléfono", "Visitas", "Total", "Última visita"]}
+              rows={(topCustomers ?? []).map((c: any) => [
+                c.customerName || "Cliente",
+                c.customerPhone || "—",
+                String(c.orderCount || 0),
+                `$${Number(c.total || 0).toFixed(2)}`,
+                c.lastVisit ? new Date(c.lastVisit).toLocaleDateString("es-MX") : "—",
+              ])}
+              empty="Sin clientes identificados en el periodo."
+            />
+          </div>
+        )}
+
+        {reportTab === "inventario" && (
+          <div className="space-y-3">
+            <div className="flex justify-end no-print">
+              <Button onClick={handleExportInventoryCSV} variant="secondary" className="rounded-xl text-xs">
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Inventario CSV
+              </Button>
+            </div>
+            <DataTable
+              headers={["Insumo", "SKU", "Stock", "Mínimo", "Unidad"]}
+              rows={(lowStock ?? []).map((i: any) => [
+                i.name,
+                i.sku || "—",
+                String(i.stock),
+                String(i.minStock),
+                i.unit,
+              ])}
+              empty="Sin insumos bajo stock."
+            />
+          </div>
+        )}
+
+        {reportTab === "impuestos" && (
+          <div className="space-y-3">
+            <div className="flex justify-end no-print">
+              <Button onClick={handleExportTaxCSV} variant="secondary" className="rounded-xl text-xs">
+                <Download className="mr-1.5 h-3.5 w-3.5" /> Impuestos CSV
+              </Button>
+            </div>
+            <DataTable
+              headers={["Concepto", "Monto"]}
+              rows={[
+                ["Ventas totales", `$${totalRevenue.toFixed(2)}`],
+                ["Base gravable", `$${displayBase.toFixed(2)}`],
+                ["IVA trasladado 16%", `$${displayIVA.toFixed(2)}`],
+                ["Propinas", `$${Number(tipsSummary?.totalTip || 0).toFixed(2)}`],
+                ["Gastos", `$${Number(pandl?.expenses || 0).toFixed(2)}`],
+                ["Utilidad neta", `$${Number(pandl?.netProfit || 0).toFixed(2)}`],
+              ]}
+              empty="Sin datos fiscales."
+            />
+          </div>
+        )}
+
+        {reportTab === "mix" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Kpi label="Ingresos bebidas" value={`$${drinkRevenue.toFixed(2)}`} />
+              <Kpi label="Ingresos comida" value={`$${foodRevenue.toFixed(2)}`} />
+              <Kpi
+                label="% bebidas"
+                value={`${drinkRevenue + foodRevenue > 0 ? ((drinkRevenue / (drinkRevenue + foodRevenue)) * 100).toFixed(1) : "0"}%`}
+              />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-black text-(--text-primary) mb-2">Ingresos por categoría</h4>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={categoryMix} layout="vertical" margin={{ top: 0, right: 0, left: 40, bottom: 0 }}>
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="category" type="category" width={90} tick={{ fill: "currentColor", fontSize: 9, opacity: 0.7 }} axisLine={false} tickLine={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="revenue" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-end mb-2 no-print">
+                  <Button onClick={handleExportMixCSV} variant="secondary" className="rounded-xl text-xs">
+                    <Download className="mr-1.5 h-3.5 w-3.5" /> Mix CSV
+                  </Button>
+                </div>
+                <DataTable
+                  headers={["Categoría", "Cantidad", "Ingresos"]}
+                  rows={categoryMix.map((c) => [c.category, String(c.quantity), `$${c.revenue.toFixed(2)}`])}
+                  empty="Sin productos en el periodo."
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
@@ -972,6 +1268,53 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+      <p className="text-[10px] font-black uppercase tracking-wider text-(--text-muted)">{label}</p>
+      <p className="text-xl font-black text-(--text-primary) mt-1">{value}</p>
+      {hint && <p className="text-[10px] text-(--text-muted) mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+function DataTable({
+  headers,
+  rows,
+  empty,
+}: {
+  headers: string[];
+  rows: string[][];
+  empty: string;
+}) {
+  return (
+    <div className="max-h-72 overflow-y-auto rounded-xl border border-(--border-subtle)">
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 bg-(--bg-elevated) text-(--text-muted) uppercase text-[9px]">
+          <tr>
+            {headers.map((h) => (
+              <th key={h} className="text-left px-2 py-2">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i} className="border-t border-(--border-subtle)">
+              {row.map((cell, j) => (
+                <td key={j} className="px-2 py-1.5 text-(--text-primary)">{cell}</td>
+              ))}
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td colSpan={headers.length} className="px-2 py-4 text-center text-(--text-muted)">{empty}</td></tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
