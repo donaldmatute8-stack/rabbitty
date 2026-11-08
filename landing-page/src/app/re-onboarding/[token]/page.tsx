@@ -72,7 +72,6 @@ export default function ReonboardingPage() {
   useEffect(() => {
     if (!token) return;
     let alive = true;
-    setLoading(true);
     fetch(`/api/re-onboarding/validate?token=${encodeURIComponent(token)}`)
       .then(async (res) => {
         const json = (await res.json().catch(() => ({}))) as ValidateResponse;

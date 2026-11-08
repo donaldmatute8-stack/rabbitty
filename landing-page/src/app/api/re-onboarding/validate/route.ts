@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       LIMIT 1
     `;
 
-    let verification: Record<string, any> = {};
+    let verification: Record<string, unknown> = {};
     try {
       verification = JSON.parse(biz.verificationData || "{}");
     } catch {

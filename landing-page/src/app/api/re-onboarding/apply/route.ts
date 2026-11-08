@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
         `;
         if (!biz) throw new Error("business_not_found");
 
-        let verification: Record<string, any> = {};
+        let verification: Record<string, unknown> = {};
         try {
           verification = JSON.parse(biz.verificationData || "{}");
         } catch {
