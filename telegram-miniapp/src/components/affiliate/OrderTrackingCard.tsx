@@ -35,9 +35,11 @@ interface OrderDetail {
 export function OrderTrackingCard({
   orders,
   onRefresh,
+  onHide,
 }: {
   orders: TrackedOrder[];
   onRefresh?: () => void;
+  onHide?: (orderId: string) => void;
 }) {
   const [detailId, setDetailId] = useState<string | null>(null);
   // ── H-TRACK-GLOBAL: la tarjeta vive en TODAS las pestañas y el Rabbitter
@@ -68,6 +70,7 @@ export function OrderTrackingCard({
     PlatformBridge.hapticFeedback('light');
     try { localStorage.setItem('rabbitty_track_hidden_v1', order.orderId); } catch { /* noop */ }
     setHiddenOrderId(order.orderId);
+    onHide?.(order.orderId);
   };
 
   // ¿Está oculta la tarjeta de ESTE pedido? (page.tsx lo usa para decidir si

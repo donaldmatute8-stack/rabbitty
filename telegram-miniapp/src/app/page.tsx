@@ -139,7 +139,16 @@ export default function FeedPage() {
   );
   // Sheet del pedido abierto desde el ícono de la barra superior (H-TRACK-NAV)
   const [trackOpenId, setTrackOpenId] = useState<string | null>(null);
+  const [hiddenTrackId, setHiddenTrackId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem('rabbitty_track_hidden_v1');
+    } catch {
+      return null;
+    }
+  });
   const activeOrder = trackedOrders[0] ?? null;
+  const showTrackingIcon = Boolean(activeOrder && activeOrder.orderId !== hiddenTrackId);
   // Flags de producto (Vibe Passport se activa desde Admin God)
   const appFlags = useAppFlags();
 
@@ -624,7 +633,7 @@ export default function FeedPage() {
         style={{
           transformOrigin: 'center left',
           background: 'var(--bg-primary)',
-          zIndex: drawerOpen ? 202 : undefined,
+          zIndex: drawerOpen ? 100 : undefined,
           pointerEvents: drawerOpen ? 'none' : 'auto',
           border: drawerOpen ? (isDark ? '1.5px solid rgba(255,255,255,0.18)' : '1.5px solid rgba(0,0,0,0.12)') : 'none',
           boxShadow: drawerOpen ? (isDark ? '-12px 0 45px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' : '-10px 0 40px rgba(0,0,0,0.18)') : 'none',
@@ -729,7 +738,7 @@ export default function FeedPage() {
               <div className="flex items-center gap-2.5">
                 {/* H-TRACK-NAV: acceso al pedido en curso — SOLO si hay uno.
                     Es el punto de entrada cuando la tarjeta del feed se oculta. */}
-                {activeOrder && (
+                {showTrackingIcon && activeOrder && (
                   <button
                     type="button"
                     onClick={() => {
@@ -854,7 +863,16 @@ export default function FeedPage() {
           {/* ── H-TRACK-GLOBAL: tarjeta de seguimiento en TODAS las pestañas
               (arriba del contenido). Ocultable/recuperable por el Rabbitter. ── */}
           {trackingLoaded && user?.id != null && (
-            <OrderTrackingCard orders={trackedOrders} onRefresh={() => void refreshTracking()} />
+            <OrderTrackingCard
+              orders={trackedOrders}
+              onRefresh={() => void refreshTracking()}
+              onHide={(orderId) => {
+                setHiddenTrackId(orderId);
+                try {
+                  localStorage.setItem('rabbitty_track_hidden_v1', orderId);
+                } catch { /* noop */ }
+              }}
+            />
           )}
 
           {/* ── bunz'in tab ── */}

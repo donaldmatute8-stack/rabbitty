@@ -14,9 +14,11 @@ interface LayoutProps {
   right?: React.ReactNode;
   hideNav?: boolean;
   onBackCustom?: () => void;
+  /** Desplaza solo el contenido bajo el header (p. ej. dock lateral del chat). */
+  contentShift?: number;
 }
 
-export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, left, right, hideNav = false, onBackCustom }: LayoutProps) {
+export default function ProfileSubpageLayout({ title, children, showBack = true, centerTitle = false, left, right, hideNav = false, onBackCustom, contentShift = 0 }: LayoutProps) {
   const router = useRouter();
 
   const handleBack = () => {
@@ -95,8 +97,9 @@ export default function ProfileSubpageLayout({ title, children, showBack = true,
 
         <motion.div
           initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
+          animate={{ opacity: 1, y: 0, paddingLeft: contentShift }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          style={{ paddingLeft: contentShift }}
         >
           {children}
         </motion.div>

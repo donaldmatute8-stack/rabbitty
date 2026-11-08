@@ -11,7 +11,6 @@ import RabbittyCodeSimple from '@/components/ui/RabbittyCodeSimple';
 import { RABBITTY_CODE_STYLE } from '@/lib/rabbittyCodeStyle';
 import { NativeQrScanner } from '@/components/scanner/NativeQrScanner';
 import RabbittyLoader from '@/components/RabbittyLoader';
-import BottomNav from '@/components/BottomNav';
 import Button from '@/components/ui/Button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -934,6 +933,14 @@ export default function ScanPage() {
             alt=""
             className="pointer-events-none fixed inset-0 h-dvh w-full object-cover"
           />
+          <div
+            className="pointer-events-none fixed inset-0"
+            style={{
+              background:
+                'linear-gradient(135deg, rgba(233,30,99,0.42) 0%, rgba(139,92,246,0.30) 48%, rgba(255,46,147,0.22) 100%)',
+              mixBlendMode: 'color',
+            }}
+          />
           <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/55" />
         </>
       )}
@@ -1312,8 +1319,6 @@ export default function ScanPage() {
           </motion.div>
         </div>
       )}
-      {/* En la cámara no mostramos la barra: pantalla completa como Telegram */}
-      {activeTab !== 'scan' && <BottomNav isDark={isDark} />}
     </div>
   );
 }

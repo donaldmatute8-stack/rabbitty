@@ -904,13 +904,11 @@ export default function ChatInboxPage() {
 
       {/* Main Container: Smoothly pushed laterally when vertical docker is open */}
       <motion.div
-        animate={{
-          paddingLeft: drawerOpen && dockerOrientation === 'vertical' ? 76 : 0,
-        }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
         style={{ width: '100%' }}
       >
         <ProfileSubpageLayout
+          contentShift={drawerOpen && dockerOrientation === 'vertical' ? 76 : 0}
           title={
             <span className="font-bold text-[16px] tracking-tight text-(--text-primary) truncate max-w-[170px] sm:max-w-xs block text-center">
               {activeTab === 'business'
@@ -1657,6 +1655,7 @@ export default function ChatInboxPage() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         title="Settings"
+        glass
       >
         <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
           {/* Identity Switcher Tabs (If affiliate / has business) */}
@@ -2014,32 +2013,17 @@ export default function ChatInboxPage() {
         isOpen={contactsModalOpen}
         onClose={() => setContactsModalOpen(false)}
         title="Contactos & Comunidad"
+        glass
       >
         <div className="flex flex-col gap-4 text-(--text-primary) pb-6">
-          {/* Invitar: hoja nativa (WhatsApp/Telegram incluidos) sin plugin de agenda */}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => { void shareInvite({ username: user?.username ?? null, id: user?.id ?? null }); }}
-              className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0088CC]/15 border border-[#0088CC]/35 px-3 py-2.5 text-[13px] font-black text-[#4FC3F7] cursor-pointer active:scale-95 transition-transform"
-            >
-              <Share2 size={15} /> Invitar
-            </button>
-            <button
-              type="button"
-              onClick={() => openInviteChannel('whatsapp', { username: user?.username ?? null, id: user?.id ?? null })}
-              className="flex-1 rounded-2xl bg-emerald-500/15 border border-emerald-500/35 px-3 py-2.5 text-[13px] font-black text-emerald-300 cursor-pointer active:scale-95 transition-transform"
-            >
-              WhatsApp
-            </button>
-            <button
-              type="button"
-              onClick={() => openInviteChannel('telegram', { username: user?.username ?? null, id: user?.id ?? null })}
-              className="flex-1 rounded-2xl bg-sky-500/15 border border-sky-500/35 px-3 py-2.5 text-[13px] font-black text-sky-300 cursor-pointer active:scale-95 transition-transform"
-            >
-              Telegram
-            </button>
-          </div>
+          {/* Invitar: una sola acción; el share nativo ya incluye WhatsApp/Telegram */}
+          <button
+            type="button"
+            onClick={() => { void shareInvite({ username: user?.username ?? null, id: user?.id ?? null }); }}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#0088CC]/15 border border-[#0088CC]/35 px-4 py-3 text-[14px] font-black text-[#4FC3F7] cursor-pointer active:scale-[0.98] transition-transform"
+          >
+            <Share2 size={17} /> Invitar a Rabbitty
+          </button>
 
           {/* Live Search bar for registered Rabbitters & Contacts */}
           <div className="flex items-center gap-2 bg-(--bg-subtle) border border-(--border-subtle) rounded-2xl px-3.5 py-2.5 focus-within:border-[#0088CC] transition-colors">
@@ -2231,50 +2215,18 @@ export default function ChatInboxPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => openWhatsAppInvite(c.tel)}
-                      className="w-8 h-8 rounded-full bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] flex items-center justify-center text-xs hover:bg-[#25D366]/30 active:scale-95 transition-all"
-                      aria-label="Invitar por WhatsApp"
-                      title="Invitar por WhatsApp"
+                      onClick={() => { void shareInvite({ username: user?.username ?? null, id: user?.id ?? null }); }}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#0088CC]/15 border border-[#0088CC]/30 text-[#0088CC] font-bold text-xs hover:bg-[#0088CC]/25 active:scale-95 transition-all"
+                      aria-label="Invitar a Rabbitty"
+                      title="Invitar a Rabbitty"
                     >
-                      📱
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openTelegramInvite}
-                      className="w-8 h-8 rounded-full bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] flex items-center justify-center text-xs hover:bg-[#229ED9]/30 active:scale-95 transition-all"
-                      aria-label="Invitar por Telegram"
-                      title="Invitar por Telegram"
-                    >
-                      ✈
+                      Invitar
                     </button>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Invitar con Enlace Rápido */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
-              Compartir invitación directa
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => openWhatsAppInvite()}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#25D366]/15 border border-[#25D366]/30 text-[#25D366] font-bold text-[13px] hover:bg-[#25D366]/25 active:scale-95 transition-all"
-              >
-                <span>📱 WhatsApp</span>
-              </button>
-              <button
-                type="button"
-                onClick={openTelegramInvite}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#229ED9]/15 border border-[#229ED9]/30 text-[#229ED9] font-bold text-[13px] hover:bg-[#229ED9]/25 active:scale-95 transition-all"
-              >
-                <span>✈ Telegram</span>
-              </button>
-            </div>
-          </div>
 
           {/* Contactos Históricos en Rabbitty */}
           <div className="flex flex-col gap-1.5">

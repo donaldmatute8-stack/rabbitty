@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       .from(orders)
       .where(and(
         eq(orders.customerId, userId),
-        inArray(orders.status, ['PENDING', 'CASH_PAYMENT_REQUESTED', 'PAID', 'COMPLETED']),
+        inArray(orders.status, ['PENDING', 'CASH_PAYMENT_REQUESTED', 'PAID']),
         gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '24 hours'`),
         isNull(orders.voidReason),
       ))
@@ -91,7 +91,13 @@ export async function GET(req: Request) {
     const payload = rows
       // H-PERSIST: la comanda-borrador (solo vínculo, sin productos) NO es un
       // pedido del Rabbitter — no debe pintar tarjeta de seguimiento.
+      // Tampoco los pedidos ya entregados: al completarse desaparecen de la
+      // barra superior y de la tarjeta del feed.
       .filter((o) => (itemsByOrder.get(o.id)?.length ?? 0) > 0)
+      .filter((o) => {
+        const items = itemsByOrder.get(o.id) ?? [];
+        return deriveOrderStage({ order: { status: o.status }, items }) !== 'DONE';
+      })
       .map((o) => {
       const items = itemsByOrder.get(o.id) ?? [];
       const stage: OrderStage = deriveOrderStage({ order: { status: o.status }, items });

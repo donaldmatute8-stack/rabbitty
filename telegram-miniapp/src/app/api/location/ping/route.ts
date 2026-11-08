@@ -29,6 +29,8 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import { parsePushRules } from "@/lib/push/categories";
 
 const COOLDOWN_SECONDS = 12 * 60 * 60; // 12 horas
+/** Flash offers: máximo una vez por usuario/negocio cada 24 horas. */
+const FLASH_OFFER_COOLDOWN_SECONDS = 24 * 60 * 60;
 /** H12: reglas por Rabbitter — ventana de dedup corto cuando piden TODAS las alertas. */
 const PROXIMITY_BYPASS_DEDUPE_WINDOW_MS = 5 * 60 * 1000; // 5 min
 
@@ -194,10 +196,12 @@ export async function POST(req: NextRequest) {
           };
 
           const cooldownKey = `push:boost:${caller.id}:${b.id}`;
-          const isBoostCoolingDown = allAlertsMode ? false : await isCooldownActive(cooldownKey, COOLDOWN_SECONDS);
+          // Aunque el Rabbitter tenga "todas las alertas", una flash offer no
+          // se repite más de una vez cada 24 horas en el mismo negocio.
+          const isBoostCoolingDown = await isCooldownActive(cooldownKey, FLASH_OFFER_COOLDOWN_SECONDS);
 
           if (!isBoostCoolingDown) {
-            const dedupeWindowMs = allAlertsMode ? PROXIMITY_BYPASS_DEDUPE_WINDOW_MS : 12 * 3600 * 1000;
+            const dedupeWindowMs = FLASH_OFFER_COOLDOWN_SECONDS * 1000;
             const pushTitle = `⚡ ¡${activeBoost.rewardPercentage}% Bunz en ${b.name}!`;
             const pushBody = `Pasa en tu caminata de hoy: ${activeBoost.headline || `obtenemos recompensa especial de +${activeBoost.rewardPercentage}% Bunz`}.`;
 

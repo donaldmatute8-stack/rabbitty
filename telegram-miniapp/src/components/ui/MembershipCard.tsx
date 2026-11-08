@@ -79,12 +79,12 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
     <>
       {/* ── CARD HERO COMPONENT ── */}
       <motion.div
-        layout
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         className="w-full relative overflow-hidden rounded-3xl mb-5 cursor-pointer select-none"
         style={{
+          transition: 'padding 0.3s ease',
           padding: isCollapsed ? '12px 16px 18px' : '20px 20px 26px',
           background: isDark
             ? 'linear-gradient(135deg, #18181B 0%, #111113 45%, #240C1A 100%)'

@@ -14,6 +14,8 @@ interface BottomSheetProps {
   showHandle?: boolean;
   showCloseButton?: boolean;
   maxHeight?: string;
+  /** Glassmorphism para menús de contactos/settings del chat. */
+  glass?: boolean;
 }
 
 export function BottomSheet({
@@ -25,6 +27,7 @@ export function BottomSheet({
   showHandle = true,
   showCloseButton = true,
   maxHeight = '80vh',
+  glass = false,
 }: BottomSheetProps) {
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
@@ -70,7 +73,18 @@ export function BottomSheet({
               'flex flex-col',
               className
             )}
-            style={{ maxHeight }}
+            style={{
+              maxHeight,
+              ...(glass
+                ? {
+                    background: 'var(--glass-bg)',
+                    backdropFilter: 'blur(28px) saturate(160%)',
+                    WebkitBackdropFilter: 'blur(28px) saturate(160%)',
+                    borderTop: '1px solid var(--glass-border)',
+                    boxShadow: '0 -24px 60px rgba(0,0,0,0.45)',
+                  }
+                : {}),
+            }}
           >
             {/* Handle */}
             {showHandle && (
