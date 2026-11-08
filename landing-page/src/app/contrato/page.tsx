@@ -31,6 +31,7 @@ const SECTIONS: Array<{ title: string; paragraphs: string[]; bullets?: string[] 
     paragraphs: [
       'Los Bunz son unidades promocionales de lealtad. No son dinero de curso legal, divisas, valores, instrumentos financieros, depósitos, inversiones ni activos virtuales con expectativa de rendimiento.',
       'Los Bunz no son convertibles a efectivo, no generan intereses ni rendimientos y solo pueden canjearse en los comercios y bajo las condiciones del programa. Su valor y reglas pueden cambiar con aviso al Afiliado y a los usuarios.',
+      'Los Bunz son transferibles entre Rabbitters dentro de la plataforma y fungibles entre los establecimientos afiliados: pueden ganarse en un negocio y usarse en otro, conforme a las reglas y controles de seguridad del programa. La restricción de transferibilidad del incentivo o de la capacidad del Afiliado no aplica a los Bunz de los Rabbitters.',
       'El Afiliado no podrá presentar los Bunz como dinero, inversión, ahorro garantizado o mecanismo de captación. Queda prohibido simular transacciones, crear cuentas falsas o manipular el programa.',
     ],
   },

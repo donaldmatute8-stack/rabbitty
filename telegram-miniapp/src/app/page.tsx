@@ -633,8 +633,8 @@ export default function FeedPage() {
         style={{
           transformOrigin: 'center left',
           background: 'var(--bg-primary)',
-          zIndex: drawerOpen ? 100 : undefined,
-          pointerEvents: drawerOpen ? 'none' : 'auto',
+          zIndex: drawerOpen ? 202 : undefined,
+          pointerEvents: 'auto',
           border: drawerOpen ? (isDark ? '1.5px solid rgba(255,255,255,0.18)' : '1.5px solid rgba(0,0,0,0.12)') : 'none',
           boxShadow: drawerOpen ? (isDark ? '-12px 0 45px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.08)' : '-10px 0 40px rgba(0,0,0,0.18)') : 'none',
         }}
@@ -1058,6 +1058,22 @@ export default function FeedPage() {
 
         </div>
       </main>
+
+        {/* Con el sidebar abierto, el home se ve igual (arriba), pero cualquier
+            clic sobre él cierra el drawer en vez de activar botones del home. */}
+        {drawerOpen && (
+          <div
+            aria-hidden
+            onClick={() => setDrawerOpen(false)}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 9999,
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+          />
+        )}
       </motion.div>
 
       {/* NAVBAR SUPERIOR MINIMALISTA FLOTANTE (ESTILO FACEBOOK):

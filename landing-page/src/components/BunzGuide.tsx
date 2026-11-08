@@ -91,6 +91,9 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
                 <p style={{ margin: 0 }}>
                   <strong style={{ color: '#fff' }}>Valor y reglas:</strong> Los Bunz no son dinero ni tienen una paridad fija garantizada. Su valor, vigencia y condiciones se informan en el programa y en el contrato vigente. Rabbitty no promete rendimientos ni convertibilidad a efectivo.
                 </p>
+                <p style={{ margin: 0 }}>
+                  <strong style={{ color: '#fff' }}>Transferibles y fungibles:</strong> Los Bunz pueden transferirse entre Rabbitters y usarse en otros negocios afiliados. La capacidad o el incentivo del negocio no es transferible; son conceptos distintos.
+                </p>
               </div>
             </motion.div>
           )}

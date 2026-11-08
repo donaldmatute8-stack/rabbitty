@@ -18,7 +18,7 @@ export const FAQS: FaqItem[] = [
   },
   {
     q: '¿Puedo transferir mis Bunz a otra persona?',
-    a: '¡Sí! Puedes transferir Bunz al instante a cualquier usuario por su @usuario, ID o código QR desde el chat de Bunzy o tu Billetera. Las transferencias están protegidas por Face ID / PIN de seguridad y verificación en dos pasos (2FA).',
+    a: '¡Sí! Puedes transferir Bunz al instante a cualquier usuario por su @usuario, ID o código QR desde el chat de Bunzy o tu Billetera. Las transferencias están protegidas por Face ID / PIN de seguridad y verificación en dos pasos (2FA). Los Bunz son fungibles: puedes ganarlos en un negocio y usarlos en cualquier otro negocio afiliado. No son convertibles a efectivo. La regla de “no transferible” aplica al incentivo o capacidad del negocio afiliado, no a tus Bunz.',
   },
   {
     q: '¿Cómo protejo mi cuenta con Face ID, PIN y 2FA?',

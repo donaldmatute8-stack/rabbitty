@@ -95,6 +95,9 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
                 <p style={{ margin: 0 }}>
                   <strong style={{ color: 'var(--text-primary)' }}>Valor y reglas:</strong> Los Bunz no son dinero ni tienen una paridad fija garantizada. Su valor, vigencia y condiciones se informan en el programa y en el contrato vigente. Rabbitty no promete rendimientos ni convertibilidad a efectivo.
                 </p>
+                <p style={{ margin: 0 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Transferibles y fungibles:</strong> Los Bunz de tus clientes pueden transferirse entre Rabbitters y usarse en otros negocios afiliados. La capacidad o el incentivo de tu negocio no es transferible; son conceptos distintos.
+                </p>
               </div>
             </motion.div>
           )}
@@ -123,6 +126,9 @@ export default function BunzGuide({ onClose }: { onClose: () => void }) {
                     </p>
                     <p style={{ margin: 0 }}>
                       Nunca se toca la capacidad comprometida con los Rabbitters. No hay intereses ni cambios retroactivos. Cualquier cargo o cuota se informa antes de cobrar; no se aplican cargos no aprobados.
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      La capacidad y el incentivo del negocio no son transferibles. Los Bunz de los Rabbitters sí son transferibles y fungibles dentro de la red.
                     </p>
                   </div>
                 </div>
