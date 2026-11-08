@@ -234,9 +234,9 @@ export async function POST(req: NextRequest) {
           ON CONFLICT ("affiliateId") DO UPDATE SET
             "pilotEnabled" = true,
             "periodDays" = 7,
-            "maxEmissionBunz" = GREATEST("maxEmissionBunz", 5000),
-            "maxRedemptionBunz" = GREATEST("maxRedemptionBunz", 5000),
-            "maxSettlementBunz" = GREATEST("maxSettlementBunz", 2000),
+            "maxEmissionBunz" = 5000,
+            "maxRedemptionBunz" = 5000,
+            "maxSettlementBunz" = 2000,
             notes = EXCLUDED.notes,
             "updatedAt" = now()
         `;
