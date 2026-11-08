@@ -207,6 +207,9 @@ const GROUPS = [
       "DOCS/legal/11-PLAN-DEPURACION-SANDBOX.md",
       "DOCS/legal/12-ANEXO-A-626-PLANTILLA.md",
       "packages/api/src/routers/passkeys.ts",
+      "landing-page/src/lib/contractContent.ts",
+      "landing-page/src/lib/contractEvidence.ts",
+      "landing-page/src/app/api/re-onboarding/contract/route.ts",
     ],
   },
   {
