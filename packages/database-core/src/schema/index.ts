@@ -190,6 +190,22 @@ export const merchantRecoveryProposals = pgTable(
   ]
 );
 
+/** Re-onboarding de un afiliado existente con enlace de un solo uso. */
+export const affiliateReonboardingTokens = pgTable(
+  "affiliate_reonboarding_tokens",
+  {
+    id: id(),
+    affiliateId: text("affiliateId").notNull(),
+    tokenHash: text("tokenHash").notNull().unique(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    usedAt: timestamp("usedAt"),
+    createdBy: text("createdBy"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("affiliate_reonboarding_affiliate_idx").on(t.affiliateId)]
+);
+
 /** MCCE · Eventos append-only de capacidad. */
 export const merchantCapacityEvents = pgTable(
   "merchant_capacity_events",

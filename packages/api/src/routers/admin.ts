@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
-import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems } from "@rabbitty/database-restaurant/schema";
+import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems, bunzEconomicLimits } from "@rabbitty/database-restaurant/schema";
 import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches, merchantCapacityAccounts } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
@@ -33,6 +33,22 @@ async function resolveAffiliateId(ctx: Context): Promise<string> {
     throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado" });
   }
   return rest.businessId;
+}
+
+/** Crea los topes del piloto para un afiliado nuevo (idempotente). */
+async function ensureBunzPilotLimits(db: any, affiliateId: string, source: string) {
+  await db
+    .insert(bunzEconomicLimits)
+    .values({
+      affiliateId,
+      pilotEnabled: true,
+      periodDays: 7,
+      maxEmissionBunz: 5000,
+      maxRedemptionBunz: 5000,
+      maxSettlementBunz: 2000,
+      notes: source,
+    })
+    .onConflictDoNothing();
 }
 /** Push a la app nativa (mismo canal que usa el POS). Devuelve true si entregó. */
 async function sendOwnerPush(
@@ -292,6 +308,13 @@ export const adminRouter = router({
           }
         } catch (provisionError) {
           console.error("[APPROVE] no se pudo aprovisionar restaurante/sucursal:", provisionError);
+        }
+
+        // ── Topes del piloto para que el tenant nuevo pueda emitir/redimir ──
+        try {
+          await ensureBunzPilotLimits(ctx.restaurantDb, updated.id, "Aprobación de negocio");
+        } catch (limitsError) {
+          console.error("[APPROVE] no se pudieron crear los topes Bunz:", limitsError);
         }
 
         // ── Aviso al dueño: push nativo primero, Telegram como respaldo ──

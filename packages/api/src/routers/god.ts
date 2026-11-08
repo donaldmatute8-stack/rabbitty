@@ -15,6 +15,7 @@ import {
   merchantCapacityEvents,
   merchantRecoveryProposals,
   merchantRecoveryTerms,
+  affiliateReonboardingTokens,
 } from "@rabbitty/database-core";
 import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
 import {
@@ -146,6 +147,46 @@ export const godRouter = router({
       };
     });
   }),
+
+  // ── Link de re-onboarding de un afiliado existente (token de un solo uso) ──
+  createReonboardingLink: godAdminProcedure
+    .input(z.object({ affiliateId: z.string(), expiresInDays: z.number().min(1).max(30).default(7) }))
+    .mutation(async ({ ctx, input }) => {
+      const [biz] = await ctx.coreDb
+        .select({ id: ownedBusinesses.id, name: ownedBusinesses.name })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, input.affiliateId))
+        .limit(1);
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Afiliado no encontrado" });
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiresAt = new Date(Date.now() + input.expiresInDays * 86_400_000);
+
+      await ctx.coreDb.insert(affiliateReonboardingTokens).values({
+        affiliateId: input.affiliateId,
+        tokenHash,
+        expiresAt,
+        createdBy: String(ctx.userId ?? "god_admin"),
+        metadata: { businessName: biz.name, source: "god_tenants" },
+      });
+
+      const base =
+        process.env.NEXT_PUBLIC_LANDING_URL ||
+        process.env.LANDING_URL ||
+        "https://rabbitty.me";
+      const url = `${base.replace(/\/$/, "")}/re-onboarding/${token}`;
+
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: ctx.userId ?? null,
+        action: "AFFILIATE_REONBOARDING_LINK_CREATED",
+        resource: "affiliateReonboardingTokens",
+        resourceId: input.affiliateId,
+        details: JSON.stringify({ businessName: biz.name, expiresAt: expiresAt.toISOString() }),
+      });
+
+      return { ok: true, url, expiresAt };
+    }),
 
   // ── Crear Afiliado Prueba (1 clic): usuario + negocio + restaurante + sucursal + menú seed ──
   createTestAffiliate: godAdminProcedure

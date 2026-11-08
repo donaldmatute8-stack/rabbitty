@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Crown, Store, Eye, LogOut, RefreshCw, UserPlus, ExternalLink, ShieldCheck } from "lucide-react";
+import { Crown, Store, Eye, LogOut, RefreshCw, UserPlus, ExternalLink, ShieldCheck, Link2, Copy, X } from "lucide-react";
 import { Card, Button, Input, cn, toast } from "@rabbitty/ui";
 
 interface Tenant {
@@ -29,6 +29,8 @@ export default function GodTenantsPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", category: "Cafetería", rewardPercentage: "12", creditLimit: "500" });
   const [startingAs, setStartingAs] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null);
+  const [linkModal, setLinkModal] = useState<{ url: string; tenant: string; expiresAt?: string } | null>(null);
 
   const loadTenants = async () => {
     try {
@@ -98,6 +100,34 @@ export default function GodTenantsPage() {
     }
   };
 
+  const createReonboardingLink = async (t: Tenant) => {
+    setGeneratingLink(t.id);
+    try {
+      const r = await fetch("/api/trpc/god.createReonboardingLink?batch=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "0": { json: { affiliateId: t.id, expiresInDays: 7 } } }),
+      });
+      const data = await r.json();
+      if (data?.[0]?.error) {
+        throw new Error(data[0].error?.json?.message || data[0].error?.message || "No se pudo crear el enlace");
+      }
+      const result = data?.[0]?.result?.data?.json as { url?: string; expiresAt?: string } | undefined;
+      if (!result?.url) throw new Error("El servidor no devolvió el enlace");
+      setLinkModal({ url: result.url, tenant: t.name, expiresAt: result.expiresAt });
+      try {
+        await navigator.clipboard.writeText(result.url);
+        toast.success("Link de re-onboarding copiado");
+      } catch {
+        toast.success("Link de re-onboarding generado");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al generar el enlace");
+    } finally {
+      setGeneratingLink(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050508] p-6 lg:p-10">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-6">
@@ -157,19 +187,33 @@ export default function GodTenantsPage() {
                   {" · "}paquete {t.package ?? "—"} · crédito {t.creditUsed ?? 0}/{t.creditLimit ?? 0} Bunz
                 </p>
               </div>
-              <Button
-                onClick={() => enterAs(t)}
-                disabled={!t.canImpersonate || startingAs !== null}
-                className={cn(
-                  "rounded-xl px-4 py-2.5 text-xs font-black cursor-pointer border transition-all",
-                  t.canImpersonate
-                    ? "bg-linear-to-r from-sky-600 to-indigo-600 text-white border-sky-500/40 hover:scale-[1.02] disabled:opacity-50"
-                    : "bg-white/5 text-gray-600 border-white/10 cursor-not-allowed"
-                )}
-              >
-                {startingAs === t.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
-                {t.canImpersonate ? "Entrar como…" : "Sin sucursal"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => void createReonboardingLink(t)}
+                  disabled={generatingLink !== null}
+                  className="rounded-xl px-4 py-2.5 text-xs font-black cursor-pointer border border-violet-500/40 bg-violet-500/15 text-violet-200 hover:bg-violet-500/25 transition-all disabled:opacity-50"
+                >
+                  {generatingLink === t.id ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Link2 className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Re-onboarding
+                </Button>
+                <Button
+                  onClick={() => enterAs(t)}
+                  disabled={!t.canImpersonate || startingAs !== null}
+                  className={cn(
+                    "rounded-xl px-4 py-2.5 text-xs font-black cursor-pointer border transition-all",
+                    t.canImpersonate
+                      ? "bg-linear-to-r from-sky-600 to-indigo-600 text-white border-sky-500/40 hover:scale-[1.02] disabled:opacity-50"
+                      : "bg-white/5 text-gray-600 border-white/10 cursor-not-allowed"
+                  )}
+                >
+                  {startingAs === t.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1" />}
+                  {t.canImpersonate ? "Entrar como…" : "Sin sucursal"}
+                </Button>
+              </div>
             </Card>
           ))}
           {tenants !== null && tenants.length === 0 && (
@@ -185,6 +229,64 @@ export default function GodTenantsPage() {
           Cada entrada/salida queda en audit log (IMPERSONATION_START/END) · cookie firmada 8h · requiere tu 2FA
         </div>
       </motion.div>
+
+      {linkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-3xl border border-violet-500/30 bg-[#130725] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-violet-300">
+                  Link de un solo uso
+                </p>
+                <h3 className="m-0 mt-1 text-lg font-black text-white">
+                  Re-onboarding de {linkModal.tenant}
+                </h3>
+                <p className="m-0 mt-1 text-[11px] text-white/50">
+                  Compártelo con el afiliado. Se invalida al guardar o al vencer.
+                </p>
+              </div>
+              <button
+                onClick={() => setLinkModal(null)}
+                className="rounded-full p-1.5 text-white/50 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              readOnly
+              value={linkModal.url}
+              onFocus={(e) => e.currentTarget.select()}
+              className="mt-4 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 font-mono text-[11px] text-white"
+            />
+            {linkModal.expiresAt && (
+              <p className="m-0 mt-2 text-[10px] text-white/40">
+                Vence: {new Date(linkModal.expiresAt).toLocaleString("es-MX")}
+              </p>
+            )}
+            <div className="mt-4 flex gap-2">
+              <Button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(linkModal.url);
+                    toast.success("Link copiado");
+                  } catch {
+                    toast.error("No se pudo copiar; selecciona el texto");
+                  }
+                }}
+                className="flex-1 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black text-white"
+              >
+                <Copy className="mr-1 h-3.5 w-3.5" /> Copiar link
+              </Button>
+              <Button
+                onClick={() => setLinkModal(null)}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-black text-white/70"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

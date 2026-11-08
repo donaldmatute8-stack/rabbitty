@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@rabbitty/auth";
 import { getCoreDb } from "@rabbitty/api/db";
 import { users, ownedBusinesses, webSessions } from "@rabbitty/database-core";
+import { bunzEconomicLimits } from "@rabbitty/database-restaurant/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -49,6 +50,21 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
       })
       .where(eq(ownedBusinesses.id, restaurantId));
+
+    // Topes del piloto para que el negocio pueda emitir/redimir Bunz.
+    try {
+      await db.insert(bunzEconomicLimits).values({
+        affiliateId: business.id,
+        pilotEnabled: true,
+        periodDays: 7,
+        maxEmissionBunz: 5000,
+        maxRedemptionBunz: 5000,
+        maxSettlementBunz: 2000,
+        notes: "Aprobación admin",
+      }).onConflictDoNothing();
+    } catch (limitsError) {
+      console.error("[VERIFY] no se pudieron crear los topes Bunz:", limitsError);
+    }
 
     // Create web session for magic link
     const [webSession] = await db.insert(webSessions).values({

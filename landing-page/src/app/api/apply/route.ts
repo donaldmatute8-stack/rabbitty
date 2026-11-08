@@ -372,6 +372,23 @@ export async function POST(req: Request) {
           if (inserted.length > 0) {
             newBusinessId = inserted[0].id;
             persisted = true;
+
+            // Topes del piloto para que el tenant nuevo pueda emitir/redimir
+            // en cuanto sea aprobado. Idempotente por affiliateId.
+            try {
+              await sql`
+                INSERT INTO "bunz_economic_limits" (
+                  "affiliateId", "pilotEnabled", "periodDays",
+                  "maxEmissionBunz", "maxRedemptionBunz", "maxSettlementBunz", "notes"
+                ) VALUES (
+                  ${newBusinessId}, true, 7, 5000, 5000, 2000, 'Alta web'
+                )
+                ON CONFLICT ("affiliateId") DO NOTHING
+              `;
+            } catch (limitsErr) {
+              console.error('[Landing Apply] No se pudieron crear los topes Bunz:', limitsErr);
+            }
+
             console.log('[Landing Apply] Negocio insertado en DB:', newBusinessId);
           }
         } else {
