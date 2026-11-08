@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     await db.update(ownedBusinesses)
       .set({
-        status: "VERIFIED",
+        status: "APPROVED",
         verificationMethod: "admin_approve",
         verificationData: JSON.stringify({
           verifiedAt: new Date().toISOString(),

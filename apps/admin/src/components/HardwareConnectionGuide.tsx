@@ -327,12 +327,12 @@ export function HardwareConnectionGuide() {
               <div className="p-5 rounded-2xl bg-black/40 border border-white/5 space-y-3">
                 <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-wider">
                   <span className="flex h-6 w-6 rounded-full bg-emerald-500/20 items-center justify-center text-xs">3</span>
-                  Rabbitty Print Agent
+                  Impresión
                 </div>
                 <h4 className="font-bold text-white text-base">Impresión Silenciosa</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
                   El bridge actual (<strong>Rabbitty POS Printer</strong>) imprime directo por USB cuando Rabbitty corre en la Mac de caja con CUPS.
-                  El <strong>Rabbitty Print Agent</strong> de escritorio (macOS/Windows, <em>próximamente</em>) dará impresión silenciosa sin diálogo del navegador desde cualquier dispositivo.
+                  Si tu impresora es BLE, usa <strong>Conectar BT</strong>; si es Classic/SPP, conéctala por USB a la Mac de caja.
                 </p>
               </div>
             </div>
@@ -386,10 +386,10 @@ export function HardwareConnectionGuide() {
                   <span className="flex h-6 w-6 rounded-full bg-pink-500/20 items-center justify-center text-xs">3</span>
                   Configurar en Rabbitty
                 </div>
-                <h4 className="font-bold text-white text-base">Requiere Print Agent (próximamente)</h4>
+                <h4 className="font-bold text-white text-base">Impresión por red no disponible</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">
                   La impresión por red (<strong>RAW 9100</strong>) no se puede hacer desde el navegador (no existe raw-TCP web).
-                  Llegará con el <strong>Rabbitty Print Agent</strong> local. Por ahora, para comandas de cocina usa el bridge USB/Mac o una impresora BLE.
+                  Por ahora, para comandas de cocina usa el bridge USB/Mac o una impresora BLE.
                 </p>
               </div>
             </div>

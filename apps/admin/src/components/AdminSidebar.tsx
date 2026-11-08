@@ -335,6 +335,12 @@ export function AdminSidebar() {
       ? marketingPillars
       : menuPillars;
 
+  // Preferencias del negocio desde DB (sincroniza entre dispositivos).
+  const { data: restaurantPrefs } = trpc.admin.getRestaurants.useQuery(undefined, {
+    retry: false,
+    staleTime: 60_000,
+  });
+
   // Módulos activos desde settings. null = sin configuración previa → todo visible.
   const [activeModules, setActiveModules] = useState<Set<string> | null>(readActiveModules);
 
@@ -346,6 +352,18 @@ export function AdminSidebar() {
     window.addEventListener(MODULES_CHANGED_EVENT, handler);
     return () => window.removeEventListener(MODULES_CHANGED_EVENT, handler);
   }, []);
+
+  // Preferencias del negocio desde DB (sincroniza entre dispositivos).
+  useEffect(() => {
+    const raw = (restaurantPrefs?.[0] as { activeModules?: string } | undefined)?.activeModules;
+    if (!raw || raw === "[]") return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setActiveModules(new Set(parsed.filter((v: unknown): v is string => typeof v === "string")));
+      }
+    } catch { /* preferencias corruptas: se ignora */ }
+  }, [restaurantPrefs]);
 
   const visibleItems = (pillar: MenuPillar) =>
     activeModules

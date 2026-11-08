@@ -161,6 +161,11 @@ export default function SettingsPage() {
     onSuccess: () => { utils.admin.getRestaurants.invalidate(); toast.success("Configuración actualizada"); },
     onError: (e: any) => toast.error(e.message),
   });
+  // Preferencias de módulos/tipo de negocio: silencioso para no lanzar un toast por cada toggle.
+  const savePrefs = trpc.admin.updateRestaurant.useMutation({
+    onSuccess: () => utils.admin.getRestaurants.invalidate(),
+    onError: () => toast.error("No se pudieron guardar los módulos del negocio"),
+  });
   // Tipo de cambio USD/MXN (auto/API o manual) — lectura + force refresh
   const refreshFxRateMutation = trpc.admin.refreshFxRate.useMutation({
     onSuccess: (data: any) => {
@@ -331,6 +336,15 @@ export default function SettingsPage() {
 
   // Load business type and modules from localStorage (lazy init arriba)
 
+  const persistBusinessPreferences = (type: BusinessType, modules: Set<string>) => {
+    if (!r?.id) return;
+    savePrefs.mutate({
+      id: r.id,
+      businessType: type,
+      activeModules: JSON.stringify([...modules]),
+    });
+  };
+
   const handleSelectType = (type: BusinessType) => {
     setSelectedType(type);
     const preset = BUSINESS_PRESETS.find((p) => p.id === type)!;
@@ -342,6 +356,7 @@ export default function SettingsPage() {
       // Almacenamiento no disponible
     }
     persistModules(newModules);
+    persistBusinessPreferences(type, newModules);
     toast.success(`Perfil de negocio cambiado a ${preset.label}`);
   };
 
@@ -354,11 +369,29 @@ export default function SettingsPage() {
     }
     setActiveModules(next);
     persistModules(next);
+    persistBusinessPreferences(selectedType, next);
   };
 
   useEffect(() => {
     if (r) {
       setForm(prev => ({ ...prev, name: r.name, taxRate: r.taxRate, defaultRewardRate: normalizePercent(r.defaultRewardRate, 20), acceptsBunz: r.acceptsBunz ?? true, bunzAvailabilityMode: ((r as any).bunzAvailabilityMode ?? "ALWAYS") as "ALWAYS" | "SCHEDULE", bunzSchedule: String((r as any).bunzSchedule ?? "{}"), bunzMinOrderAmount: Number((r as any).bunzMinOrderAmount ?? 0), bunzMaxOrderAmount: Number((r as any).bunzMaxOrderAmount ?? 0), bunzDailyLimit: Number((r as any).bunzDailyLimit ?? 0), bunzMaxPctOfBill: Number((r as any).bunzMaxPctOfBill ?? 100), bunzAllowedProducts: String((r as any).bunzAllowedProducts ?? "[]"), happyHourStart: r.happyHourStart ?? "", happyHourEnd: r.happyHourEnd ?? "", happyHourRewardRate: normalizePercent(r.happyHourRewardRate, 40), usdRateMode: (r.usdRateMode ?? "AUTO") as "AUTO" | "MANUAL", usdRate: Number(r.usdRate ?? 18), staleOrderHours: r.staleOrderHours ?? 12 }));
+    }
+  }, [r]);
+
+  useEffect(() => {
+    if (!r) return;
+    const serverType = (r as { businessType?: string }).businessType as BusinessType | undefined;
+    const serverModules = (r as { activeModules?: string }).activeModules;
+    if (serverModules && serverModules !== "[]") {
+      try {
+        const parsed = JSON.parse(serverModules);
+        if (Array.isArray(parsed)) setActiveModules(new Set(parsed.filter((v: unknown) => typeof v === "string")));
+      } catch { /* default */ }
+    }
+    if (serverType && BUSINESS_PRESETS.some((p) => p.id === serverType)) {
+      let hasLocal = false;
+      try { hasLocal = Boolean(localStorage.getItem(STORAGE_KEY)); } catch { /* noop */ }
+      if (serverType !== "restaurant" || !hasLocal) setSelectedType(serverType);
     }
   }, [r]);
 
@@ -614,396 +647,27 @@ export default function SettingsPage() {
             <ChevronRight className="h-4 w-4 text-pink-300 shrink-0" />
           </Link>
 
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { href: "/perfil-negocio", title: "Perfil & sucursal", desc: "Identidad, dirección, horarios y sucursales" },
+              { href: "/perfil-negocio?tab=pos", title: "Operación POS", desc: "Propinas, USD, Happy Hour y comandas" },
+              { href: "/perfil-negocio?tab=bunz", title: "Bunz", desc: "Aceptación, límites y catálogo" },
+              { href: "/settings?tab=payments", title: "Pagos & Stripe", desc: "Cobros, CLABE y conciliación" },
+              { href: "/settings/legal", title: "Legal & MCCE", desc: "RFC, representante y contrato" },
+            ].map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-2xl border border-white/10 bg-white/5 p-4 no-underline hover:bg-white/10 hover:border-white/20 transition-colors"
+              >
+                <p className="m-0 text-[12px] font-black text-white">{item.title}</p>
+                <p className="m-0 mt-1 text-[10.5px] leading-snug text-gray-500">{item.desc}</p>
+              </Link>
+            ))}
+          </div>
+
           <div className="grid gap-6 lg:grid-cols-2">
-          {/* Profile Card */}
-          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300">
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-500/10 border border-pink-500/20 text-pink-400 shrink-0"><Store className="h-5 w-5" /></div>
-                <h3 className="font-bold text-white text-base">Perfil del Restaurante</h3>
-              </div>
-              {editing !== "profile" ? (
-                <button onClick={() => startEdit("profile")} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"><Edit3 className="h-4 w-4" /></button>
-              ) : (
-                <div className="flex gap-1.5">
-                  <button onClick={() => setEditing(null)} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"><X className="h-4 w-4" /></button>
-                  <button onClick={saveSection} className="rounded-xl border border-green-500/20 bg-green-500/10 p-2 text-green-400 hover:bg-green-500/20 transition-all cursor-pointer"><Check className="h-4 w-4" /></button>
-                </div>
-              )}
-            </div>
-            {editing === "profile" ? (
-              <div className="space-y-3"><Input label="Nombre" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></div>
-            ) : (
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Nombre</span><span className="font-bold text-white">{r?.name}</span></div>
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Slug</span><span className="font-mono text-gray-300 bg-white/5 px-2 py-0.5 rounded border border-white/5 text-xs">{r?.slug}</span></div>
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Estado</span><Badge variant={r?.isActive ? "success" : "danger"}>{r?.isActive ? "Activo" : "Inactivo"}</Badge></div>
-              </div>
-            )}
-          </Card>
-
-          {/* Billing Card */}
-          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300">
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0"><DollarSign className="h-5 w-5" /></div>
-                <h3 className="font-bold text-white text-base">Facturación & Impuestos</h3>
-              </div>
-              {editing !== "billing" ? (
-                <button onClick={() => startEdit("billing")} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"><Edit3 className="h-4 w-4" /></button>
-              ) : (
-                <div className="flex gap-1.5">
-                  <button onClick={() => setEditing(null)} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 transition-all cursor-pointer"><X className="h-4 w-4" /></button>
-                  <button onClick={saveSection} className="rounded-xl border border-green-500/20 bg-green-500/10 p-2 text-green-400 hover:bg-green-500/20 transition-all cursor-pointer"><Check className="h-4 w-4" /></button>
-                </div>
-              )}
-            </div>
-            {editing === "billing" ? (
-              <div className="space-y-4">
-                <Input label="Tasa de IVA (%)" type="number" value={form.taxRate * 100} onChange={(e) => setForm((f) => ({ ...f, taxRate: Number(e.target.value) / 100 }))} />
-                {/* ── Tipo de cambio USD/MXN ── */}
-                <div className="rounded-xl p-3 bg-white/5 border border-white/10 space-y-3">
-                  <p className="text-xs font-black uppercase tracking-wider text-gray-400">Tipo de cambio USD → MXN</p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, usdRateMode: "AUTO" }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border transition-all ${form.usdRateMode === "AUTO" ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300" : "bg-white/5 border-white/10 text-gray-400"}`}
-                    >🌐 Automático (API)</button>
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, usdRateMode: "MANUAL" }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer border transition-all ${form.usdRateMode === "MANUAL" ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "bg-white/5 border-white/10 text-gray-400"}`}
-                    >✍️ Manual</button>
-                  </div>
-                  {form.usdRateMode === "AUTO" ? (
-                    <div className="flex items-center justify-between gap-3 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3 py-2">
-                      <div className="text-xs text-emerald-300 font-bold">1 USD ≈ {(r?.usdRate ?? 18).toFixed(2)} MXN</div>
-                      <button
-                        type="button"
-                        onClick={() => refreshFxRateMutation.mutate({ restaurantId: r?.id })}
-                        disabled={refreshFxRateMutation.isPending}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-[11px] font-black cursor-pointer disabled:opacity-50"
-                      >{refreshFxRateMutation.isPending ? "Actualizando…" : "Actualizar ahora"}</button>
-                    </div>
-                  ) : (
-                    <Input label="Tasa fija (MXN por 1 USD)" type="number" step="0.01" value={form.usdRate} onChange={(e) => setForm((f) => ({ ...f, usdRate: Number(e.target.value) }))} />
-                  )}
-                  <p className="text-[11px] text-gray-500 leading-snug">
-                    💱 La tasa USD <strong className="text-gray-400">no cambia la recompensa</strong>. La recompensa se calcula en la moneda local del negocio (MXN en México), con el valor referencial que se informe en el programa. Sirve para <strong className="text-gray-400">valuar los cobros que recibas en dólares de turistas</strong>.
-                  </p>
-                  <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={(r as any)?.showUsdTicket ?? false}
-                      onChange={(e) => {
-                        setForm((f) => ({ ...f }));
-                        update.mutate({ id: r!.id, showUsdTicket: e.target.checked });
-                      }}
-                      className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer"
-                    />
-                    Mostrar valor USD en el POS y en los tickets (impreso y digital)
-                  </label>
-                  <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={(r as any)?.tipPayoutEnabled ?? false}
-                      onChange={(e) => {
-                        setForm((f) => ({ ...f }));
-                        update.mutate({ id: r!.id, tipPayoutEnabled: e.target.checked });
-                      }}
-                      className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer"
-                    />
-                    Permitir pagar propinas de tarjeta desde caja al cerrar turno (opcional en el cierre)
-                  </label>
-
-                  {/* ── Gratificaciones voluntarias (D-11) — catálogo Rabbitty ── */}
-                  <div className="rounded-xl p-3 bg-white/5 border border-white/10 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-black uppercase tracking-wider text-gray-300 m-0">Gratificaciones voluntarias</p>
-                      {(r as any)?.gratuityMode && (r as any).gratuityMode !== "OFF" ? (
-                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300">
-                          {String((r as any).gratuityMode) === "POS" ? "POS presencial" : String((r as any).gratuityMode) === "BOTH" ? "POS + Digital" : "Digital (próx.)"}
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-gray-500/15 text-gray-400">Deshabilitado</span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-gray-500 m-0 leading-snug">
-                      Catálogo de opciones definido por Rabbitty. "No dejar gratificación" siempre es opción primera y nada va preseleccionado — la elección del cliente es expresa. Independiente del método de pago: jamás aparece como cargo por tarjeta.
-                    </p>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {([
-                        ["OFF", "Deshabilitado"],
-                        ["POS", "POS presencial"],
-                        ["BOTH", "POS + Digital (próximamente)"],
-                      ] as const).map(([mode, label]) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => {
-                            setForm((f) => ({ ...f }));
-                            update.mutate({ id: r!.id, gratuityMode: mode });
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
-                            String((r as any)?.gratuityMode || "OFF") === mode
-                              ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
-                              : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white"
-                          }`}
-                        >{label}</button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] text-gray-500 font-bold">Porcentajes del catálogo:</span>
-                      {[5, 10, 15].map((p) => {
-                        const current = (() => {
-                          try { return JSON.parse(String((r as any)?.gratuityPcts || "[]")) as number[] } catch { return [] as number[] }
-                        })();
-                        const on = current.includes(p);
-                        return (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => {
-                              setForm((f) => ({ ...f }));
-                              const next = on ? current.filter((x) => x !== p) : [...current, p].sort((a, b) => a - b);
-                              update.mutate({ id: r!.id, gratuityPcts: next.length > 0 ? next : [] });
-                            }}
-                            className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
-                              on ? "bg-pink-500/15 border-pink-500/40 text-pink-300" : "bg-white/5 border-white/10 text-gray-500 hover:text-white"
-                            }`}
-                          >{p}%</button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {/* Plan Analíticas Pro (vendible — on/off aquí) */}
-                  <div
-                    className="flex items-center justify-between gap-3 rounded-xl p-3 cursor-pointer transition-colors hover:bg-white/5"
-                    style={{ background: (r as any)?.analyticsProEnabled ? "rgba(16,185,129,0.08)" : "rgba(255,255,255,0.03)", border: (r as any)?.analyticsProEnabled ? "1px solid rgba(16,185,129,0.4)" : "1px solid rgba(255,255,255,0.1)" }}
-                    onClick={() => update.mutate({ id: r!.id, analyticsProEnabled: !(r as any)?.analyticsProEnabled })}
-                    role="button"
-                    aria-pressed={(r as any)?.analyticsProEnabled ? "true" : "false"}
-                  >
-                    <div>
-                      <p className="text-xs font-black text-white m-0">
-                        📊 Plan Analíticas Pro
-                        <span className={`ml-2 text-[9px] font-black px-1.5 py-0.5 rounded-full ${(r as any)?.analyticsProEnabled ? "bg-emerald-500/15 text-emerald-300" : "bg-gray-500/15 text-gray-400"}`}>
-                          {(r as any)?.analyticsProEnabled ? "ACTIVO" : "INACTIVO (upgrade pagado)"}
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-gray-400 m-0 mt-0.5">
-                        Conversión de checkout y abandono, analítica de propinas, tendencia semanal por método y crecimiento de tu clientela.
-                      </p>
-                    </div>
-                    <span className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[11px] font-black ${(r as any)?.analyticsProEnabled ? "bg-emerald-500 text-gray-950" : "bg-white/10 text-gray-500"}`}>
-                      {(r as any)?.analyticsProEnabled ? "✔" : "+"}
-                    </span>
-                  </div>
-                </div>
-                {/* ── Expiración de tabs huérfanas ── */}
-                <Input label="Horas antes de expirar tabs sin pagar (1–72)" type="number" value={form.staleOrderHours} onChange={(e) => setForm((f) => ({ ...f, staleOrderHours: Number(e.target.value) }))} />
-              </div>
-            ) : (
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Moneda</span><span className="font-bold text-white uppercase">{r?.currency}</span></div>
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Tasa de IVA</span><span className="font-bold text-white">{(r?.taxRate ?? 0) * 100}%</span></div>
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Zona Horaria</span><span className="font-mono text-gray-300 bg-white/5 px-2 py-0.5 rounded border border-white/5 text-xs">{r?.timezone}</span></div>
-                <div className="flex justify-between items-center py-0.5">
-                  <span className="text-gray-400 font-medium">Tipo de cambio USD</span>
-                  <span className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full border ${form.usdRateMode === "MANUAL" ? "text-amber-300 border-amber-500/40 bg-amber-500/10" : "text-emerald-300 border-emerald-500/40 bg-emerald-500/10"}`}>
-                      {form.usdRateMode}
-                    </span>
-                    <span className="font-bold text-white">{(r?.usdRate ?? 18).toFixed(2)} MXN</span>
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Expira tabs sin pagar</span><span className="font-bold text-white">{r?.staleOrderHours ?? 12}h</span></div>
-                <div className="flex justify-between items-center py-0.5"><span className="text-gray-400 font-medium">Plan Analíticas</span>
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${(r as any)?.analyticsProEnabled ? "bg-emerald-500/15 text-emerald-300" : "bg-gray-500/15 text-gray-400"}`}>
-                    {(r as any)?.analyticsProEnabled ? "PRO ACTIVO" : "Básico (gratis)"}
-                  </span>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          {/* Bunz Rewards */}
-          <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300 lg:col-span-2">
-            <div className="mb-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0"><Gift className="h-5 w-5" /></div>
-                <div><h3 className="font-bold text-white text-base">Bunz Rewards & Happy Hour</h3><p className="text-xs text-gray-400">Configura la tasa de cashback y las horas de doble recompensa</p></div>
-              </div>
-              {editing !== "bunz" ? (
-                <button onClick={() => startEdit("bunz")} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"><Edit3 className="h-4 w-4" /></button>
-              ) : (
-                <div className="flex gap-1.5">
-                  <button onClick={() => setEditing(null)} className="rounded-xl border border-white/5 bg-white/5 p-2 text-gray-400 cursor-pointer hover:bg-white/10 transition-all"><X className="h-4 w-4" /></button>
-                  <button onClick={saveSection} className="rounded-xl border border-green-500/20 bg-green-500/10 p-2 text-green-400 cursor-pointer hover:bg-green-500/20 transition-all"><Check className="h-4 w-4" /></button>
-                </div>
-              )}
-            </div>
-            {editing === "bunz" ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <Input label="Tasa de recompensa (%)" type="number" value={form.defaultRewardRate} onChange={(e) => setForm((f) => ({ ...f, defaultRewardRate: Number(e.target.value) }))} />
-                  <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
-                    <input type="checkbox" checked={form.acceptsBunz} onChange={(e) => setForm((f) => ({ ...f, acceptsBunz: e.target.checked }))} className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 cursor-pointer" />
-                    Acepta Bunz como forma de pago
-                  </label>
-
-                  {/* ── H16 Nivel B: reglas comerciales de pagos con Bunz ── */}
-                  <div className="rounded-xl p-3 bg-white/5 border border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-black uppercase tracking-wider text-gray-300 m-0">Disponibilidad de pagos con Bunz</p>
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${form.acceptsBunz ? 'bg-emerald-500/15 text-emerald-300' : 'bg-gray-500/15 text-gray-400'}`}>
-                        {form.acceptsBunz ? 'ACTIVO' : 'DESHABILITADO'}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 m-0 leading-snug">
-                      Rabbitty gobierna las reglas del sistema (saldo server-side, atomicidad, 0 cashback en pagos 100% Bunz, auditoría). Aquí defines
-                      <strong className="text-gray-400"> cuándo y cuánto</strong> aceptas, dentro de esos límites. Si no está disponible para el comensal, la opción simplemente no aparece.
-                    </p>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {([
-                        ["ALWAYS", "Siempre disponible"],
-                        ["SCHEDULE", "Días y horarios"],
-                      ] as const).map(([mode, label]) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => setForm((f) => ({ ...f, bunzAvailabilityMode: mode }))}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
-                            form.bunzAvailabilityMode === mode
-                              ? 'bg-violet-500/15 border-violet-500/40 text-violet-300'
-                              : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-                          }`}
-                        >{label}</button>
-                      ))}
-                    </div>
-                    {form.bunzAvailabilityMode === "SCHEDULE" && (
-                      <div className="space-y-2.5 rounded-lg bg-black/30 border border-white/10 p-2.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {[
-                            ["Dom", 0],["Lun", 1],["Mar", 2],["Mié", 3],["Jue", 4],["Vie", 5],["Sáb", 6],
-                          ].map(([label, day]) => {
-                            const days = (() => { try { return JSON.parse(form.bunzSchedule).days as number[] } catch { return [] } })();
-                            const on = days.includes(Number(day));
-                            return (
-                              <button
-                                key={label as string}
-                                type="button"
-                                onClick={() => {
-                                  const next = on ? days.filter((d) => d !== Number(day)) : [...days, Number(day)].sort((a, b) => a - b);
-                                  const sched = (() => { try { return JSON.parse(form.bunzSchedule) } catch { return {} } })() as Record<string, unknown>;
-                                  setForm((f) => ({ ...f, bunzSchedule: JSON.stringify({ days: next, start: sched.start ?? '09:00', end: sched.end ?? '22:00' }) }));
-                                }}
-                                className={`px-2 py-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer ${
-                                  on ? 'bg-violet-500/15 border-violet-500/40 text-violet-300' : 'bg-white/5 border-white/10 text-gray-500 hover:text-white'
-                                }`}
-                              >{label as string}</button>
-                            );
-                          })}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            label="Hora inicio"
-                            type="time"
-                            value={(() => { try { return JSON.parse(form.bunzSchedule).start ?? '09:00' } catch { return '09:00' } })()} 
-                            onChange={(e) => {
-                              const sched = (() => { try { return JSON.parse(form.bunzSchedule) } catch { return {} } })() as Record<string, unknown>;
-                              setForm((f) => ({ ...f, bunzSchedule: JSON.stringify({ ...sched, start: e.target.value }) }));
-                            }}
-                          />
-                          <Input
-                            label="Hora fin"
-                            type="time"
-                            value={(() => { try { return JSON.parse(form.bunzSchedule).end ?? '22:00' } catch { return '22:00' } })()}
-                            onChange={(e) => {
-                              const sched = (() => { try { return JSON.parse(form.bunzSchedule) } catch { return {} } })() as Record<string, unknown>;
-                              setForm((f) => ({ ...f, bunzSchedule: JSON.stringify({ ...sched, end: e.target.value }) }));
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-3 gap-2">
-                      <Input
-                        label="Mínimo Bunz/factura"
-                        type="number"
-                        value={form.bunzMinOrderAmount}
-                        onChange={(e) => setForm((f) => ({ ...f, bunzMinOrderAmount: Math.max(0, Number(e.target.value)) }))}
-                      />
-                      <Input
-                        label="Máximo Bunz/factura"
-                        type="number"
-                        value={form.bunzMaxOrderAmount}
-                        onChange={(e) => setForm((f) => ({ ...f, bunzMaxOrderAmount: Math.max(0, Number(e.target.value)) }))}
-                      />
-                      <Input
-                        label="Límite diario Bunz"
-                        type="number"
-                        value={form.bunzDailyLimit}
-                        onChange={(e) => setForm((f) => ({ ...f, bunzDailyLimit: Math.max(0, Math.floor(Number(e.target.value))) }))}
-                      />
-                    </div>
-                    <p className="text-[10px] text-gray-500 m-0">0 = sin límite. El límite diario se valida atómicamente (concurrentes incluidos) — dos pagos simultáneos no pueden excederlo.</p>
-
-                    {/* ── H16-2: % facturable + catálogo de productos ── */}
-                    <div className="space-y-2.5 rounded-lg bg-black/30 border border-white/10 p-2.5">
-                      <Input
-                        label="% máximo de la factura pagable en Bunz (0 = ALWAYS100)"
-                        type="number"
-                        value={form.bunzMaxPctOfBill}
-                        onChange={(e) => setForm((f) => ({ ...f, bunzMaxPctOfBill: Math.min(100, Math.max(0, Math.floor(Number(e.target.value)))) }))}
-                      />
-                      <Input
-                        label="Catálogo de menuItemId separados por coma (vacío = todos)"
-                        type="text"
-                        value={String(form.bunzAllowedProducts || '[]')}
-                        onChange={(e) => {
-                          const entries = e.target.value.split(',').map((x) => x.trim()).filter(Boolean);
-                          setForm((f) => ({ ...f, bunzAllowedProducts: JSON.stringify(entries) }));
-                        }}
-                      />
-                      <p className="text-[10px] text-gray-500 m-0">
-                        Si pones un % menor a 100, la parte no cubierta se cobra en fiat en el local (pago mixto). El catálogo filtra qué productos aceptan Bunz.
-                      </p>
-                    </div>
-
-                  </div>
-                </div>
-                <div className="rounded-2xl bg-white/5 p-5 border border-white/5">
-                  <h4 className="mb-3 text-sm font-bold text-pink-400">Happy Hour (Bunz x2)</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input label="Hora Inicio" type="time" value={form.happyHourStart || ""} onChange={(e) => setForm((f) => ({ ...f, happyHourStart: e.target.value }))} />
-                    <Input label="Hora Fin" type="time" value={form.happyHourEnd || ""} onChange={(e) => setForm((f) => ({ ...f, happyHourEnd: e.target.value }))} />
-                    <div className="col-span-2">
-                      <Input label="Recompensa Happy Hour (%)" type="number" value={form.happyHourRewardRate || 0} onChange={(e) => setForm((f) => ({ ...f, happyHourRewardRate: Number(e.target.value) }))} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 text-sm">
-                <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
-                  <p className="text-2xl font-black text-pink-400">{r?.defaultRewardRate != null ? `${normalizePercent(r.defaultRewardRate, 20)}%` : "20%"}</p>
-                  <p className="text-xs text-gray-400 mt-1">Cashback Bunz</p>
-                </div>
-                <div className="rounded-xl border border-white/5 bg-white/5 p-4 text-center">
-                  <p className="text-2xl font-black text-white">{r?.acceptsBunz ? "✅" : "❌"}</p>
-                  <p className="text-xs text-gray-400 mt-1">Acepta Bunz</p>
-                </div>
-                <div className={cn("rounded-xl border p-4 text-center", r?.happyHourStart ? "border-pink-500/20 bg-pink-500/10" : "border-white/5 bg-white/5")}>
-                  <p className="text-sm font-bold text-pink-300">{r?.happyHourStart && r?.happyHourEnd ? `${r.happyHourStart} - ${r.happyHourEnd}` : "Sin Happy Hour"}</p>
-                  <p className="text-xs text-gray-400 mt-1">{r?.happyHourRewardRate ? `×${normalizePercent(r.happyHourRewardRate, 40)}% Bunz` : "Happy Hour"}</p>
-                </div>
-              </div>
-            )}
-          </Card>
-
-          {/* Cortes de Caja */}
+          {/* Cortes de Caja */}          {/* Cortes de Caja */}
           <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300 lg:col-span-2 mt-6">
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-3">

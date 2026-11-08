@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Input, Select, Dialog, toast } from "@rabbitty/ui";
 import { 
-  Printer, Monitor, Layers, Cpu, Download, BookOpen, Terminal, 
+  Printer, Monitor, Layers, Cpu, BookOpen, Terminal, 
   CheckCircle, FileText, Sparkles, Building2, Phone, Mail, 
   MapPin, ShieldCheck, Save, RefreshCw, Eye, Share2, MessageCircle, 
   FileDown, Image as ImageIcon, ExternalLink, Maximize2, Upload, X,
@@ -112,10 +112,6 @@ export default function HardwarePage() {
       ticketFooter: ticketForm.ticketFooter,
       printerType: ticketForm.printerType,
     });
-  };
-
-  const handleDownload = (os: string) => {
-    toast.info(`El Rabbitty Print Agent para ${os} estará disponible próximamente. Por ahora usa el bridge USB/Mac o impresión del navegador.`);
   };
 
   const [btConnected, setBtConnected] = useState(false);
@@ -1088,36 +1084,6 @@ export default function HardwarePage() {
             </h2>
 
             <div className="grid gap-6">
-              {/* Print Client Card */}
-              <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md relative overflow-hidden">
-                <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-pink-500/10 blur-2xl pointer-events-none" />
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400">
-                      <Terminal className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-white">Rabbitty Print Agent</h3>
-                      <p className="text-xs text-gray-400">Servicio local para impresión silenciosa</p>
-                      <Badge variant="warning" className="mt-1.5 text-[10px]">Próximamente</Badge>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-400 leading-relaxed">
-                    En desarrollo. Conectará la Mac/Windows de caja con impresoras USB y de Red (RAW 9100) para imprimir sin el diálogo del navegador. Mientras tanto, el <strong>bridge USB/Mac</strong> ya imprime directo por USB y Web Bluetooth cubre impresoras BLE.
-                  </p>
-                  <div className="pt-2 flex flex-wrap gap-2.5">
-                    <Button variant="secondary" size="sm" onClick={() => handleDownload("macOS")}>
-                      <Download className="h-4 w-4" />
-                      macOS (Apple Silicon)
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={() => handleDownload("Windows")}>
-                      <Download className="h-4 w-4" />
-                      Windows (x64)
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-
               {/* Quick Guide Card */}
               <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md">
                 <div className="space-y-4">

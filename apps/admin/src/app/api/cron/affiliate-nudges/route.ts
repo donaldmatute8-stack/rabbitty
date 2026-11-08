@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCoreDb, getRestaurantDb } from "@rabbitty/api/db";
-import { and, eq, isNull, asc } from "drizzle-orm";
+import { and, eq, inArray, isNull, asc } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       })
       .from(ownedBusinesses)
       .innerJoin(users, eq(users.id, ownedBusinesses.ownerId))
-      .where(and(isNull(users.username), eq(ownedBusinesses.status, "VERIFIED")))
+      .where(and(isNull(users.username), inArray(ownedBusinesses.status, ["APPROVED", "VERIFIED"])))
       .limit(200);
 
     const today = new Date().toISOString().slice(0, 10);

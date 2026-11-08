@@ -1,289 +1,129 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, Badge, Button, Dialog, Input, toast } from "@rabbitty/ui";
-import { Settings, ExternalLink, ShieldCheck } from "lucide-react";
+import { Card, Badge, Button } from "@rabbitty/ui";
+import { ExternalLink, Settings, ShieldCheck, Coins, CreditCard, UtensilsCrossed } from "lucide-react";
 
+/**
+ * Mi restaurante & POS — resumen operativo.
+ *
+ * La edición vive en un solo lugar: /perfil-negocio. Aquí solo mostramos el
+ * estado del restaurante y accesos directos para evitar editar dos veces.
+ */
 export default function RestaurantsPage() {
-  const utils = trpc.useUtils();
-  const [isGod, setIsGod] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/auth/2fa/verify")
-      .then((r) => r.json())
-      .then((d) => {
-        if (alive) setIsGod(Boolean(d?.required && d?.verified));
-      })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
+  const { data: restaurants, isLoading, error, refetch } = trpc.admin.getRestaurants.useQuery();
 
-  const { data: restaurants } = trpc.admin.getRestaurants.useQuery();
-  // getPendingBusinesses y approveOwnedBusiness son procedimientos GOD.
-  // Un afiliado no debe llamarlos: antes la pestaña "Solicitudes" fallaba.
-  const { data: pendingBusinesses } = trpc.admin.getPendingBusinesses.useQuery(undefined, {
-    enabled: isGod,
-    retry: false,
-  });
-
-  const approveBusiness = trpc.admin.approveOwnedBusiness.useMutation({
-    onSuccess: () => {
-      utils.admin.getPendingBusinesses.invalidate();
-      toast.success("Estado de negocio actualizado");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const updateRestaurant = trpc.admin.updateRestaurant.useMutation({
-    onSuccess: () => {
-      utils.admin.getRestaurants.invalidate();
-      toast.success("Restaurante actualizado");
-      setEditDialog(null);
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const [activeTab, setActiveTab] = useState<"restaurants" | "applications">("restaurants");
-  useEffect(() => {
-    if (isGod) setActiveTab("applications");
-  }, [isGod]);
-  const [editDialog, setEditDialog] = useState<Record<string, any> | null>(null);
-  const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 0, acceptsBunz: false });
-
-  const openEdit = (r: any) => {
-    setEditDialog(r);
-    setForm({ name: r.name, taxRate: r.taxRate, defaultRewardRate: r.defaultRewardRate ?? 0.05, acceptsBunz: r.acceptsBunz ?? true });
-  };
-
-  const handleSave = () => {
-    if (!editDialog) return;
-    updateRestaurant.mutate({ id: editDialog.id, ...form });
-  };
-
-  const pendingList = pendingBusinesses?.filter((b) => b.status === "PENDING" || b.status === "PENDING_VERIFICATION") ?? [];
+  const r = restaurants?.[0] ?? null;
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-6 pb-10">
       <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
         <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
-              {isGod ? "Restaurantes y Afiliados" : "Mi restaurante y POS"}
-            </h1>
-            <p className="text-gray-400 mt-2 text-sm font-medium">
-              {isGod
-                ? "Gestiona solicitudes de afiliados y restaurantes en la red"
-                : "Datos operativos de tu restaurante. Para perfil público, sucursal, Bunz y equipo usa Mi negocio."}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10">
-              {isGod && (
-                <button
-                  onClick={() => setActiveTab("applications")}
-                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                    activeTab === "applications" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  Solicitudes ({pendingList.length})
-                </button>
-              )}
-              <button
-                onClick={() => setActiveTab("restaurants")}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                  activeTab === "restaurants" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Restaurantes POS ({restaurants?.length ?? 0})
-              </button>
-            </div>
-          </div>
+        <div className="relative z-10">
+          <h1 className="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
+            Mi restaurante & POS
+          </h1>
+          <p className="mt-2 text-sm font-medium text-gray-400">
+            Estado operativo de tu restaurante y accesos a la configuración centralizada.
+          </p>
         </div>
       </div>
 
-      {!isGod && (
-        <Link
-          href="/perfil-negocio"
-          className="flex items-center justify-between gap-3 rounded-2xl border border-pink-500/25 bg-pink-500/10 px-5 py-4 no-underline hover:bg-pink-500/15 transition-colors"
-        >
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 h-5 w-5 text-pink-300 shrink-0" />
-            <div>
-              <p className="m-0 text-sm font-black text-white">Configuración centralizada en Mi negocio</p>
-              <p className="m-0 text-[11px] text-gray-400">
-                Perfil público, sucursal, operación POS, Bunz y equipo en un solo lugar.
-              </p>
-            </div>
-          </div>
-          <span className="text-xs font-bold text-pink-300 whitespace-nowrap">Abrir →</span>
-        </Link>
-      )}
-
-      {activeTab === "applications" ? (
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span>Solicitudes de Afiliación Nuevas</span>
-            {pendingList.length > 0 && (
-              <span className="text-xs bg-pink-500/20 text-pink-400 border border-pink-500/30 px-2 py-0.5 rounded-full">
-                {pendingList.length} Pendiente{pendingList.length > 1 ? "s" : ""}
-              </span>
-            )}
-          </h2>
-          {pendingList.length === 0 ? (
-            <Card className="p-8 text-center text-gray-400 border border-white/5 bg-white/5">
-              No hay solicitudes pendientes.
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {pendingList.map((b) => (
-                <Card key={b.id} className="flex flex-col md:flex-row md:items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500/20 to-orange-500/20 border border-pink-500/30 text-xl font-black text-pink-400">
-                      {b.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-lg text-white">{b.name}</h3>
-                        <Badge variant={b.status === "APPROVED" || b.status === "VERIFIED" ? "success" : b.status === "REJECTED" ? "danger" : "warning"}>
-                          {b.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {b.category}
-                        {b.niche ? <span className="ml-1 rounded-full bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-bold text-cyan-300">{b.niche}</span> : null}
-                        {" "}• {b.address}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-300">
-                        <span>Reward: <strong>{b.rewardPercentage}%</strong></span>
-                        {b.package && <span>Paquete: <strong>{b.package}</strong></span>}
-                        {b.creditLimit ? <span>Capacidad autorizada: <strong>{b.creditLimit.toLocaleString()} Bunz</strong></span> : null}
-                        <span>Dueño: <strong>{b.ownerName || "Sin Nombre"}</strong> ({b.ownerTelegramId ? `@${b.ownerUsername || b.ownerTelegramId}` : "Sin Telegram"})</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 self-end md:self-center">
-                    {(b.status === "PENDING" || b.status === "PENDING_VERIFICATION") && (
-                      <>
-                        <Button
-                          variant="secondary"
-                          className="bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
-                          disabled={approveBusiness.isPending}
-                          onClick={() => approveBusiness.mutate({ id: b.id, status: "REJECTED" })}
-                        >
-                          Rechazar
-                        </Button>
-                        <Button
-                          className="bg-emerald-500 text-black hover:bg-emerald-400 font-bold"
-                          disabled={approveBusiness.isPending}
-                          onClick={() => approveBusiness.mutate({ id: b.id, status: "APPROVED" })}
-                        >
-                          Aprobar Negocio
-                        </Button>
-                      </>
-                    )}
-                    {b.status === "APPROVED" && (
-                      <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
-                        ✓ Aprobado
-                      </span>
-                    )}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {restaurants?.map((r) => (
-            <Card key={r.id} className="flex items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 hover:bg-white/10 transition-all duration-300">
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-500/10 border border-pink-500/20 text-xl font-black text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.15)]">
-                  {r.name.charAt(0)}
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-white">{r.name}</h3>
-                  <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                    <span className="font-mono bg-white/5 px-2 py-0.5 rounded border border-white/5">{r.slug}</span>
-                    <span>•</span>
-                    <Badge variant={r.isActive ? "success" : "danger"}>
-                      {r.isActive ? "Activo" : "Inactivo"}
-                    </Badge>
-                    <span>•</span>
-                    <span className="uppercase text-gray-300 font-semibold">{r.currency}</span>
-                    <span>•</span>
-                    <span className="text-gray-300 font-semibold">{(r.taxRate * 100).toFixed(0)}% IVA</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.open(`https://rabbitty.me/${r.slug}`, "_blank", "noopener,noreferrer")}
-                  title="Ver página pública"
-                  aria-label="Ver página pública"
-                  className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300"
-                >
-                  <ExternalLink className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => openEdit(r)}
-                  className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300"
-                >
-                  <Settings className="h-5 w-5" />
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Dialog
-        open={!!editDialog}
-        onClose={() => setEditDialog(null)}
-        title="Editar Restaurante"
+      <Link
+        href="/perfil-negocio"
+        className="flex items-center justify-between gap-3 rounded-2xl border border-pink-500/25 bg-pink-500/10 px-5 py-4 no-underline transition-colors hover:bg-pink-500/15"
       >
-        <div className="space-y-4">
-          <Input
-            label="Nombre"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="IVA (%)"
-              type="number"
-              value={form.taxRate * 100}
-              onChange={(e) => setForm((f) => ({ ...f, taxRate: Number(e.target.value) / 100 }))}
-            />
-            <Input
-              label="Reward Rate (%)"
-              type="number"
-              value={form.defaultRewardRate * 100}
-              onChange={(e) => setForm((f) => ({ ...f, defaultRewardRate: Number(e.target.value) / 100 }))}
-            />
-          </div>
-          <label className="flex items-center gap-2.5 text-sm text-gray-300 font-semibold cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.acceptsBunz}
-              onChange={(e) => setForm((f) => ({ ...f, acceptsBunz: e.target.checked }))}
-              className="h-5 w-5 rounded border-white/10 bg-white/5 text-pink-500 focus:ring-pink-500/20 focus:ring-offset-0 transition-all duration-300"
-            />
-            Acepta Bunz
-          </label>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setEditDialog(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={updateRestaurant.isPending}>
-              {updateRestaurant.isPending ? "Guardando..." : "Guardar"}
-            </Button>
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-pink-300" />
+          <div>
+            <p className="m-0 text-sm font-black text-white">Toda la edición vive en Mi negocio</p>
+            <p className="m-0 text-[11px] text-gray-400">
+              Perfil público, sucursales, POS, Bunz, equipo y documentos en un solo lugar.
+            </p>
           </div>
         </div>
-      </Dialog>
+        <span className="whitespace-nowrap text-xs font-bold text-pink-300">Abrir →</span>
+      </Link>
+
+      {isLoading ? (
+        <Card className="border border-white/5 bg-white/5 p-8 text-center text-sm text-gray-400">
+          Cargando restaurante…
+        </Card>
+      ) : error ? (
+        <Card className="border border-rose-500/20 bg-rose-500/10 p-6 text-center">
+          <p className="m-0 text-sm font-semibold text-rose-200">
+            No se pudo cargar tu restaurante: {error.message}
+          </p>
+          <Button
+            variant="secondary"
+            onClick={() => void refetch()}
+            className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-200 text-xs font-bold"
+          >
+            Reintentar
+          </Button>
+        </Card>
+      ) : !r ? (
+        <Card className="border border-white/5 bg-white/5 p-8 text-center text-sm text-gray-400">
+          No encontramos un restaurante asociado a esta cuenta.
+        </Card>
+      ) : (
+        <Card className="border border-white/5 bg-white/5 p-6 backdrop-blur-md">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-pink-500/20 bg-pink-500/10 text-xl font-black text-pink-400 shadow-[0_0_15px_rgba(236,72,153,0.15)]">
+                {r.name.charAt(0)}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-white">{r.name}</h2>
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                  <span className="rounded border border-white/5 bg-white/5 px-2 py-0.5 font-mono">{r.slug}</span>
+                  <Badge variant={r.isActive ? "success" : "danger"}>{r.isActive ? "Activo" : "Inactivo"}</Badge>
+                  <span className="font-semibold uppercase text-gray-300">{r.currency}</span>
+                  <span className="font-semibold text-gray-300">{(Number(r.taxRate) * 100).toFixed(0)}% IVA</span>
+                  <span className="font-semibold text-gray-300">{r.defaultRewardRate}% Bunz</span>
+                  <span className="font-semibold text-gray-300">{r.acceptsBunz ? "Acepta Bunz" : "No acepta Bunz"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => window.open(`https://rabbitty.me/${r.slug}`, "_blank", "noopener,noreferrer")}
+                variant="secondary"
+                className="rounded-xl border border-white/10 bg-white/5 text-xs"
+              >
+                <ExternalLink className="mr-1.5 h-4 w-4" /> Ver página pública
+              </Button>
+              <Link
+                href="/perfil-negocio?tab=sucursal"
+                className="inline-flex items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold text-white no-underline hover:bg-white/10"
+              >
+                <Settings className="mr-1.5 h-4 w-4" /> Editar en Mi negocio
+              </Link>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { href: "/perfil-negocio?tab=pos", title: "Operación POS", desc: "Propinas, USD, Happy Hour y comandas", Icon: UtensilsCrossed },
+          { href: "/perfil-negocio?tab=bunz", title: "Bunz", desc: "Aceptación, límites y catálogo", Icon: Coins },
+          { href: "/settings/legal", title: "Legal & MCCE", desc: "RFC, representante y contrato", Icon: ShieldCheck },
+          { href: "/settings?tab=payments", title: "Pagos & Stripe", desc: "Cobros, CLABE y conciliación", Icon: CreditCard },
+        ].map(({ href, title, desc, Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className="rounded-2xl border border-white/10 bg-white/5 p-4 no-underline transition-colors hover:border-white/20 hover:bg-white/10"
+          >
+            <Icon className="h-4 w-4 text-pink-300" />
+            <p className="m-0 mt-2 text-[12px] font-black text-white">{title}</p>
+            <p className="m-0 mt-1 text-[10.5px] leading-snug text-gray-500">{desc}</p>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

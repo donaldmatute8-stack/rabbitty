@@ -18,10 +18,10 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Store, Save, Globe, Clock, MapPin, Info, RefreshCw, Receipt, Volume2,
-  Coins, Users, ChevronRight, Building2, Sparkles,
+  Coins, Users, ChevronRight, Building2, Sparkles, Plus, Pencil, Power,
 } from "lucide-react";
 import Link from "next/link";
-import { Card, Button, Input, toast } from "@rabbitty/ui";
+import { Card, Button, Input, Dialog, toast } from "@rabbitty/ui";
 import { trpc } from "../../../lib/trpc-client";
 import { useBranch } from "../../../components/DashboardClientWrapper";
 
@@ -52,10 +52,42 @@ const Field = ({ label, hint, children }: { label: string; hint?: string; childr
 const textInput = "bg-black/50 border-white/10 text-white text-xs h-9";
 
 export default function BusinessProfilePage() {
-  const [tab, setTab] = useState<Tab>("perfil");
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "perfil";
+    const raw = new URLSearchParams(window.location.search).get("tab");
+    const valid: Tab[] = ["perfil", "sucursal", "pos", "bunz", "equipo"];
+    return valid.includes(raw as Tab) ? (raw as Tab) : "perfil";
+  });
   const utils = trpc.useUtils();
   const { branchId: activeBranchId, setBranchId } = useBranch();
-  const { data: branches } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
+  const { data: branches } = trpc.admin.getBranches.useQuery(
+    { includeInactive: true },
+    { retry: false }
+  );
+  const createBranch = trpc.admin.createBranch.useMutation({
+    onSuccess: (branch: any) => {
+      toast.success("Sucursal creada");
+      setBranchModal(null);
+      if (branch?.id) setBranchId(branch.id);
+      void utils.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo crear la sucursal"),
+  });
+  const updateBranch = trpc.admin.updateBranch.useMutation({
+    onSuccess: () => {
+      toast.success("Sucursal actualizada");
+      setBranchModal(null);
+      void utils.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo actualizar la sucursal"),
+  });
+  const deactivateBranch = trpc.admin.deactivateBranch.useMutation({
+    onSuccess: () => {
+      toast.success("Sucursal desactivada");
+      void utils.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "No se pudo desactivar la sucursal"),
+  });
 
   // ── Identidad pública ──
   const profileQuery = trpc.settings.getBusinessProfile.useQuery(undefined, { retry: false });
@@ -120,6 +152,9 @@ export default function BusinessProfilePage() {
     bunzMinOrderAmount: "0", bunzMaxOrderAmount: "0",
     bunzDailyLimit: "0", bunzMaxPctOfBill: "100",
   });
+
+  const [branchModal, setBranchModal] = useState<{ mode: "create" | "edit"; id?: string } | null>(null);
+  const [branchForm, setBranchForm] = useState({ name: "", address: "", phone: "" });
 
   useEffect(() => {
     if (!biz) return;
@@ -186,7 +221,9 @@ export default function BusinessProfilePage() {
       staleOrderHours: String(r.staleOrderHours ?? 12),
       showUsdTicket: Boolean(r.showUsdTicket),
       tipPayoutEnabled: Boolean(r.tipPayoutEnabled),
-      gratuityMode: (["OFF", "POS", "DIGITAL", "BOTH"].includes(String(r.gratuityMode)) ? String(r.gratuityMode) : "OFF") as "OFF" | "POS" | "DIGITAL" | "BOTH",
+      gratuityMode: (["OFF", "POS", "DIGITAL", "BOTH"].includes(String(r.gratuityMode))
+        ? (["DIGITAL", "BOTH"].includes(String(r.gratuityMode)) ? "POS" : String(r.gratuityMode))
+        : "OFF") as "OFF" | "POS" | "DIGITAL" | "BOTH",
       gratuityPcts: (() => {
         try {
           const parsed = JSON.parse(String(r.gratuityPcts ?? "[]"));
@@ -298,6 +335,28 @@ export default function BusinessProfilePage() {
     return (
       <div className="min-h-screen bg-[#050508] p-6 lg:p-10">
         <div className="max-w-3xl mx-auto text-sm text-gray-400">Cargando tu negocio…</div>
+      </div>
+    );
+  }
+
+  const loadError = profileQuery.error || restaurantsQuery.error;
+
+  if (loadError && !biz && !restaurantId) {
+    return (
+      <div className="min-h-screen bg-[#050508] p-6 lg:p-10">
+        <div className="max-w-3xl mx-auto space-y-3">
+          <h1 className="text-2xl font-black text-white">Mi negocio</h1>
+          <p className="text-sm text-rose-300">
+            No se pudo cargar tu negocio: {loadError.message}
+          </p>
+          <Button
+            variant="secondary"
+            onClick={() => { void profileQuery.refetch(); void restaurantsQuery.refetch(); }}
+            className="rounded-xl bg-white/5 border border-white/10 text-gray-200 text-xs font-bold cursor-pointer"
+          >
+            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reintentar
+          </Button>
+        </div>
       </div>
     );
   }
@@ -554,35 +613,102 @@ export default function BusinessProfilePage() {
         {tab === "sucursal" && (
           <div className="space-y-4">
             <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
-              <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
-                <Building2 className="h-4 w-4 text-cyan-400" /> Tus sucursales
-              </h2>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
+                  <Building2 className="h-4 w-4 text-cyan-400" /> Tus sucursales
+                </h2>
+                <Button
+                  onClick={() => {
+                    setBranchForm({ name: "", address: "", phone: "" });
+                    setBranchModal({ mode: "create" });
+                  }}
+                  className="rounded-xl bg-cyan-600/20 border border-cyan-500/30 text-cyan-200 text-[11px] font-black px-3 py-1.5"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Nueva sucursal
+                </Button>
+              </div>
               <p className="text-[11px] text-gray-500 m-0">
                 Elige la sucursal que quieres editar. El resto del panel cambia al mismo contexto.
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {(branches ?? []).map((b: any) => {
                   const active = b.id === activeBranchId;
+                  const activeCount = (branches ?? []).filter((x: any) => x.isActive).length;
                   return (
-                    <button
+                    <div
                       key={b.id}
-                      type="button"
-                      onClick={() => {
-                        setBranchId(b.id);
-                        utils.invalidate();
-                      }}
-                      className={`rounded-xl border p-3 text-left transition-all cursor-pointer ${
+                      className={`rounded-xl border p-3 transition-all ${
                         active
                           ? "border-cyan-500/50 bg-cyan-500/10"
-                          : "border-white/10 bg-black/20 hover:bg-white/5"
+                          : b.isActive
+                          ? "border-white/10 bg-black/20"
+                          : "border-white/5 bg-black/40 opacity-60"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[12px] font-black text-white truncate">{b.name}</span>
-                        {active && <span className="text-[9px] font-black uppercase text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 rounded-full">Activa</span>}
+                        <div className="flex items-center gap-1">
+                          {!b.isActive && (
+                            <span className="text-[8.5px] font-black uppercase text-gray-400 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-full">Inactiva</span>
+                          )}
+                          {active && (
+                            <span className="text-[8.5px] font-black uppercase text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 rounded-full">Activa</span>
+                          )}
+                        </div>
                       </div>
                       <p className="m-0 mt-0.5 text-[10px] text-gray-500 truncate">{b.address || "Sin dirección"}</p>
-                    </button>
+                      {b.phone && <p className="m-0 text-[10px] text-gray-600 truncate">{b.phone}</p>}
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {b.isActive && !active && (
+                          <button
+                            type="button"
+                            onClick={() => { setBranchId(b.id); utils.invalidate(); }}
+                            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold text-cyan-200"
+                          >
+                            Usar
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBranchForm({ name: b.name || "", address: b.address || "", phone: b.phone || "" });
+                            setBranchModal({ mode: "edit", id: b.id });
+                          }}
+                          className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-300"
+                        >
+                          <Pencil className="inline h-3 w-3 mr-0.5" /> Editar
+                        </button>
+                        {b.isActive ? (
+                          <button
+                            type="button"
+                            disabled={activeCount <= 1 || deactivateBranch.isPending}
+                            onClick={() => {
+                              const fallback = (branches ?? []).find((x: any) => x.id !== b.id && x.isActive);
+                              deactivateBranch.mutate(
+                                { id: b.id },
+                                {
+                                  onSuccess: () => {
+                                    if (b.id === activeBranchId && fallback) setBranchId(fallback.id);
+                                  },
+                                }
+                              );
+                            }}
+                            className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-[10px] font-bold text-rose-300 disabled:opacity-40"
+                            title={activeCount <= 1 ? "No puedes desactivar la última sucursal" : "Desactivar"}
+                          >
+                            <Power className="inline h-3 w-3 mr-0.5" /> Desactivar
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => updateBranch.mutate({ id: b.id, isActive: true })}
+                            className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-300"
+                          >
+                            <Power className="inline h-3 w-3 mr-0.5" /> Activar
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
                 {!branches?.length && (
@@ -590,16 +716,61 @@ export default function BusinessProfilePage() {
                 )}
               </div>
               <Link href="/support" className="text-[11px] font-bold text-cyan-300 underline">
-                ¿Necesitas otra sucursal? Escríbenos
+                ¿Necesitas ayuda con una sucursal? Escríbenos
               </Link>
             </Card>
 
+            <Dialog
+              open={!!branchModal}
+              onClose={() => setBranchModal(null)}
+              title={branchModal?.mode === "create" ? "Nueva sucursal" : "Editar sucursal"}
+            >
+              <div className="space-y-4">
+                <Field label="Nombre de la sucursal">
+                  <Input value={branchForm.name} onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })} className={textInput} />
+                </Field>
+                <Field label="Dirección">
+                  <Input value={branchForm.address} onChange={(e) => setBranchForm({ ...branchForm, address: e.target.value })} className={textInput} />
+                </Field>
+                <Field label="Teléfono">
+                  <Input value={branchForm.phone} onChange={(e) => setBranchForm({ ...branchForm, phone: e.target.value })} className={textInput} />
+                </Field>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="secondary" onClick={() => setBranchModal(null)} className="rounded-xl text-xs">Cancelar</Button>
+                  <Button
+                    onClick={() => {
+                      if (branchForm.name.trim().length < 2) return toast.error("Escribe el nombre de la sucursal");
+                      if (branchForm.address.trim().length < 4) return toast.error("Escribe la dirección");
+                      if (branchModal?.mode === "create") {
+                        createBranch.mutate({
+                          name: branchForm.name.trim(),
+                          address: branchForm.address.trim(),
+                          phone: branchForm.phone.trim() || null,
+                        });
+                      } else if (branchModal?.id) {
+                        updateBranch.mutate({
+                          id: branchModal.id,
+                          name: branchForm.name.trim(),
+                          address: branchForm.address.trim(),
+                          phone: branchForm.phone.trim() || null,
+                        });
+                      }
+                    }}
+                    disabled={createBranch.isPending || updateBranch.isPending}
+                    className="rounded-xl bg-cyan-600 text-white text-xs font-black px-4"
+                  >
+                    {createBranch.isPending || updateBranch.isPending ? "Guardando…" : "Guardar sucursal"}
+                  </Button>
+                </div>
+              </div>
+            </Dialog>
+
             <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
               <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
-                <Building2 className="h-4 w-4 text-cyan-400" /> Identidad de la sucursal
+                <Building2 className="h-4 w-4 text-cyan-400" /> Datos del restaurante (compartidos)
               </h2>
               <p className="text-[11px] text-gray-500 m-0">
-                Estás editando la sucursal activa. Cambia de sucursal en el selector superior del panel.
+                Estos datos aplican a todas las sucursales: nombre comercial, slug, moneda, impuestos y datos fiscales.
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Nombre en el ticket">
@@ -651,7 +822,7 @@ export default function BusinessProfilePage() {
               <Button onClick={() => void saveBranch()} disabled={updateRestaurant.isPending}
                 className="rounded-xl px-4 py-2 text-xs font-black bg-linear-to-r from-cyan-600 to-blue-600 text-white cursor-pointer disabled:opacity-50">
                 <Save className="h-3.5 w-3.5 mr-1.5" />
-                {updateRestaurant.isPending ? "Guardando…" : "Guardar sucursal"}
+                {updateRestaurant.isPending ? "Guardando…" : "Guardar datos del restaurante"}
               </Button>
             </div>
           </div>
@@ -743,13 +914,11 @@ export default function BusinessProfilePage() {
               <Field label="Gratificación voluntaria en el POS" hint="Catálogo controlado por Rabbitty (5/10/15%)">
                 <select
                   value={pos.gratuityMode}
-                  onChange={(e) => setPos({ ...pos, gratuityMode: e.target.value as "OFF" | "POS" | "DIGITAL" | "BOTH" })}
+                  onChange={(e) => setPos({ ...pos, gratuityMode: e.target.value as "OFF" | "POS" })}
                   className="w-full rounded-lg border border-white/10 text-white text-xs h-9 px-2 bg-black/50"
                 >
                   <option value="OFF">Desactivada</option>
-                  <option value="POS">Solo POS presencial</option>
-                  <option value="DIGITAL">Solo digital (próximamente)</option>
-                  <option value="BOTH">POS + digital</option>
+                  <option value="POS">POS presencial</option>
                 </select>
               </Field>
 

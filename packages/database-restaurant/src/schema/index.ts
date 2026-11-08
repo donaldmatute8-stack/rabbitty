@@ -25,6 +25,10 @@ export const restaurants = pgTable("restaurants", {
   taxRate: real("taxRate").default(0.16).notNull(),
   timezone: text("timezone").default("America/Mexico_City").notNull(),
   defaultRewardRate: integer("defaultRewardRate").default(20).notNull(),
+  /** Perfil de negocio elegido en el admin (restaurant, cafe, bar, etc.) */
+  businessType: text("businessType").default("restaurant").notNull(),
+  /** Módulos activos del sidebar, JSON array. Antes vivía solo en localStorage. */
+  activeModules: text("activeModules").default("[]").notNull(),
   acceptsBunz: boolean("acceptsBunz").default(true).notNull(),
   happyHourStart: text("happyHourStart"), // e.g. "14:00"
   happyHourEnd: text("happyHourEnd"), // e.g. "18:00"

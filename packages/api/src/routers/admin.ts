@@ -259,12 +259,16 @@ export const adminRouter = router({
         ownerTelegramId: users.telegramId,
       })
       .from(ownedBusinesses)
-      .leftJoin(users, eq(ownedBusinesses.ownerId, users.id));
+      .leftJoin(users, eq(ownedBusinesses.ownerId, users.id))
+      // Solo lo que realmente requiere acción del God Admin. El filtro vive
+      // aquí para no traer toda la base al panel de aprobaciones.
+      .where(inArray(ownedBusinesses.status, ["PENDING", "PENDING_VERIFICATION"]))
+      .orderBy(desc(ownedBusinesses.createdAt));
     return list;
   }),
 
   approveOwnedBusiness: godAdminProcedure
-    .input(z.object({ id: z.string(), status: z.enum(["APPROVED", "VERIFIED", "REJECTED"]) }))
+    .input(z.object({ id: z.string(), status: z.enum(["APPROVED", "REJECTED"]) }))
     .mutation(async ({ ctx, input }) => {
       const [updated] = await ctx.coreDb
         .update(ownedBusinesses)
@@ -272,7 +276,7 @@ export const adminRouter = router({
         .where(eq(ownedBusinesses.id, input.id))
         .returning();
 
-      if (updated && (input.status === "APPROVED" || input.status === "VERIFIED")) {
+      if (updated && input.status === "APPROVED") {
         // ── Aprovisionar restaurante + sucursal (idempotente) ──
         // Sin esto, el negocio aprobado no tiene tenancy y no puede entrar al
         // admin ni operar el POS. Los tenants existentes ya lo tienen.
@@ -435,6 +439,8 @@ export const adminRouter = router({
         taxRate: z.number().optional(),
         timezone: z.string().optional(),
         defaultRewardRate: z.number().optional(),
+        businessType: z.enum(["restaurant", "cafe", "bar", "dark_kitchen", "food_truck"]).optional(),
+        activeModules: z.string().max(5000).optional(),
         acceptsBunz: z.boolean().optional(),
         happyHourStart: z.string().optional().nullable(),
         happyHourEnd: z.string().optional().nullable(),
@@ -531,6 +537,22 @@ export const adminRouter = router({
           updateData.bunzSchedule = JSON.stringify(clean);
         } catch {
           delete updateData.bunzSchedule;
+        }
+      }
+      if (updateData.activeModules !== undefined) {
+        try {
+          const parsed = JSON.parse(updateData.activeModules);
+          updateData.activeModules = JSON.stringify(
+            Array.from(
+              new Set(
+                (Array.isArray(parsed) ? parsed : [])
+                  .filter((v: unknown) => typeof v === "string")
+                  .slice(0, 80)
+              )
+            )
+          );
+        } catch {
+          delete updateData.activeModules;
         }
       }
       if (updateData.bunzMinOrderAmount !== undefined) updateData.bunzMinOrderAmount = Math.max(0, Number(updateData.bunzMinOrderAmount) || 0);
@@ -954,31 +976,163 @@ export const adminRouter = router({
       }
     }),
 
-  getBranches: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.staffRole && ctx.staffBranchId) {
-      return await ctx.restaurantDb.select().from(branches).where(and(eq(branches.id, ctx.staffBranchId), eq(branches.isActive, true)));
-    }
-    // ── Multi-tenant guard: un OWNER (no staff) solo ve las branches de SU negocio ──
-    if (ctx.userId) {
-      const coreOwned = await import("@rabbitty/database-core/schema").then(m => m.ownedBusinesses);
-      const ownerBiz = await ctx.coreDb.select().from(coreOwned)
-        .where(eq(coreOwned.ownerId, ctx.userId)).limit(1).catch(() => []);
-      if (ownerBiz[0]?.id) {
-        const ownRest = await ctx.restaurantDb.select({ id: restaurants.id }).from(restaurants)
-          .where(eq(restaurants.businessId, ownerBiz[0].id));
-        if (ownRest[0]?.id) {
-          return await ctx.restaurantDb.select().from(branches)
-            .where(and(eq(branches.restaurantId, ownRest[0].id), eq(branches.isActive, true)));
-        }
-        return [];
+  getBranches: protectedProcedure
+    .input(z.object({ includeInactive: z.boolean().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const includeInactive = Boolean(input?.includeInactive);
+
+      const scoped = async (restaurantId: string) => {
+        const conditions = [eq(branches.restaurantId, restaurantId)];
+        if (!includeInactive) conditions.push(eq(branches.isActive, true));
+        return await ctx.restaurantDb.select().from(branches).where(and(...conditions));
+      };
+
+      if (ctx.staffRole && ctx.staffBranchId) {
+        const conditions = [eq(branches.id, ctx.staffBranchId)];
+        if (!includeInactive) conditions.push(eq(branches.isActive, true));
+        return await ctx.restaurantDb.select().from(branches).where(and(...conditions));
       }
-    }
-    // Sin owner y sin staff: SOLO las sucursales del restaurante en contexto.
-    // Antes devolvía TODAS las sucursales de la plataforma (fuga de tenants).
-    const restaurantId = await resolveRestaurantId(ctx);
-    if (!restaurantId) return [];
-    return await ctx.restaurantDb.select().from(branches).where(and(eq(branches.restaurantId, restaurantId), eq(branches.isActive, true)));
-  }),
+
+      // ── Multi-tenant guard: un OWNER (no staff) solo ve las branches de SU negocio ──
+      if (ctx.userId) {
+        const coreOwned = await import("@rabbitty/database-core/schema").then((m) => m.ownedBusinesses);
+        const ownerBiz = await ctx.coreDb
+          .select()
+          .from(coreOwned)
+          .where(eq(coreOwned.ownerId, ctx.userId))
+          .limit(1)
+          .catch(() => []);
+        if (ownerBiz[0]?.id) {
+          const ownRest = await ctx.restaurantDb
+            .select({ id: restaurants.id })
+            .from(restaurants)
+            .where(eq(restaurants.businessId, ownerBiz[0].id));
+          if (ownRest[0]?.id) return await scoped(ownRest[0].id);
+          return [];
+        }
+      }
+
+      // Sin owner y sin staff: SOLO las sucursales del restaurante en contexto.
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) return [];
+      return await scoped(restaurantId);
+    }),
+
+  createBranch: adminOnlyProcedure
+    .input(
+      z.object({
+        name: z.string().min(2).max(80),
+        address: z.string().min(4).max(220),
+        phone: z.string().max(30).optional().nullable(),
+        cashDropEnabled: z.boolean().optional(),
+        cashDropThreshold: z.number().min(0).max(1_000_000).optional(),
+        cashDropManagerThreshold: z.number().min(0).max(1_000_000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Restaurante no resuelto" });
+      const [branch] = await ctx.restaurantDb
+        .insert(branches)
+        .values({
+          restaurantId,
+          name: input.name.trim(),
+          address: input.address.trim(),
+          phone: input.phone?.trim() || null,
+          isActive: true,
+          cashDropEnabled: input.cashDropEnabled ?? false,
+          cashDropThreshold: input.cashDropThreshold ?? 3000,
+          cashDropManagerThreshold: input.cashDropManagerThreshold ?? 1000,
+        })
+        .returning();
+      if (!branch) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la sucursal" });
+      }
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: ctx.userId ?? null,
+        action: "BRANCH_CREATED",
+        resource: "branches",
+        resourceId: branch.id,
+        details: JSON.stringify({ restaurantId, name: branch.name, address: branch.address }),
+      });
+      return branch;
+    }),
+
+  updateBranch: adminOnlyProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(2).max(80).optional(),
+        address: z.string().min(4).max(220).optional(),
+        phone: z.string().max(30).optional().nullable(),
+        isActive: z.boolean().optional(),
+        cashDropEnabled: z.boolean().optional(),
+        cashDropThreshold: z.number().min(0).max(1_000_000).optional(),
+        cashDropManagerThreshold: z.number().min(0).max(1_000_000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Restaurante no resuelto" });
+      const [existing] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, input.id))
+        .limit(1);
+      if (!existing || existing.restaurantId !== restaurantId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Sucursal no encontrada" });
+      }
+      const patch: Record<string, unknown> = {};
+      if (input.name !== undefined) patch.name = input.name.trim();
+      if (input.address !== undefined) patch.address = input.address.trim();
+      if (input.phone !== undefined) patch.phone = input.phone?.trim() || null;
+      if (input.isActive !== undefined) patch.isActive = input.isActive;
+      if (input.cashDropEnabled !== undefined) patch.cashDropEnabled = input.cashDropEnabled;
+      if (input.cashDropThreshold !== undefined) patch.cashDropThreshold = input.cashDropThreshold;
+      if (input.cashDropManagerThreshold !== undefined) patch.cashDropManagerThreshold = input.cashDropManagerThreshold;
+      if (Object.keys(patch).length === 0) return { ok: true };
+      const [updated] = await ctx.restaurantDb
+        .update(branches)
+        .set(patch)
+        .where(eq(branches.id, input.id))
+        .returning();
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: ctx.userId ?? null,
+        action: "BRANCH_UPDATED",
+        resource: "branches",
+        resourceId: input.id,
+        details: JSON.stringify({ restaurantId, patch }),
+      });
+      return updated;
+    }),
+
+  deactivateBranch: adminOnlyProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const restaurantId = await resolveRestaurantId(ctx);
+      if (!restaurantId) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Restaurante no resuelto" });
+      const active = await ctx.restaurantDb
+        .select({ id: branches.id })
+        .from(branches)
+        .where(and(eq(branches.restaurantId, restaurantId), eq(branches.isActive, true)));
+      if (active.length <= 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No puedes desactivar la última sucursal activa" });
+      }
+      const [updated] = await ctx.restaurantDb
+        .update(branches)
+        .set({ isActive: false })
+        .where(and(eq(branches.id, input.id), eq(branches.restaurantId, restaurantId)))
+        .returning();
+      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Sucursal no encontrada" });
+      await ctx.coreDb.insert(auditEntries).values({
+        userId: ctx.userId ?? null,
+        action: "BRANCH_DEACTIVATED",
+        resource: "branches",
+        resourceId: input.id,
+        details: JSON.stringify({ restaurantId }),
+      });
+      return { ok: true };
+    }),
 
   getCrossStoreKpis: protectedProcedure.query(async ({ ctx }) => {
     let allBranches = await ctx.restaurantDb.select().from(branches);

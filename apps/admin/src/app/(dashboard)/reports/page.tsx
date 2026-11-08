@@ -62,7 +62,14 @@ export default function ReportsPage() {
     return { from: iso(from), to: iso(to) };
   }, [daysRange, customRange.from, customRange.to]);
   const { branchId: activeBranchId } = useBranch();
-  const branchId = activeBranchId || "default";
+  // El contexto puede apuntar a una sucursal desactivada o de otro tenant.
+  // Validamos contra las sucursales visibles antes de consultar para que los
+  // reportes nunca caigan en datos vacíos por un branchId obsoleto.
+  const { data: branchOptions } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
+  const branchId =
+    branchOptions && branchOptions.some((b: any) => b.id === activeBranchId)
+      ? activeBranchId
+      : branchOptions?.[0]?.id || "default";
 
   const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, ...dateFilter });
   const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 30, ...dateFilter });

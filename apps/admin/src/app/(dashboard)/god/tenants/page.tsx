@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Crown, Store, Eye, LogOut, RefreshCw, UserPlus, ExternalLink, ShieldCheck, Link2, Copy, X } from "lucide-react";
+import { Crown, Store, Eye, LogOut, RefreshCw, UserPlus, ExternalLink, ShieldCheck, Link2, Copy, X, Check } from "lucide-react";
 import { Card, Button, Input, cn, toast } from "@rabbitty/ui";
 
 interface Tenant {
@@ -26,6 +26,17 @@ interface Tenant {
 
 export default function GodTenantsPage() {
   const [tenants, setTenants] = useState<Tenant[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pending, setPending] = useState<Array<{
+    id: string;
+    name: string;
+    category: string | null;
+    address: string | null;
+    rewardPercentage: number | null;
+    ownerName: string | null;
+    status: string;
+  }>>([]);
+  const [approving, setApproving] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", category: "Cafetería", rewardPercentage: "12", creditLimit: "500" });
   const [startingAs, setStartingAs] = useState<string | null>(null);
@@ -33,20 +44,58 @@ export default function GodTenantsPage() {
   const [linkModal, setLinkModal] = useState<{ url: string; tenant: string; expiresAt?: string } | null>(null);
 
   const loadTenants = async () => {
+    setLoadError(null);
     try {
-      const res = await fetch("/api/admin/impersonate");
-      void res;
-      // listTenants via tRPC batch endpoint (plain fetch to batch)
-      const r = await fetch("/api/trpc/god.listTenants?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } })));
+      // listTenants + solicitudes pendientes via tRPC batch endpoint
+      const [r, p] = await Promise.all([
+        fetch("/api/trpc/god.listTenants?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))),
+        fetch("/api/trpc/admin.getPendingBusinesses?batch=1&input=" + encodeURIComponent(JSON.stringify({ "0": { json: null } }))),
+      ]);
+      if (!r.ok) throw new Error(`No se pudo cargar la lista de tenants (HTTP ${r.status})`);
+
       const data = await r.json();
+      if (data?.[0]?.error) {
+        throw new Error(data[0].error?.json?.message || data[0].error?.message || "No se pudo cargar la lista de tenants");
+      }
       const json = data?.[0]?.result?.data?.json;
       setTenants(Array.isArray(json) ? json : []);
-    } catch {
+
+      const pdata = await p.json().catch(() => null);
+      const pjson = pdata?.[0]?.result?.data?.json;
+      const list = Array.isArray(pjson) ? pjson : [];
+      // El servidor ya filtra; este guard cubre respuestas cacheadas antiguas.
+      setPending(
+        list.filter((b: any) => b.status === "PENDING" || b.status === "PENDING_VERIFICATION")
+      );
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "No se pudo cargar el panel de tenants");
       setTenants([]);
+      setPending([]);
     }
   };
 
   useEffect(() => { void loadTenants(); }, []);
+
+  const approvePending = async (id: string, status: "APPROVED" | "REJECTED") => {
+    setApproving(id);
+    try {
+      const r = await fetch("/api/trpc/admin.approveOwnedBusiness?batch=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "0": { json: { id, status } } }),
+      });
+      const data = await r.json();
+      if (data?.[0]?.error) {
+        throw new Error(data[0].error?.json?.message || data[0].error?.message || "No se pudo actualizar");
+      }
+      toast.success(status === "APPROVED" ? "Afiliado aprobado" : "Solicitud rechazada");
+      await loadTenants();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar la solicitud");
+    } finally {
+      setApproving(null);
+    }
+  };
 
   const createTestAffiliate = async () => {
     if (!form.name.trim()) { toast.error("Ponle nombre al negocio de prueba"); return; }
@@ -146,6 +195,19 @@ export default function GodTenantsPage() {
           </Button>
         </div>
 
+        {loadError && (
+          <div className="flex flex-col gap-2 rounded-2xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="m-0 text-xs font-semibold text-rose-200">{loadError}</p>
+            <Button
+              variant="secondary"
+              onClick={() => void loadTenants()}
+              className="rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-200 text-xs font-bold"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Reintentar
+            </Button>
+          </div>
+        )}
+
         {/* Crear afiliado de prueba */}
         <Card className="p-5 border border-pink-500/20 bg-pink-500/5">
           <div className="flex items-center gap-2 pb-3">
@@ -162,6 +224,66 @@ export default function GodTenantsPage() {
           <Button onClick={createTestAffiliate} disabled={creating} className="mt-3 rounded-xl bg-linear-to-r from-pink-600 to-purple-600 text-white font-black text-xs px-5 py-2.5 cursor-pointer disabled:opacity-40">
             {creating ? "Creando..." : "⚡ Crear Afiliado Prueba"}
           </Button>
+        </Card>
+
+        {/* Solicitudes pendientes de aprobación */}
+        <Card className="p-5 border border-amber-500/20 bg-amber-500/5">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber-400" />
+              <h2 className="text-sm font-black text-white uppercase tracking-wider">Solicitudes pendientes</h2>
+              <span className="text-[10px] text-gray-500">
+                {pending.length} por revisar
+              </span>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => void loadTenants()}
+              className="rounded-xl bg-white/5 border border-white/10 text-gray-200 text-xs font-bold"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refrescar
+            </Button>
+          </div>
+
+          {pending.length === 0 ? (
+            <p className="text-xs text-gray-500 m-0">No hay solicitudes pendientes.</p>
+          ) : (
+            <div className="space-y-2">
+              {pending.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="m-0 text-sm font-black text-white">{b.name}</p>
+                    <p className="m-0 text-[11px] text-gray-500">
+                      {b.category || "Sin categoría"} · {b.address || "Sin dirección"} · {b.ownerName || "Sin dueño"}
+                    </p>
+                    <p className="m-0 mt-1 text-[10px] font-bold text-amber-300">
+                      Recompensa {b.rewardPercentage ?? "—"}% · Estado {b.status}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      disabled={approving === b.id}
+                      onClick={() => void approvePending(b.id, "REJECTED")}
+                      className="rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-300 text-xs font-bold"
+                    >
+                      <X className="h-3.5 w-3.5 mr-1" /> Rechazar
+                    </Button>
+                    <Button
+                      disabled={approving === b.id}
+                      onClick={() => void approvePending(b.id, "APPROVED")}
+                      className="rounded-xl bg-emerald-500 text-black text-xs font-black"
+                    >
+                      <Check className="h-3.5 w-3.5 mr-1" /> Aprobar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Lista de tenants */}
