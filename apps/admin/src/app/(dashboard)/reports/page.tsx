@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, cn, Button } from "@rabbitty/ui";
+import { Card, cn, Button, toast } from "@rabbitty/ui";
 import { motion } from "framer-motion";
-import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap } from "lucide-react";
+import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap, Printer, Mail, FileText, Banknote, Coffee, Receipt, X } from "lucide-react";
 import { useBranch } from "../../../components/DashboardClientWrapper";
 
 /** Teaser del gate: lo que ve el afiliado sin el plan. */
@@ -48,12 +48,34 @@ const COLORS = ["#ec4899", "#8b5cf6", "#3b82f6", "#10b981", "#f59e0b"];
 export default function ReportsPage() {
   const [daysRange, setDaysRange] = useState(30);
   const [customRange, setCustomRange] = useState<{ from: string | null; to: string | null }>({ from: null, to: null });
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
   const dateFilter = customRange.from && customRange.to ? { from: customRange.from, to: customRange.to } : { days: daysRange };
+  const reportRange = useMemo(() => {
+    if (customRange.from && customRange.to) return { from: customRange.from, to: customRange.to };
+    const to = new Date();
+    const from = new Date();
+    from.setDate(from.getDate() - daysRange);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return { from: iso(from), to: iso(to) };
+  }, [daysRange, customRange.from, customRange.to]);
   const { branchId: activeBranchId } = useBranch();
   const branchId = activeBranchId || "default";
 
   const { data: salesTrends, isLoading: loadingSales } = trpc.analytics.getSalesTrends.useQuery({ branchId, ...dateFilter });
-  const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 5 });
+  const { data: topProducts, isLoading: loadingTop } = trpc.analytics.getTopProducts.useQuery({ branchId, limit: 30, ...dateFilter });
+  const { data: pandl } = trpc.expenses.getPandL.useQuery({ startDate: reportRange.from, endDate: reportRange.to });
+  const { data: expenseList = [] } = trpc.expenses.list.useQuery({ startDate: reportRange.from, endDate: reportRange.to });
+
+  const topDrinks = useMemo(
+    () => (topProducts ?? []).filter((p: any) => p.isDrink).slice(0, 6),
+    [topProducts]
+  );
+  const topDishes = useMemo(
+    () => (topProducts ?? []).filter((p: any) => !p.isDrink).slice(0, 8),
+    [topProducts]
+  );
   const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
   // Propinas (cuenta vs propina separadas — sin gate de plan)
   const { data: tipsSummary } = trpc.analytics.getTipsSummary.useQuery({ branchId, ...dateFilter });
@@ -69,10 +91,8 @@ export default function ReportsPage() {
     { enabled: true }
   );
 
-  const { data: exportData, refetch: refetchExport, isFetching: isExporting } = trpc.analytics.getExportData.useQuery(
-    { branchId, ...dateFilter },
-    { enabled: false }
-  );
+  const utils = trpc.useUtils();
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleExportReconciliationCSV = () => {
     if (!reconciliationData || reconciliationData.records.length === 0) {
@@ -103,9 +123,152 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
+  const downloadCSV = (filename: string, headers: string[], rows: (string | number)[][]) => {
+    const escape = (value: string | number) => {
+      const text = String(value ?? "");
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const csv = "\uFEFF" + [headers.map(escape).join(","), ...rows.map((row) => row.map(escape).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrintReport = () => window.print();
+
+  const handleExportExpensesCSV = () => {
+    if (!expenseList.length) {
+      toast.error("No hay gastos en el periodo.");
+      return;
+    }
+    downloadCSV(
+      `Gastos_${reportRange.from}_${reportRange.to}.csv`,
+      ["Fecha", "Categoría", "Descripción", "Proveedor", "Referencia", "Monto"],
+      expenseList.map((e: any) => [
+        new Date(e.expenseDate).toLocaleDateString("es-MX"),
+        e.category,
+        e.description,
+        e.paidTo || "",
+        e.reference || "",
+        Number(e.amount || 0).toFixed(2),
+      ])
+    );
+  };
+
+  const handleExportProductsCSV = () => {
+    if (!topProducts?.length) {
+      toast.error("No hay productos en el periodo.");
+      return;
+    }
+    downloadCSV(
+      `Productos_${reportRange.from}_${reportRange.to}.csv`,
+      ["Producto", "Categoría", "Bebida", "Cantidad", "Ingresos"],
+      topProducts.map((p: any) => [
+        p.name,
+        p.category,
+        p.isDrink ? "Sí" : "No",
+        Number(p.quantity || 0),
+        Number(p.revenue || 0).toFixed(2),
+      ])
+    );
+  };
+
+  const buildReportEmailHtml = () => {
+    const fmt = (v: number | null | undefined) =>
+      `$${Number(v || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const productRows = (topProducts ?? [])
+      .slice(0, 12)
+      .map(
+        (p: any) =>
+          `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">${p.name}</td><td style="padding:6px 8px;border-bottom:1px solid #eee">${p.category}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${p.quantity}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${fmt(p.revenue)}</td></tr>`
+      )
+      .join("");
+    const expenseRows = (pandl?.byCategory ?? [])
+      .map(
+        (c: any) =>
+          `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">${c.category}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${fmt(c.total)}</td></tr>`
+      )
+      .join("");
+
+    return `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0A0314;padding:24px;color:#fff">
+        <div style="max-width:640px;margin:0 auto;background:#130725;border:1px solid rgba(244,63,94,0.35);border-radius:20px;overflow:hidden">
+          <div style="padding:22px;border-bottom:1px solid rgba(255,255,255,0.08)">
+            <p style="margin:0;font-size:10px;font-weight:900;letter-spacing:.22em;color:#F43F5E">RABBITTY</p>
+            <h1 style="margin:6px 0 0;font-size:22px;color:#fff">Reporte de operación</h1>
+            <p style="margin:4px 0 0;font-size:12px;color:#94A3B8">${reportRange.from} a ${reportRange.to}</p>
+          </div>
+          <div style="padding:20px">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;color:#E2E8F0">
+              <tr><td style="padding:6px 0">Ventas totales</td><td style="text-align:right;font-weight:800">${fmt(totalRevenue)}</td></tr>
+              <tr><td style="padding:6px 0">Base gravable</td><td style="text-align:right">${fmt(displayBase)}</td></tr>
+              <tr><td style="padding:6px 0">IVA trasladado</td><td style="text-align:right">${fmt(displayIVA)}</td></tr>
+              <tr><td style="padding:6px 0">Propinas</td><td style="text-align:right">${fmt(tipsSummary?.totalTip)}</td></tr>
+              <tr><td style="padding:6px 0">Gastos</td><td style="text-align:right;color:#FCA5A5">${fmt(pandl?.expenses)}</td></tr>
+              <tr><td style="padding:8px 0;border-top:1px solid #333;font-weight:900">Utilidad neta</td><td style="padding:8px 0;border-top:1px solid #333;text-align:right;font-weight:900;color:#6EE7B7">${fmt(pandl?.netProfit)}</td></tr>
+            </table>
+
+            <h2 style="margin:22px 0 8px;font-size:14px;color:#fff">Productos más vendidos</h2>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;color:#CBD5E1">
+              <thead><tr><th style="text-align:left;padding:6px 8px">Producto</th><th style="text-align:left;padding:6px 8px">Categoría</th><th style="text-align:right;padding:6px 8px">Cant.</th><th style="text-align:right;padding:6px 8px">Ingresos</th></tr></thead>
+              <tbody>${productRows || '<tr><td colspan="4" style="padding:8px;color:#64748B">Sin datos</td></tr>'}</tbody>
+            </table>
+
+            <h2 style="margin:22px 0 8px;font-size:14px;color:#fff">Gastos por categoría</h2>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;color:#CBD5E1">
+              <tbody>${expenseRows || '<tr><td colspan="2" style="padding:8px;color:#64748B">Sin gastos</td></tr>'}</tbody>
+            </table>
+
+            <p style="margin:22px 0 0;font-size:11px;color:#64748B">
+              Reporte generado desde Rabbitty Admin. Los Bunz son puntos de lealtad, no dinero.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailTo.trim()) {
+      toast.error("Escribe un correo.");
+      return;
+    }
+    setEmailSending(true);
+    try {
+      const res = await fetch("/api/reports/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: emailTo.trim(),
+          subject: `Reporte Rabbitty ${reportRange.from} a ${reportRange.to}`,
+          html: buildReportEmailHtml(),
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) throw new Error(json.error || "No se pudo enviar el correo");
+      toast.success("Reporte enviado por correo.");
+      setEmailOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo enviar el correo.");
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   const handleExportCSV = async () => {
-    const { data } = await refetchExport();
-    if (!data || data.length === 0) return alert("No hay datos para exportar.");
+    setIsExporting(true);
+    try {
+      const data = await utils.analytics.getExportData.fetch({ branchId, ...dateFilter });
+      if (!data || data.length === 0) {
+        toast.error("No hay datos para exportar.");
+        return;
+      }
 
     // CSV format with Taxes separated
     const headers = ["ID Orden", "Fecha", "Segmento/Cliente", "Subtotal", "Impuesto (IVA)", "Descuento", "Bunz Pagados", "Total", "Status CFDI"];
@@ -122,15 +285,17 @@ export default function ReportsPage() {
       order.cfdiStatus || "NONE",
     ]);
 
-    const csvContent = [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", `Reporte_Rabbitty_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCSV(
+      `Reporte_Rabbitty_${new Date().toISOString().split("T")[0]}.csv`,
+      headers,
+      rows
+    );
+    toast.success("CSV de ventas descargado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo exportar el CSV.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const totalRevenue = Math.round((salesTrends?.reduce((sum: number, item: any) => sum + (Number(item.totalSales) || 0), 0) || 0) * 100) / 100;
@@ -160,7 +325,28 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="space-y-8 pb-10">
+    <div id="reports-printable" className="space-y-8 pb-10">
+      <style jsx global>{`
+        @media print {
+          aside, header, nav, .no-print { display: none !important; }
+          body { background: #fff !important; color: #111 !important; }
+          #reports-printable { padding: 0 !important; }
+          #reports-printable .print-card {
+            break-inside: avoid;
+            box-shadow: none !important;
+          }
+          #reports-printable table { font-size: 10px !important; }
+          #reports-printable .recharts-wrapper { max-height: 220px !important; }
+          @page { margin: 1.2cm; size: A4 portrait; }
+        }
+      `}</style>
+
+      <div className="hidden print:block">
+        <h1 className="text-xl font-black">Rabbitty · Reporte de operación</h1>
+        <p className="text-xs text-gray-600">
+          Periodo: {reportRange.from} a {reportRange.to}
+        </p>
+      </div>
       {/* Header Disruptivo */}
       <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-gray-900 via-gray-800 to-black p-8 shadow-2xl border border-white/5">
         <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-pink-500/20 blur-3xl" />
@@ -175,7 +361,7 @@ export default function ReportsPage() {
             <p className="text-gray-400 mt-2 text-lg">Métricas vitales y tendencias de tu restaurante.</p>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="no-print flex items-center gap-4">
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-1 flex flex-wrap gap-1">
               {[
                 { label: "Hoy", days: 1 },
@@ -236,6 +422,22 @@ export default function ReportsPage() {
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
               {isExporting ? "Generando..." : "Exportar Ventas CSV"}
+            </Button>
+
+            <Button
+              onClick={handlePrintReport}
+              className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white cursor-pointer text-xs"
+            >
+              <Printer className="mr-1.5 h-3.5 w-3.5 text-emerald-300" />
+              Imprimir / PDF
+            </Button>
+
+            <Button
+              onClick={() => setEmailOpen(true)}
+              className="rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white cursor-pointer text-xs"
+            >
+              <Mail className="mr-1.5 h-3.5 w-3.5 text-sky-300" />
+              Enviar por correo
             </Button>
 
             <Button
@@ -574,7 +776,202 @@ export default function ReportsPage() {
           </Card>
         </motion.div>
 
+        {/* ── Utilidad, gastos y reportes personalizados ── */}
+        <motion.div variants={itemVariants} className="md:col-span-2">
+          <Card className="print-card p-6 border border-(--border-subtle) bg-(--bg-subtle)">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2">
+                  <Banknote className="text-emerald-500" /> Utilidad y gastos
+                </h3>
+                <p className="text-sm text-(--text-muted)">
+                  Ingresos, gastos y margen del periodo seleccionado
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 no-print">
+                <Button
+                  onClick={handleExportExpensesCSV}
+                  variant="secondary"
+                  className="rounded-xl text-xs"
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" /> Gastos CSV
+                </Button>
+                <Button
+                  onClick={handleExportProductsCSV}
+                  variant="secondary"
+                  className="rounded-xl text-xs"
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" /> Productos CSV
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-(--text-muted)">Ventas</p>
+                <p className="text-xl font-black text-emerald-400 mt-1">${Number(pandl?.revenue ?? 0).toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-(--text-muted)">Gastos</p>
+                <p className="text-xl font-black text-rose-400 mt-1">${Number(pandl?.expenses ?? 0).toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-(--text-muted)">Utilidad neta</p>
+                <p className="text-xl font-black text-(--text-primary) mt-1">${Number(pandl?.netProfit ?? 0).toFixed(2)}</p>
+              </div>
+              <div className="rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+                <p className="text-[10px] font-black uppercase tracking-wider text-(--text-muted)">Margen</p>
+                <p className="text-xl font-black text-sky-400 mt-1">{Number(pandl?.margin ?? 0).toFixed(1)}%</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div>
+                <h4 className="text-sm font-black text-(--text-primary) mb-3">Gastos por categoría</h4>
+                {!pandl?.byCategory?.length ? (
+                  <p className="text-sm text-(--text-muted)">Sin gastos registrados en el periodo.</p>
+                ) : (
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={pandl.byCategory} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.05} vertical={false} />
+                        <XAxis dataKey="category" tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: "currentColor", fontSize: 9, opacity: 0.6 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="total" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-black text-(--text-primary) mb-3">Detalle de gastos</h4>
+                <div className="max-h-56 overflow-y-auto rounded-xl border border-(--border-subtle)">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-(--bg-elevated) text-(--text-muted) uppercase text-[9px]">
+                      <tr>
+                        <th className="text-left px-2 py-2">Fecha</th>
+                        <th className="text-left px-2 py-2">Categoría</th>
+                        <th className="text-right px-2 py-2">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expenseList.map((e: any) => (
+                        <tr key={e.id} className="border-t border-(--border-subtle)">
+                          <td className="px-2 py-1.5 text-(--text-muted)">{new Date(e.expenseDate).toLocaleDateString("es-MX")}</td>
+                          <td className="px-2 py-1.5 text-(--text-primary)">{e.category}</td>
+                          <td className="px-2 py-1.5 text-right font-bold text-rose-400">${Number(e.amount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      {!expenseList.length && (
+                        <tr><td colSpan={3} className="px-2 py-4 text-center text-(--text-muted)">Sin gastos</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+
+        {/* ── Bebidas más vendidas ── */}
+        <motion.div variants={itemVariants}>
+          <Card className="print-card p-6 h-full border border-(--border-subtle) bg-(--bg-subtle)">
+            <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 mb-4">
+              <Coffee className="text-amber-500" /> Bebidas más vendidas
+            </h3>
+            {!topDrinks.length ? (
+              <p className="text-sm text-(--text-muted)">Sin bebidas identificadas en el periodo.</p>
+            ) : (
+              <div className="space-y-3">
+                {topDrinks.map((p: any) => (
+                  <div key={`${p.name}-${p.category}`} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-(--text-primary) truncate m-0">{p.name}</p>
+                      <p className="text-[10px] text-(--text-muted) m-0">{p.category} · {p.quantity} vendidos</p>
+                    </div>
+                    <span className="text-sm font-black text-amber-400">${Number(p.revenue).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+
+        {/* ── Tabla de productos ── */}
+        <motion.div variants={itemVariants}>
+          <Card className="print-card p-6 h-full border border-(--border-subtle) bg-(--bg-subtle)">
+            <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 mb-4">
+              <FileText className="text-pink-500" /> Productos más vendidos
+            </h3>
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-(--border-subtle)">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-(--bg-elevated) text-(--text-muted) uppercase text-[9px]">
+                  <tr>
+                    <th className="text-left px-2 py-2">Producto</th>
+                    <th className="text-left px-2 py-2">Categoría</th>
+                    <th className="text-right px-2 py-2">Cant.</th>
+                    <th className="text-right px-2 py-2">Ingresos</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(topProducts ?? []).slice(0, 15).map((p: any) => (
+                    <tr key={`${p.name}-${p.category}`} className="border-t border-(--border-subtle)">
+                      <td className="px-2 py-1.5 text-(--text-primary)">{p.name}</td>
+                      <td className="px-2 py-1.5 text-(--text-muted)">{p.category}</td>
+                      <td className="px-2 py-1.5 text-right text-(--text-primary)">{p.quantity}</td>
+                      <td className="px-2 py-1.5 text-right font-bold text-emerald-400">${Number(p.revenue).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  {!topProducts?.length && (
+                    <tr><td colSpan={4} className="px-2 py-4 text-center text-(--text-muted)">Sin ventas en el periodo</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </motion.div>
+
       </motion.div>
+
+      {emailOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm no-print">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#130725] p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">
+                  Enviar reporte
+                </p>
+                <h3 className="m-0 mt-1 text-lg font-black text-white">Correo del reporte</h3>
+                <p className="m-0 mt-1 text-[11px] text-white/50">
+                  Periodo {reportRange.from} a {reportRange.to}
+                </p>
+              </div>
+              <button onClick={() => setEmailOpen(false)} className="rounded-full p-1.5 text-white/50 hover:bg-white/10 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <label className="mt-4 block text-[11px] font-bold text-white/60">
+              Correo destino
+              <input
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                placeholder="dueno@negocio.com"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-white outline-none focus:border-sky-400/60"
+              />
+            </label>
+            <div className="mt-4 flex gap-2">
+              <Button onClick={handleSendEmail} disabled={emailSending} className="flex-1 rounded-xl bg-sky-600 text-white">
+                <Mail className="mr-1.5 h-4 w-4" /> {emailSending ? "Enviando..." : "Enviar"}
+              </Button>
+              <Button onClick={() => setEmailOpen(false)} variant="secondary" className="rounded-xl">
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

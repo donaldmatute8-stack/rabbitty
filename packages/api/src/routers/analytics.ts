@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { orders, orderItems, menuItems, payments, branches, customers, restaurants, paymentIntents } from "@rabbitty/database-restaurant/schema";
+import { orders, orderItems, menuItems, menuCategories, payments, branches, customers, restaurants, paymentIntents } from "@rabbitty/database-restaurant/schema";
 
 // ─── ZONA HORARIA DEL NEGOCIO ──────────────────────────────────────────────
 // Los reportes financieros y por hora se agrupan por el día/hora LOCAL del
@@ -103,7 +103,8 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
-            gte(orders.createdAt, startDate)
+            gte(orders.createdAt, startDate),
+            ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
         );
 
@@ -179,17 +180,25 @@ export const analyticsRouter = router({
     .input(
       z.object({
         branchId: z.string(),
-        limit: z.number(),
+        limit: z.number().optional().default(10),
+        days: z.number().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
       })
     )
     .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { startDate, endDate } = effectiveDateRange(input);
+
       const ordersList = await ctx.restaurantDb
-        .select()
+        .select({ id: orders.id })
         .from(orders)
         .where(
           and(
-            eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
-            inArray(orders.status, ["COMPLETED", "PAID"])
+            eq(orders.branchId, branchId),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
+            gte(orders.createdAt, startDate),
+            ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
         );
 
@@ -204,27 +213,50 @@ export const analyticsRouter = router({
       const menuItemsList = await ctx.restaurantDb
         .select()
         .from(menuItems)
-        .where(eq(menuItems.branchId, await resolveBranchId(ctx, input.branchId)));
+        .where(eq(menuItems.branchId, branchId));
 
-      const productRevenueMap = new Map<string, number>();
+      const categoriesList = await ctx.restaurantDb
+        .select({ id: menuCategories.id, name: menuCategories.name })
+        .from(menuCategories)
+        .where(eq(menuCategories.branchId, branchId));
+      const categoryById = new Map(categoriesList.map((c) => [c.id, c.name]));
+
+      const drinkPattern = /bebida|cafe|café|refresco|cerveza|vino|coctel|cóctel|agua|te|té|jugo|smoothie|frappe|latte|capuchino|espresso|barra|mixolog/i;
+
+      type ProductRow = {
+        name: string;
+        quantity: number;
+        revenue: number;
+        category: string;
+        isDrink: boolean;
+      };
+      const productMap = new Map<string, ProductRow>();
+
       for (const item of itemsList) {
-        // Skip voided items
         if (item.status === "VOIDED" || item.voidedAt) continue;
         const menuItem = menuItemsList.find((mi) => mi.id === item.menuItemId);
         const name = menuItem?.name || `Item ${item.menuItemId}`;
-        const rev = productRevenueMap.get(name) || 0;
-        productRevenueMap.set(name, rev + (Number(item.totalPrice) || 0));
+        const category = menuItem ? categoryById.get(menuItem.categoryId) || "Sin categoría" : "Sin categoría";
+        const key = `${name}::${category}`;
+        const current = productMap.get(key) ?? {
+          name,
+          quantity: 0,
+          revenue: 0,
+          category,
+          isDrink: drinkPattern.test(`${category} ${name}`),
+        };
+        current.quantity += Number(item.quantity) || 0;
+        current.revenue += Number(item.totalPrice) || 0;
+        productMap.set(key, current);
       }
 
-      const result = Array.from(productRevenueMap.entries())
-        .map(([name, revenue]) => ({
-          name,
-          revenue,
+      return Array.from(productMap.values())
+        .map((row) => ({
+          ...row,
+          revenue: Math.round((row.revenue + Number.EPSILON) * 100) / 100,
         }))
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, input.limit);
-
-      return result;
     }),
 
   getPaymentMethods: protectedProcedure

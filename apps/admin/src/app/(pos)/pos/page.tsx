@@ -277,6 +277,15 @@ export default function PosPage() {
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
   const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
   const [cardFlowChoice, setCardFlowChoice] = useState<"stripe" | "external" | null>(null);
+  const stripeReady = Boolean(stripeStatus?.data?.chargesEnabled);
+
+  // Si Stripe se desconecta o no está listo, no dejar el flujo en "stripe":
+  // el cobro directo con tarjeta exige referencia de terminal.
+  useEffect(() => {
+    if (stripeStatus?.isFetched && !stripeReady && cardFlowChoice === "stripe") {
+      setCardFlowChoice("external");
+    }
+  }, [stripeStatus?.isFetched, stripeReady, cardFlowChoice]);
   // P0-3: referencia/autorización de la terminal externa (obligatoria para tarjeta)
   const [cardReference, setCardReference] = useState("");
   const [rabbitterQuery, setRabbitterQuery] = useState("");
@@ -1550,6 +1559,14 @@ export default function PosPage() {
         return;
       }
     }
+    if (method.includes("STRIPE") && !stripeReady) {
+      toast.error("Rabbitty Pay no está conectado. Selecciona Mi Terminal y registra la referencia.");
+      return;
+    }
+    if (method === "TARJETA_EXTERNA" && cardReference.trim().length < 3) {
+      toast.error("Registra la referencia o autorización de la terminal antes de cobrar con tarjeta.");
+      return;
+    }
     setPendingMethod(null);
     setIsCharging(true);
     try {
@@ -1561,10 +1578,18 @@ export default function PosPage() {
 
   const handlePrintReceipt = async () => {
     if (!paidTicketData) return;
+    if (!printEngine.isConnected()) {
+      toast.info("Impresora térmica no conectada. Abriendo impresión del sistema (AirPrint / PDF).");
+      window.print();
+      return;
+    }
     await runPrint("receipt", async () => {
       const r = await printEngine.printTicket(paidTicketData, true);
       if (r.success) toast.success("¡Ticket impreso correctamente!");
-      else toast.warning(r.error || "No se pudo imprimir. Revisa la impresora.");
+      else {
+        toast.warning(r.error || "No se pudo imprimir. Abriendo impresión del sistema.");
+        window.print();
+      }
     });
   };
 
@@ -1603,10 +1628,7 @@ export default function PosPage() {
           expiresAt: new Date(result.expiresAt)
         });
         return; // Don't finalize yet, wait for polling!
-      } else if (
-        method.includes("STRIPE") &&
-        stripeStatus.data?.chargesEnabled
-      ) {
+      } else if (method.includes("STRIPE") && stripeReady) {
         // ── Rabbitty Pay (Stripe Connect): el comensal paga desde su teléfono
         //    con Apple Pay / tarjeta vía /pay/[orderId]; liquidación por webhook ──
         const charge = await stripeChargeMutation.mutateAsync({
@@ -1629,6 +1651,12 @@ export default function PosPage() {
         });
         return; // Waiting for webhook; POS polling below flips to finalize.
       } else {
+        // Defensa: nunca llamar a directCheckout con tarjeta sin referencia.
+        // Si Stripe no está conectado, el POS debe usar "Mi Terminal".
+        if (mappedMethod === "CREDIT_CARD" && !(cardFlowChoice === "external" && cardReference.trim().length >= 3)) {
+          toast.error("Rabbitty Pay no está conectado. Selecciona Mi Terminal y registra la referencia.");
+          return;
+        }
         const checkoutResult = await directCheckoutMutation.mutateAsync({
           tableId: selectedTableId || undefined,
           orderType: mappedOrderType,
@@ -1710,6 +1738,25 @@ export default function PosPage() {
 
   return (
     <div className="flex h-dvh w-full flex-col bg-gray-950 text-white overflow-hidden select-none font-sans">
+      <style jsx global>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #thermal-printable-receipt, #thermal-printable-receipt * { visibility: visible !important; }
+          #thermal-printable-receipt {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 80mm !important;
+            max-width: 80mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+            color: #000 !important;
+            box-shadow: none !important;
+          }
+          @page { margin: 3mm; size: 80mm auto; }
+        }
+      `}</style>
       
       {cashStatus?.requiresDrop && !corteModalOpen && can("POS_CASH") && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-gray-900/95 p-4 backdrop-blur-md">
@@ -3292,7 +3339,12 @@ export default function PosPage() {
                 </>
               ) : pendingMethod === "TARJETA" ? (
                 <div className="py-1 space-y-3">
-                  {stripeStatus.data?.chargesEnabled && (
+                  {!stripeReady && (
+                    <div className="rounded-2xl bg-amber-400/[0.08] border border-amber-400/25 px-3 py-2.5 text-[11px] leading-snug text-amber-200">
+                      Rabbitty Pay no está conectado. Cobra con tu terminal física (Clip, BBVA o Mercado Pago) y registra la referencia.
+                    </div>
+                  )}
+                  {stripeReady && (
                     <div className="grid grid-cols-1 gap-2">
                       <button
                         type="button"
