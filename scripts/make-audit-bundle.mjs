@@ -193,19 +193,19 @@ const GROUPS = [
   {
     title: "Privacidad y faltantes legales (borradores)",
     files: [
-      "Docs/legal/00-INDICE-Y-ESTADO.md",
-      "Docs/legal/01-RAT-REGISTRO-ACTIVIDADES.md",
-      "Docs/legal/02-MATRIZ-CONSERVACION.md",
-      "Docs/legal/03-PROCEDIMIENTO-ARCO.md",
-      "Docs/legal/04-MATRIZ-PROVEEDORES-DPA.md",
-      "Docs/legal/05-CLAUSULAS-DPA-Y-SOLICITUD.md",
-      "Docs/legal/06-AUDITORIA-PASSKEYS.md",
-      "Docs/legal/07-EVIDENCIA-ACEPTACION-E2E.md",
-      "Docs/legal/08-ANEXO-B-CONDICIONES.md",
-      "Docs/legal/09-MEMORANDUM-FISCAL-BORRADOR.md",
-      "Docs/legal/10-BRIEF-FINTECH-ART24.md",
-      "Docs/legal/11-PLAN-DEPURACION-SANDBOX.md",
-      "Docs/legal/12-ANEXO-A-626-PLANTILLA.md",
+      "DOCS/legal/00-INDICE-Y-ESTADO.md",
+      "DOCS/legal/01-RAT-REGISTRO-ACTIVIDADES.md",
+      "DOCS/legal/02-MATRIZ-CONSERVACION.md",
+      "DOCS/legal/03-PROCEDIMIENTO-ARCO.md",
+      "DOCS/legal/04-MATRIZ-PROVEEDORES-DPA.md",
+      "DOCS/legal/05-CLAUSULAS-DPA-Y-SOLICITUD.md",
+      "DOCS/legal/06-AUDITORIA-PASSKEYS.md",
+      "DOCS/legal/07-EVIDENCIA-ACEPTACION-E2E.md",
+      "DOCS/legal/08-ANEXO-B-CONDICIONES.md",
+      "DOCS/legal/09-MEMORANDUM-FISCAL-BORRADOR.md",
+      "DOCS/legal/10-BRIEF-FINTECH-ART24.md",
+      "DOCS/legal/11-PLAN-DEPURACION-SANDBOX.md",
+      "DOCS/legal/12-ANEXO-A-626-PLANTILLA.md",
       "packages/api/src/routers/passkeys.ts",
     ],
   },
@@ -257,6 +257,24 @@ function rmrf(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+/**
+ * Resuelve rutas con independencia de mayúsculas/minúsculas entre macOS y Linux.
+ * Si el checkout trae `Docs/legal` y el grupo pide `DOCS/legal` (o al revés),
+ * prueba la variante antes de fallar.
+ */
+function resolveRepoPath(rel) {
+  const direct = path.join(ROOT, rel);
+  if (fs.existsSync(direct)) return direct;
+  let alt = null;
+  if (rel.startsWith("DOCS/")) alt = "Docs/" + rel.slice(5);
+  else if (rel.startsWith("Docs/")) alt = "DOCS/" + rel.slice(5);
+  if (alt) {
+    const candidate = path.join(ROOT, alt);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return direct;
+}
+
 function writeFile(rel, content) {
   const full = path.join(OUT, "files", rel);
   fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -289,7 +307,7 @@ function main() {
   const entries = [];
   for (const group of GROUPS) {
     for (const rel of group.files) {
-      const buf = fs.readFileSync(path.join(ROOT, rel));
+      const buf = fs.readFileSync(resolveRepoPath(rel));
       const out = exportPath(rel);
       writeFile(out, buf);
       entries.push({ group: group.title, path: out, repo_path: rel, bytes: buf.length, sha256: sha(buf) });
