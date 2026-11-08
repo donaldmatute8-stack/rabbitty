@@ -667,7 +667,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-          {/* Cortes de Caja */}          {/* Cortes de Caja */}
+          {/* Cortes de Caja */}
           <Card className="p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all duration-300 lg:col-span-2 mt-6">
             <div className="mb-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
