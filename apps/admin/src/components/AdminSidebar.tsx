@@ -144,7 +144,6 @@ const godPillars: MenuPillar[] = [
     title: "🏦 God · Tesorería",
     icon: Banknote,
     items: [
-      { href: "/loyalty", label: "Split & Deuda Bunz", icon: Award },
       { href: "/god/conciliaciones", label: "Conciliaciones", icon: Scale },
       { href: "/god/economia", label: "Centro económico", icon: Scale },
     ],
@@ -249,13 +248,13 @@ const menuPillars: MenuPillar[] = [
     title: "Configuración",
     icon: Settings,
     items: [
-      { href: "/restaurants", label: "Mis Sucursales & Afiliados", icon: Store },
+      { href: "/restaurants", label: "Mi restaurante & POS", icon: Store },
       { href: "/perfil-negocio", label: "Mi negocio (perfil · POS · Bunz)", icon: Store },
       { href: "/settings?tab=payments", label: "Pasarela & Stripe Connect", icon: CreditCard, badge: "Pay" },
       { href: "/staff", label: "Personal & Roles", icon: Users },
       { href: "/hardware", label: "Impresoras & Hardware", icon: Printer },
       { href: "/restaurant-sync", label: "Sincronización POS", icon: Webhook },
-      { href: "/settings", label: "Ajustes del Sistema", icon: Settings },
+      { href: "/settings", label: "Ajustes & Seguridad", icon: Settings },
     ],
   },
 ];

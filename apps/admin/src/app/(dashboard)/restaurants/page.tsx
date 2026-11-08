@@ -1,15 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, toast } from "@rabbitty/ui";
-import { Plus, Settings, MapPin } from "lucide-react";
+import { Settings, ExternalLink, ShieldCheck } from "lucide-react";
 
 export default function RestaurantsPage() {
   const utils = trpc.useUtils();
+  const [isGod, setIsGod] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/2fa/verify")
+      .then((r) => r.json())
+      .then((d) => {
+        if (alive) setIsGod(Boolean(d?.required && d?.verified));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   const { data: restaurants } = trpc.admin.getRestaurants.useQuery();
-  const { data: pendingBusinesses } = trpc.admin.getPendingBusinesses.useQuery();
-  
+  // getPendingBusinesses y approveOwnedBusiness son procedimientos GOD.
+  // Un afiliado no debe llamarlos: antes la pestaña "Solicitudes" fallaba.
+  const { data: pendingBusinesses } = trpc.admin.getPendingBusinesses.useQuery(undefined, {
+    enabled: isGod,
+    retry: false,
+  });
+
   const approveBusiness = trpc.admin.approveOwnedBusiness.useMutation({
     onSuccess: () => {
       utils.admin.getPendingBusinesses.invalidate();
@@ -27,7 +45,10 @@ export default function RestaurantsPage() {
     onError: (err) => toast.error(err.message),
   });
 
-  const [activeTab, setActiveTab] = useState<"restaurants" | "applications">("applications");
+  const [activeTab, setActiveTab] = useState<"restaurants" | "applications">("restaurants");
+  useEffect(() => {
+    if (isGod) setActiveTab("applications");
+  }, [isGod]);
   const [editDialog, setEditDialog] = useState<Record<string, any> | null>(null);
   const [form, setForm] = useState({ name: "", taxRate: 0, defaultRewardRate: 0, acceptsBunz: false });
 
@@ -50,20 +71,26 @@ export default function RestaurantsPage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
-              Restaurantes y Afiliados
+              {isGod ? "Restaurantes y Afiliados" : "Mi restaurante y POS"}
             </h1>
-            <p className="text-gray-400 mt-2 text-sm font-medium">Gestiona solicitudes de afiliados y restaurantes en la red</p>
+            <p className="text-gray-400 mt-2 text-sm font-medium">
+              {isGod
+                ? "Gestiona solicitudes de afiliados y restaurantes en la red"
+                : "Datos operativos de tu restaurante. Para perfil público, sucursal, Bunz y equipo usa Mi negocio."}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex rounded-2xl bg-white/5 p-1 border border-white/10">
-              <button
-                onClick={() => setActiveTab("applications")}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                  activeTab === "applications" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                Solicitudes ({pendingList.length})
-              </button>
+              {isGod && (
+                <button
+                  onClick={() => setActiveTab("applications")}
+                  className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+                    activeTab === "applications" ? "bg-pink-500 text-white shadow-lg shadow-pink-500/25" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  Solicitudes ({pendingList.length})
+                </button>
+              )}
               <button
                 onClick={() => setActiveTab("restaurants")}
                 className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
@@ -77,6 +104,24 @@ export default function RestaurantsPage() {
         </div>
       </div>
 
+      {!isGod && (
+        <Link
+          href="/perfil-negocio"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-pink-500/25 bg-pink-500/10 px-5 py-4 no-underline hover:bg-pink-500/15 transition-colors"
+        >
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-pink-300 shrink-0" />
+            <div>
+              <p className="m-0 text-sm font-black text-white">Configuración centralizada en Mi negocio</p>
+              <p className="m-0 text-[11px] text-gray-400">
+                Perfil público, sucursal, operación POS, Bunz y equipo en un solo lugar.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-pink-300 whitespace-nowrap">Abrir →</span>
+        </Link>
+      )}
+
       {activeTab === "applications" ? (
         <div className="space-y-4">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -87,13 +132,13 @@ export default function RestaurantsPage() {
               </span>
             )}
           </h2>
-          {pendingBusinesses?.length === 0 ? (
+          {pendingList.length === 0 ? (
             <Card className="p-8 text-center text-gray-400 border border-white/5 bg-white/5">
-              No hay solicitudes registradas aún.
+              No hay solicitudes pendientes.
             </Card>
           ) : (
             <div className="grid gap-4">
-              {pendingBusinesses?.map((b) => (
+              {pendingList.map((b) => (
                 <Card key={b.id} className="flex flex-col md:flex-row md:items-center justify-between p-6 border border-white/5 bg-white/5 backdrop-blur-md hover:border-white/10 transition-all gap-4">
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-pink-500/20 to-orange-500/20 border border-pink-500/30 text-xl font-black text-pink-400">
@@ -174,8 +219,14 @@ export default function RestaurantsPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300">
-                  <MapPin className="h-5 w-5" />
+                <button
+                  type="button"
+                  onClick={() => window.open(`https://rabbitty.me/${r.slug}`, "_blank", "noopener,noreferrer")}
+                  title="Ver página pública"
+                  aria-label="Ver página pública"
+                  className="rounded-xl border border-white/5 bg-white/5 p-3 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20 transition-all duration-300"
+                >
+                  <ExternalLink className="h-5 w-5" />
                 </button>
                 <button
                   onClick={() => openEdit(r)}

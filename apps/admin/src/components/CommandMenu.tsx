@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Search, 
+  FileText,
+  Percent,
   LayoutDashboard, 
   Store, 
   Users, 
@@ -93,11 +95,14 @@ const commands: CommandItem[] = [
 
   // ⚙️ Configuración del Negocio
   { id: "stripe", label: "Pasarela de Pagos & Stripe Connect", category: "⚙️ Configuración del Negocio", href: "/settings?tab=payments", icon: CreditCard, keywords: ["stripe", "tarjeta", "pagos", "banco", "clabe", "apple pay"] },
-  { id: "restaurants", label: "Mis Sucursales", category: "⚙️ Configuración del Negocio", href: "/restaurants", icon: Store, keywords: ["locales", "dirección"] },
+  { id: "restaurants", label: "Mi restaurante & POS", category: "⚙️ Configuración del Negocio", href: "/restaurants", icon: Store, keywords: ["locales", "dirección", "restaurante"] },
+  { id: "mi-negocio", label: "Mi negocio · perfil, sucursal, POS y Bunz", category: "⚙️ Configuración del Negocio", href: "/perfil-negocio", icon: Store, keywords: ["perfil", "negocio", "sucursal", "bunz", "pos"] },
   { id: "staff", label: "Personal y Roles", category: "⚙️ Configuración del Negocio", href: "/staff", icon: Users, keywords: ["equipo", "empleados", "permisos", "pin"] },
   { id: "hardware", label: "Impresoras & POS", category: "⚙️ Configuración del Negocio", href: "/hardware", icon: Printer, keywords: ["tickets", "impresora", "kds"] },
   { id: "sync", label: "Sincronización", category: "⚙️ Configuración del Negocio", href: "/restaurant-sync", icon: Webhook, keywords: ["integraciones", "api"] },
   { id: "settings", label: "Configuración General", category: "⚙️ Configuración del Negocio", href: "/settings", icon: Settings, keywords: ["ajustes", "perfil", "sistema"] },
+  { id: "legal", label: "Documentación legal & MCCE", category: "⚙️ Configuración del Negocio", href: "/settings/legal", icon: FileText, keywords: ["rfc", "representante", "contrato", "legal", "mcce"] },
+  { id: "recovery", label: "Recuperación de capacidad", category: "⚙️ Configuración del Negocio", href: "/settings/recovery", icon: Percent, keywords: ["capacidad", "recuperación", "propuesta", "bunz"] },
 ];
 
 export function CommandMenu() {

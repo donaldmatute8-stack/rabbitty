@@ -281,7 +281,8 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"business" | "general" | "security" | "payments">(() => {
     if (tabParam === "security") return "security";
     if (tabParam === "payments") return "payments";
-    return "business";
+    if (tabParam === "business") return "business";
+    return "general";
   });
 
   useEffect(() => {
@@ -433,8 +434,8 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 p-1">
             {[
-              { id: "business", label: "🏬 Negocio" },
-              { id: "general", label: "⚙️ General" },
+              { id: "general", label: "🏬 Negocio & cuenta" },
+              { id: "business", label: "🧩 Módulos & legal" },
               { id: "payments", label: "💳 Pagos & Stripe" },
               { id: "security", label: "🔐 Seguridad" },
             ].map((tab) => (
@@ -464,6 +465,18 @@ export default function SettingsPage() {
       ══════════════════════════════════════════════════════════════ */}
       {activeTab === "business" && (
         <div className="space-y-8">
+          <Link
+            href="/perfil-negocio"
+            className="flex items-center justify-between rounded-2xl border border-pink-500/25 bg-pink-500/10 px-5 py-4 hover:bg-pink-500/15 transition-all"
+          >
+            <div>
+              <p className="text-sm font-black text-white">Perfil público, sucursal, POS y Bunz</p>
+              <p className="text-[11px] text-gray-400">
+                La configuración operativa vive en Mi negocio. Aquí solo ajustas módulos y documentos.
+              </p>
+            </div>
+            <span className="text-pink-300 text-xs font-bold">Abrir →</span>
+          </Link>
           <Link
             href="/settings/legal"
             className="flex items-center justify-between rounded-2xl border border-violet-500/25 bg-violet-500/10 px-5 py-4 hover:bg-violet-500/15 transition-all"

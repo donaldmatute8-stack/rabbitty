@@ -154,7 +154,8 @@ export default function ReportsPage() {
 
   const handleExportReconciliationCSV = () => {
     if (!reconciliationData || reconciliationData.records.length === 0) {
-      return alert("No hay transacciones registradas para conciliar.");
+      toast.error("No hay transacciones registradas para conciliar.");
+      return;
     }
 
     const headers = ["ID Intento", "ID Orden", "Fecha", "Status", "Proveedor", "Total Bruto (MXN)", "Neto Tarjeta (MXN)", "Comisión Rabbitty (MXN)", "Bunz Canjeados"];

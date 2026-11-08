@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 import { Card, Button, Input, toast } from "@rabbitty/ui";
 import { trpc } from "../../../lib/trpc-client";
+import { useBranch } from "../../../components/DashboardClientWrapper";
 
 const DAYS = [
   { id: 1, label: "Lun" }, { id: 2, label: "Mar" }, { id: 3, label: "Mié" },
@@ -37,7 +38,7 @@ const TABS: Array<{ id: Tab; label: string; Icon: typeof Store }> = [
   { id: "sucursal", label: "Sucursal", Icon: Building2 },
   { id: "pos", label: "Operación POS", Icon: Receipt },
   { id: "bunz", label: "Bunz", Icon: Coins },
-  { id: "equipo", label: "Equipo & Hardware", Icon: Users },
+  { id: "equipo", label: "Equipo & más", Icon: Users },
 ];
 
 const Field = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
@@ -53,6 +54,8 @@ const textInput = "bg-black/50 border-white/10 text-white text-xs h-9";
 export default function BusinessProfilePage() {
   const [tab, setTab] = useState<Tab>("perfil");
   const utils = trpc.useUtils();
+  const { branchId: activeBranchId, setBranchId } = useBranch();
+  const { data: branches } = trpc.admin.getBranches.useQuery(undefined, { retry: false });
 
   // ── Identidad pública ──
   const profileQuery = trpc.settings.getBusinessProfile.useQuery(undefined, { retry: false });
@@ -552,8 +555,52 @@ export default function BusinessProfilePage() {
           <div className="space-y-4">
             <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
               <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
+                <Building2 className="h-4 w-4 text-cyan-400" /> Tus sucursales
+              </h2>
+              <p className="text-[11px] text-gray-500 m-0">
+                Elige la sucursal que quieres editar. El resto del panel cambia al mismo contexto.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(branches ?? []).map((b: any) => {
+                  const active = b.id === activeBranchId;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        setBranchId(b.id);
+                        utils.invalidate();
+                      }}
+                      className={`rounded-xl border p-3 text-left transition-all cursor-pointer ${
+                        active
+                          ? "border-cyan-500/50 bg-cyan-500/10"
+                          : "border-white/10 bg-black/20 hover:bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] font-black text-white truncate">{b.name}</span>
+                        {active && <span className="text-[9px] font-black uppercase text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-1.5 py-0.5 rounded-full">Activa</span>}
+                      </div>
+                      <p className="m-0 mt-0.5 text-[10px] text-gray-500 truncate">{b.address || "Sin dirección"}</p>
+                    </button>
+                  );
+                })}
+                {!branches?.length && (
+                  <p className="text-[11px] text-gray-500 m-0">No hay sucursales registradas.</p>
+                )}
+              </div>
+              <Link href="/support" className="text-[11px] font-bold text-cyan-300 underline">
+                ¿Necesitas otra sucursal? Escríbenos
+              </Link>
+            </Card>
+
+            <Card className="p-5 border border-white/10 bg-white/5 space-y-3">
+              <h2 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2 m-0">
                 <Building2 className="h-4 w-4 text-cyan-400" /> Identidad de la sucursal
               </h2>
+              <p className="text-[11px] text-gray-500 m-0">
+                Estás editando la sucursal activa. Cambia de sucursal en el selector superior del panel.
+              </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Nombre en el ticket">
                   <Input value={branch.name} onChange={(e) => setBranch({ ...branch, name: e.target.value })} className={textInput} />
@@ -815,7 +862,10 @@ export default function BusinessProfilePage() {
               { href: "/staff", title: "Personal & roles", desc: "Empleados, permisos y PIN de caja", Icon: Users },
               { href: "/hardware", title: "Impresoras & hardware", desc: "Térmica, cajón, Bluetooth", Icon: Receipt },
               { href: "/menu", title: "Menú & productos", desc: "Platillos, precios y categorías", Icon: Sparkles },
-              { href: "/restaurants", title: "Sucursales & afiliados", desc: "Altas, estado y aprobaciones", Icon: Building2 },
+              { href: "/restaurants", title: "Mi restaurante & POS", desc: "Datos operativos y estado del restaurante", Icon: Building2 },
+              { href: "/settings/legal", title: "Documentación legal & MCCE", desc: "RFC, representante y aceptación", Icon: Info },
+              { href: "/settings/recovery", title: "Recuperación de capacidad", desc: "Propuestas, importe exacto y aceptación", Icon: Coins },
+              { href: "/onboarding", title: "Recorrido de bienvenida", desc: "Repasa tus datos y confirma tu operación", Icon: Sparkles },
             ].map(({ href, title, desc, Icon }) => (
               <Link key={href} href={href} className="block no-underline">
                 <Card className="p-4 border border-white/10 bg-white/5 hover:bg-white/8 transition-colors cursor-pointer">

@@ -3,17 +3,18 @@
 import { useState, useEffect } from "react";
 import { Card, Button, toast } from "@rabbitty/ui";
 import { Monitor, ExternalLink, Copy, Smartphone, QrCode } from "lucide-react";
+import { useBranch } from "../../../components/DashboardClientWrapper";
 
 export default function MenuBoardsPage() {
-  const [branchId] = useState(process.env.NEXT_PUBLIC_BRANCH_ID ?? "b1");
+  const { branchId } = useBranch();
   const [origin, setOrigin] = useState("");
 
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
 
-  const boardUrl = `${origin}/menu-board/${branchId}`;
-  const apiUrl = `${origin}/api/menu-board/${branchId}`;
+  const boardUrl = branchId ? `${origin}/menu-board/${branchId}` : "";
+  const apiUrl = branchId ? `${origin}/api/menu-board/${branchId}` : "";
 
   const copyUrl = (url: string, label: string) => {
     navigator.clipboard.writeText(url);
