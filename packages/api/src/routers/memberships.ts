@@ -928,6 +928,89 @@ export const membershipsRouter = router({
     }),
 
   /**
+   * POS: resuelve un Membership Pass SIN consumir nada.
+   * Antes, escanear el QR descontaba el primer beneficio disponible (aunque el
+   * cajero solo quisiera identificar al socio). Ahora el escaneo vincula al
+   * miembro al ticket y muestra sus beneficios; el consumo ocurre únicamente
+   * al aplicar un beneficio al cobro (o al registrar una entrada).
+   */
+  resolvePass: posProcedure
+    .input(z.object({ businessId: z.string().uuid(), qrToken: z.string().min(10) }))
+    .query(async ({ ctx, input }) => {
+      await assertCanRedeem(ctx, input.businessId);
+
+      const [subId, windowStr, mac] = input.qrToken.split(".");
+      const window = Number(windowStr);
+      if (!subId || !mac || !Number.isInteger(window)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "QR inválido" });
+      }
+      const nowWindow = Math.floor(Date.now() / 1000 / QR_WINDOW_SECONDS);
+      if (Math.abs(nowWindow - window) > 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "QR expirado" });
+      }
+
+      const [sub] = await ctx.coreDb
+        .select()
+        .from(membershipSubscriptions)
+        .where(and(
+          eq(membershipSubscriptions.id, subId),
+          eq(membershipSubscriptions.businessId, input.businessId),
+        ))
+        .limit(1);
+      if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Membresía no encontrada" });
+
+      const expected = Buffer.from(signQr(sub.id, sub.qrPassSecret, window));
+      const given = Buffer.from(mac);
+      if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "QR inválido" });
+      }
+      if (sub.status !== "ACTIVE") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente" });
+      }
+      if (!sub.noExpiration && (!sub.currentPeriodEnd || sub.currentPeriodEnd < new Date())) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Membresía no vigente (periodo vencido)" });
+      }
+
+      const [user] = await ctx.coreDb
+        .select({ id: users.id, firstName: users.firstName, lastName: users.lastName, username: users.username })
+        .from(users)
+        .where(eq(users.id, sub.userId))
+        .limit(1);
+
+      const entitlements = await ctx.coreDb
+        .select({
+          id: membershipEntitlements.id,
+          benefitType: membershipEntitlements.benefitType,
+          targetRefId: membershipEntitlements.targetRefId,
+          quotaPerCycle: membershipEntitlements.quotaPerCycle,
+          currentUsageInCycle: membershipEntitlements.currentUsageInCycle,
+          cycleResetType: membershipEntitlements.cycleResetType,
+          cycleEndDate: membershipEntitlements.cycleEndDate,
+          discountPct: membershipEntitlements.discountPct,
+          creditBalance: membershipEntitlements.creditBalance,
+        })
+        .from(membershipEntitlements)
+        .where(eq(membershipEntitlements.subscriptionId, sub.id));
+
+      return {
+        subscriptionId: sub.id,
+        userId: sub.userId,
+        memberName:
+          [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+          user?.username ||
+          "Rabbitter",
+        membershipOrigin: sub.membershipOrigin,
+        benefits: entitlements.map((e) => ({
+          ...e,
+          remaining:
+            e.benefitType === "CREDIT_BALANCE"
+              ? null
+              : Math.max(0, Number(e.quotaPerCycle || 0) - Number(e.currentUsageInCycle || 0)),
+        })),
+      };
+    }),
+
+  /**
    * POS: valida el QR y consume un derecho de forma atómica e idempotente.
    * El UPDATE condicional impide exceder la cuota aun con escaneos concurrentes.
    */

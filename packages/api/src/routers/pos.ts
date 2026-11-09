@@ -1363,64 +1363,104 @@ export const posRouter = router({
       customerName: z.string().optional(),
       customerPhone: z.string().optional(),
       bunzToApply: z.number().int().min(0).default(0),
+      // GAP 1: beneficios de membresía también en cobro con tarjeta / Rabbitty Pay
+      entitlementIds: z.array(z.string().uuid()).max(5).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
-      return await ctx.restaurantDb.transaction(async (tx: any) => {
-        const prices = await tx.select({ id: menuItems.id, price: menuItems.price })
-          .from(menuItems)
-          .where(eq(menuItems.branchId, ctx.branchId));
-        const priceMap = new Map(prices.map((p: any) => [p.id, Number(p.price)]));
+      // Compensaciones si la tx de la orden falla después de consumir beneficios
+      // (las tablas de membresía viven en la DB core, fuera de esta transacción).
+      const membershipCompensations: Array<() => Promise<unknown>> = [];
+      try {
+        // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
+        return await ctx.restaurantDb.transaction(async (tx: any) => {
+          const prices = await tx.select({ id: menuItems.id, price: menuItems.price })
+            .from(menuItems)
+            .where(eq(menuItems.branchId, ctx.branchId));
+          const priceMap = new Map(prices.map((p: any) => [p.id, Number(p.price)]));
 
-        let itemsTotal = 0;
-        const itemRows = input.items.map((it) => {
-          const unit = Number(priceMap.get(it.menuItemId) ?? 0);
-          if (!unit) throw new TRPCError({ code: "BAD_REQUEST", message: "Item de menú no válido para esta sucursal" });
-          const lineTotal = r2(unit * it.quantity);
-          itemsTotal += lineTotal;
-          return { menuItemId: it.menuItemId, quantity: it.quantity, unitPrice: unit, totalPrice: lineTotal, notes: it.notes ?? null, sortOrder: 0 };
+          let itemsTotal = 0;
+          const itemRows = input.items.map((it) => {
+            const unit = Number(priceMap.get(it.menuItemId) ?? 0);
+            if (!unit) throw new TRPCError({ code: "BAD_REQUEST", message: "Item de menú no válido para esta sucursal" });
+            const lineTotal = r2(unit * it.quantity);
+            itemsTotal += lineTotal;
+            return { menuItemId: it.menuItemId, quantity: it.quantity, unitPrice: unit, totalPrice: lineTotal, notes: it.notes ?? null, sortOrder: 0 };
+          });
+          itemsTotal = r2(itemsTotal);
+          const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);
+
+          // Todo dentro de la MISMA transacción: si el intent falla, no queda
+          // orden huérfana (antes orders/orderItems se escribían fuera de tx).
+          const [order] = await tx.insert(orders).values({
+            branchId: ctx.branchId,
+            tableId: input.tableId ?? null,
+            orderType: input.orderType,
+            customerName: input.customerName ?? null,
+            customerPhone: input.customerPhone ?? null,
+            customerId: input.customerId ?? null,
+            subtotal: calcSubtotal,
+            tax: calcTaxAmt,
+            total: calcTotal,
+            status: "PENDING",
+          }).returning();
+          if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
+
+          for (const [i, row] of itemRows.entries()) {
+            await tx.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
+          }
+
+          // ── Beneficios de membresía (mismas reglas que el cobro directo) ──
+          let orderTotal = calcTotal;
+          if (input.entitlementIds && input.entitlementIds.length > 0) {
+            const { applyMembershipBenefitsToOrder } = await import("../services/membershipBenefits");
+            const applied = await applyMembershipBenefitsToOrder({
+              coreDb: ctx.coreDb,
+              restaurantDb: ctx.restaurantDb,
+              branchId: ctx.branchId,
+              staffId: ctx.userId ?? null,
+              orderId: order.id,
+              items: itemRows.map((r) => ({ menuItemId: r.menuItemId, quantity: r.quantity, unitPrice: r.unitPrice })),
+              customerId: input.customerId,
+              entitlementIds: input.entitlementIds,
+              baseAmount: calcSubtotal,
+            });
+            membershipCompensations.push(...applied.compensations);
+            if (applied.discount > 0) {
+              const adjusted = calcTax(applied.finalAmount);
+              orderTotal = adjusted.total;
+              await tx.update(orders).set({
+                subtotal: adjusted.subtotal,
+                tax: adjusted.tax,
+                discount: applied.discount,
+                total: adjusted.total,
+              }).where(eq(orders.id, order.id));
+            }
+          }
+
+          // 3. PaymentIntent atómico (hold de Bunz si hay payer)
+          const { createOrGetPaymentIntent } = await import("../services/paymentCore");
+          const intent = await createOrGetPaymentIntent(tx, {
+            branchId: ctx.branchId,
+            orderId: order.id,
+            payerUserId: input.customerId ?? undefined,
+            bunzToApply: input.bunzToApply,
+            tipMxn: 0,
+            attemptNumber: 1,
+            provider: "STRIPE",
+          } as never);
+
+          // 4. URL de pago (app admin /pay) — env primero, fallback admin.rabbitty.me
+          const base = process.env.NEXT_PUBLIC_APP_URL || process.env.RABBITTY_ADMIN_URL || process.env.ADMIN_APP_URL || "https://admin.rabbitty.me";
+          const payUrl = `${base}/pay/${order.id}`;
+
+          return { orderId: order.id, intentId: (intent as any).intentId, payUrl, total: orderTotal, bunzApplied: (intent as any).bunzApplied ?? 0, netFiatCents: (intent as any).netFiatCents, expiresAt: (intent as any).expiresAt };
         });
-        itemsTotal = r2(itemsTotal);
-        const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);
-
-        // Todo dentro de la MISMA transacción: si el intent falla, no queda
-        // orden huérfana (antes orders/orderItems se escribían fuera de tx).
-        const [order] = await tx.insert(orders).values({
-          branchId: ctx.branchId,
-          tableId: input.tableId ?? null,
-          orderType: input.orderType,
-          customerName: input.customerName ?? null,
-          customerPhone: input.customerPhone ?? null,
-          customerId: input.customerId ?? null,
-          subtotal: calcSubtotal,
-          tax: calcTaxAmt,
-          total: calcTotal,
-          status: "PENDING",
-        }).returning();
-        if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
-
-        for (const [i, row] of itemRows.entries()) {
-          await tx.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
+      } catch (err) {
+        for (const compensate of membershipCompensations) {
+          try { await compensate(); } catch (compErr) { console.error("[membership] compensación falló:", compErr); }
         }
-
-        // 3. PaymentIntent atómico (hold de Bunz si hay payer)
-        const { createOrGetPaymentIntent } = await import("../services/paymentCore");
-        const intent = await createOrGetPaymentIntent(tx, {
-          branchId: ctx.branchId,
-          orderId: order.id,
-          payerUserId: input.customerId ?? undefined,
-          bunzToApply: input.bunzToApply,
-          tipMxn: 0,
-          attemptNumber: 1,
-          provider: "STRIPE",
-        } as never);
-
-        // 4. URL de pago (app admin /pay) — env primero, fallback admin.rabbitty.me
-        const base = process.env.NEXT_PUBLIC_APP_URL || process.env.RABBITTY_ADMIN_URL || process.env.ADMIN_APP_URL || "https://admin.rabbitty.me";
-        const payUrl = `${base}/pay/${order.id}`;
-
-        return { orderId: order.id, intentId: (intent as any).intentId, payUrl, total: calcTotal, bunzApplied: (intent as any).bunzApplied ?? 0, netFiatCents: (intent as any).netFiatCents, expiresAt: (intent as any).expiresAt };
-      });
+        throw err;
+      }
     }),
 
   voidOrder: posProcedure

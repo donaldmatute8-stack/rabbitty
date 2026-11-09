@@ -519,40 +519,6 @@ export default function PosPage() {
   const scannerInstanceRef = useRef<any>(null);
   const neonDecoderStopRef = useRef<(() => void) | null>(null);
 
-  const handleMembershipRedeem = async (qrToken: string) => {
-    try {
-      const subId = qrToken.split(".")[0];
-      const ctxBiz = await utils.memberships.myBusinessForContext.fetch();
-      if (!ctxBiz?.businessId) {
-        toast.error("Este POS no tiene un negocio de membresías vinculado");
-        return;
-      }
-      const res = await redeemMembership.mutateAsync({
-        businessId: ctxBiz.businessId,
-        qrToken,
-        branchId: ticketContext?.branch?.id || "pos",
-        // Ligazón al ticket: si acabamos de liquidar una orden en esta caja,
-        // el uso del beneficio queda auditable contra ese orderId.
-        orderId: lastPaidOrderId || undefined,
-        quantity: 1,
-        idempotencyKey: `pos_scan_${subId}_${Math.floor(Date.now() / 1000 / 30)}`,
-      });
-      if (res?.duplicate) {
-        const dupMember = res.memberName ? ` de ${res.memberName}` : "";
-        toast.info(`🐰 Membresía ya canjeada hace un momento${dupMember} (duplicado ignorado)`);
-        return;
-      }
-      if (res?.success) {
-        const member = res.memberName ? ` de ${res.memberName}` : "";
-        toast.success(`🎟️ Canje OK${member} — quedan ${res.remaining} usos este ciclo`);
-      } else {
-        toast.error("No se pudo canjear la membresía");
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "Membresía inválida o no vigente");
-    }
-  };
-
   useEffect(() => {
     let active = true;
     if (!rabbitterModalOpen || !isScanningRabbitter) {
@@ -588,7 +554,28 @@ export default function PosPage() {
             neonDecoderStopRef.current?.();
             neonDecoderStopRef.current = null;
             setIsScanningRabbitter(false);
-            await handleMembershipRedeem(cleanedRaw);
+            // El QR del pase IDENTIFICA al socio: no consume nada por sí solo.
+            // El consumo ocurre al aplicar el beneficio al cobro (incluye tarjeta).
+            try {
+              const ctxBiz = await utils.memberships.myBusinessForContext.fetch();
+              if (!ctxBiz?.businessId) {
+                toast.error("Este POS no tiene un negocio de membresías vinculado");
+                return;
+              }
+              const pass = await utils.memberships.resolvePass.fetch({
+                businessId: ctxBiz.businessId,
+                qrToken: cleanedRaw,
+              });
+              const rabbitter = await utils.pos.lookupRabbitter.fetch({ query: pass.userId });
+              if (rabbitter) {
+                setSelectedRabbitter(rabbitter);
+                toast.success(`🎟️ ${pass.memberName} vinculado · elige sus beneficios al cobrar`);
+              } else {
+                toast.info(`Membresía de ${pass.memberName} válida`);
+              }
+            } catch (err: any) {
+              toast.error(err?.message || "Membresía inválida o no vigente");
+            }
             return;
           }
 
@@ -697,7 +684,6 @@ export default function PosPage() {
   };
 
   // ── Canje de Membresía por escáner (token <subId>.<window>.<hmac>) ──
-  const redeemMembership = trpc.memberships.redeemAtPOS.useMutation();
   const { data: activeCheckIns, refetch: refetchCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, {
     refetchInterval: showBusinessQrModal ? 2000 : 12000,
     retry: false,
@@ -1651,6 +1637,8 @@ export default function PosPage() {
           customerName: selectedRabbitter?.name,
           customerPhone: selectedRabbitter?.phoneNumber || selectedRabbitter?.telegramId || undefined,
           bunzToApply: 0,
+          // GAP 1: mismos beneficios de membresía que el cobro directo
+          entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
         });
         stripeIntentId.current = charge.intentId;
         setStripePaid(false);
@@ -3245,7 +3233,7 @@ export default function PosPage() {
               )}
 
               {/* ── GAP 1: Beneficios de membresía aplicables ── */}
-              {isCash && selectedRabbitter?.id && posBizCtx.data?.businessId && (
+              {selectedRabbitter?.id && posBizCtx.data?.businessId && (
                 <BenefitsPanel
                   businessId={posBizCtx.data.businessId}
                   customerId={selectedRabbitter.id}
