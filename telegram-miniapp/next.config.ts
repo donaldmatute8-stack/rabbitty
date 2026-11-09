@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@rabbitty/api", "@rabbitty/database-core", "@rabbitty/ui"],
+  transpilePackages: ["@rabbitty/api", "@rabbitty/database-core", "@rabbitty/legal", "@rabbitty/ui"],
   typescript: {
     ignoreBuildErrors: false,
   },

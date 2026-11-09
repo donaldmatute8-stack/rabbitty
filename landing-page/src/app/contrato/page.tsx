@@ -35,7 +35,7 @@ export default function ContratoPage() {
           Contrato de Participación
         </h1>
         <p className="m-0 mt-2 text-sm text-white/50">
-          Versión {CONTRACT_VERSION} · Documento en revisión
+          Versión {CONTRACT_VERSION} · Vigente desde el 8 de noviembre de 2026
         </p>
 
         <div className="mt-10 space-y-8">

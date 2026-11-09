@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import postgres from "postgres";
 import { estimateCapacity, roundCapacity } from "@/lib/capacity";
 import { buildAcceptanceEvidence, type AcceptanceEvidence } from "@/lib/contractEvidence";
+import { CONTRACT_STATUS } from "@/lib/contractContent";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
   const email = str(body.email).toLowerCase();
   const phone = str(body.phone);
   const signature = str(body.signature);
-  const contractVersion = str(body.contractVersion) || "2026.11-v1.2-draft";
+  const contractVersion = str(body.contractVersion) || "2026.11-v1.2";
   const acceptedTerms = body.acceptedTerms === true;
   const monthlySales = Number(body.monthlySales) || 0;
   const rewardPct = Number(body.rewardPercentage) || 0;
@@ -235,7 +236,7 @@ export async function POST(req: NextRequest) {
           acceptanceId: evidence.acceptanceId,
           offerId: evidence.offerId,
           contractVersion: evidence.contractVersion,
-          contractStatus: "draft" as const,
+          contractStatus: CONTRACT_STATUS as "draft" | "approved",
           hashVersion: evidence.hashVersion,
           contractHash: evidence.contractHash,
           contractTextHash: evidence.contractTextHash,

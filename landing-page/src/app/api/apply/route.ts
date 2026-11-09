@@ -273,7 +273,7 @@ export async function POST(req: Request) {
       signature,
       acceptedTerms,
       signatureDate,
-      contractVersion: str(data.contractVersion) || '2026.11-v1.2-draft',
+      contractVersion: str(data.contractVersion) || '2026.11-v1.2',
       acceptedIp: ip,
       acceptedUserAgent: req.headers.get('user-agent') || null,
       contactName: nombre,

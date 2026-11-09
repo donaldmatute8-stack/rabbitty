@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { CONTRACT_VERSION, renderContractText } from "./contractContent";
+import { CONTRACT_STATUS, CONTRACT_VERSION, renderContractText } from "./contractContent";
 
 /**
  * Evidencia canónica de aceptación.
@@ -96,7 +96,7 @@ export function buildAcceptanceEvidence(input: AcceptanceInput): AcceptanceEvide
     `acceptanceId: ${acceptanceId}`,
     `offerId: ${input.offerId}`,
     `contractVersion: ${contractVersion}`,
-    `contractStatus: draft`,
+    `contractStatus: ${CONTRACT_STATUS}`,
     `businessName: ${input.businessName}`,
     `legalName: ${input.legalName}`,
     `rfc: ${input.rfc}`,

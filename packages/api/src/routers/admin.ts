@@ -2267,7 +2267,7 @@ export const adminRouter = router({
           method: "name_checkbox",
           acceptedName: input.acceptedName,
           userAgent: input.userAgent ?? null,
-          contractVersion: "2026.11-v1.2-draft",
+          contractVersion: "2026.11-v1.2",
         },
       });
       if (!result.ok) {

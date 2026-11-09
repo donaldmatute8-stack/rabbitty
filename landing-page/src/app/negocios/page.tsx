@@ -38,6 +38,7 @@ import { BunzyVideoStage } from '@/components/BunzyVideoStage';
 import { BunzyTypingBubble } from '@/components/BunzyTypingBubble';
 import { NicheSearch } from '@/components/NicheSearch';
 import { WelcomeRitual } from '@/components/WelcomeRitual';
+import { CONTRACT_VERSION } from '@/lib/contractContent';
 import { capacityScenarios, estimateCapacity, formatBunz } from '@/lib/capacity';
 
 interface Niche {
@@ -88,8 +89,6 @@ const STEP_META = [
     bubble: 'Último paso. Firma y te aviso por correo y WhatsApp cuando esté aprobado.'
   },
 ];
-
-const CONTRACT_VERSION = '2026.11-v1.2-draft';
 
 /** El ritual se muestra una vez por dispositivo tras enviar el alta. */
 const AFFILIATE_RITUAL_KEY = 'rabbitty_affiliate_welcome_ritual_seen_v2';

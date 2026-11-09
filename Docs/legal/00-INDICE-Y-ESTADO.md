@@ -56,7 +56,7 @@ de la corrección está en los documentos 06 y 07.
 | G4 | El registro de passkeys no fija `userVerification` explícito. | mismo archivo | Política dependiente del default de la librería. | Fijar `userVerification: "preferred"` o `"required"` documentado. |
 | G5 | No se registra un evento de auditoría al crear/borrar passkey. | mismo archivo | Difícil reconstruir alta/baja de credenciales. | Insertar en `auditEntries`. |
 | G6 | El aviso de privacidad v1.0 sigue marcado como “borrador para publicación”. | `DOCS/AVISO-DE-PRIVACIDAD-RABBITTY.md` | No hay versión publicada y fechada en URL estable. | Publicar y conservar la versión anterior. |
-| G7 | El contrato `MCCE_CONTRACT_STATUS` sigue en `draft`. | `telegram-miniapp/src/lib/mcceContract.ts` | La aceptación se guarda como borrador. | No cambiar hasta tener texto aprobado. |
+| G7 | El contrato `MCCE_CONTRACT_STATUS` sigue en `draft`. | `telegram-miniapp/src/lib/mcceContract.ts` | La aceptación se guarda como borrador. | **Corregido:** aprobado operativamente como `2026.11-v1.2`; texto unificado en `@rabbitty/legal`. Revisión legal externa pendiente. |
 | G8 | Los Rabbitters no aceptaban Términos/Privacidad. | Onboarding y app | No había evidencia de consentimiento. | **Corregido:** checkbox en onboarding + gate para existentes + columnas en `users` (migración 0053). |
 
 ---

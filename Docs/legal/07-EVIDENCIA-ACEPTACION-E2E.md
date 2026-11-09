@@ -47,8 +47,8 @@ Ya captura:
 {
   "acceptanceId": "uuid",
   "offerId": "A-<business>-<fecha>",
-  "contractVersion": "2026.11-v1.2-draft",
-  "contractStatus": "draft",
+  "contractVersion": "2026.11-v1.2",
+  "contractStatus": "approved",
   "hashVersion": "canonical-v1",
   "contractHash": "sha256(canonical)",
   "contractTextHash": "sha256(texto del contrato)",

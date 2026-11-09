@@ -148,7 +148,6 @@ const GROUPS = [
       "landing-page/src/components/BunzGuide.tsx",
       "telegram-miniapp/src/lib/support-content.ts",
       "telegram-miniapp/src/features/business/BunzGuide.tsx",
-      "telegram-miniapp/src/features/business/LegalTerms.tsx",
       "telegram-miniapp/src/app/privacy/page.tsx",
       "telegram-miniapp/src/app/profile/support/page.tsx",
       "apps/admin/src/app/(dashboard)/academy/page.tsx",
@@ -214,6 +213,10 @@ const GROUPS = [
       "telegram-miniapp/src/components/ConsentGate.tsx",
       "telegram-miniapp/src/app/api/auth/otp/verify/route.ts",
       "packages/database-core/migrations/manual/0053_user_consent.sql",
+      "packages/legal/package.json",
+      "packages/legal/src/index.ts",
+      "packages/legal/src/contract.ts",
+      "Docs/BUNZ-626-RECONCILIACION-2026-11-09.md",
     ],
   },
   {
