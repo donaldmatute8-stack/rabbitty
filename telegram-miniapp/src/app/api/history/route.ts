@@ -115,7 +115,9 @@ export async function GET(req: NextRequest) {
       console.error("[GET_HISTORY] fiat:", fiatErr);
     }
 
-    const bunzHistory: AuthoritativeHistoryItem[] = ledgerRows.map((entry) => {
+    const bunzHistory: AuthoritativeHistoryItem[] = ledgerRows
+      .filter((entry) => Math.round(Number(entry.amount)) !== 0)
+      .map((entry) => {
       const isPayee = entry.payeeSubjectId === subjectId || entry.payeeSubjectId === caller.id;
       const meta = (entry.metadata as Record<string, unknown>) || {};
       const amountNum = Math.round(Number(entry.amount));

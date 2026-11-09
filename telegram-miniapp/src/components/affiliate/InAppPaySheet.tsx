@@ -648,7 +648,14 @@ export function InAppPaySheet({
           </AnimatePresence>
         }
       >
-        {step === 'pay' && (
+        {step === 'pay' && !receiptChecked && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
+            <p className="text-xs text-white/40">Revisando tu cuenta…</p>
+          </div>
+        )}
+
+        {step === 'pay' && receiptChecked && (
           <div className="flex-1 flex flex-col min-h-0 gap-3">
 
             {/* ── HERO: monto gigante en tarjeta glass ── */}
