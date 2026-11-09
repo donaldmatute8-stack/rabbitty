@@ -350,6 +350,13 @@ export function InAppPaySheet({
     setMethod(bunzState?.canPayWithBunz ? 'bunz' : 'cash');
   }, [cardUnavailable, method, bunzState?.canPayWithBunz]);
 
+  // Si Bunz deja de cubrir la cuenta (pago parcial), no dejamos un panel vacío.
+  useEffect(() => {
+    if (method !== 'bunz') return;
+    if (!bunzState || bunzState.canPayWithBunz) return;
+    setMethod(mpAvailable ? 'mp' : cardUnavailable ? 'cash' : 'card');
+  }, [method, bunzState, mpAvailable, cardUnavailable]);
+
   // Total base cuando el caller no lo conoce
   useEffect(() => {
     if (!isOpen || !orderId || total > 0) return;
