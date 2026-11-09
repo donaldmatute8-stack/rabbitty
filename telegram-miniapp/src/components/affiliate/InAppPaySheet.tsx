@@ -715,10 +715,18 @@ export function InAppPaySheet({
                                 });
                                 const d = await r.json().catch(() => null);
                                 if (d?.ok) {
-                                  toast.success('Cuenta liquidada con Bunz');
-                                  PlatformBridge.hapticFeedback('success');
-                                  setStep('done');
-                                  onPaid?.(Number(d?.paid ?? grandTotal));
+                                  const remaining = Number(d?.remaining ?? 0);
+                                  if (remaining > 0) {
+                                    // Pago parcial (política del negocio): no cerramos la cuenta.
+                                    toast.info(`Pagaste $${Number(d?.paid ?? 0).toFixed(2)} con Bunz · quedan $${remaining.toFixed(2)}`);
+                                    PlatformBridge.hapticFeedback('success');
+                                    setBunzState((prev) => (prev ? { ...prev, canPayWithBunz: false } : prev));
+                                  } else {
+                                    toast.success('Cuenta liquidada con Bunz');
+                                    PlatformBridge.hapticFeedback('success');
+                                    setStep('done');
+                                    onPaid?.(Number(d?.paid ?? grandTotal));
+                                  }
                                 } else {
                                   toast.error(String(d?.error || 'No se pudo pagar con Bunz').slice(0, 140));
                                 }
