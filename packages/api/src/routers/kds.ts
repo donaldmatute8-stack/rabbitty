@@ -14,6 +14,8 @@ export const kdsRouter = router({
       // se envía a cocina hasta que el pago esté confirmado (PAID).
       let where = and(
         eq(orders.branchId, ctx.branchId),
+        // Cuenta enviada al móvil ≠ pedido: no entra a cocina.
+        eq(orders.billOnly, false),
         or(
           inArray(orders.status, ["PENDING", "PAID", "CASH_PAYMENT_REQUESTED"]),
           and(eq(orders.status, "PENDING_PAYMENT"), isNotNull(orders.tableId))

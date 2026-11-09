@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -595,6 +595,13 @@ export default function PosPage() {
           } else if (cleaned.includes("phone=")) {
             const m = cleaned.match(/[?&]phone=([^&]+)/);
             if (m) cleaned = decodeURIComponent(m[1]);
+          } else if (/\/u\//.test(cleaned)) {
+            // QR "Mi Rabbitty Code" de la app: https://app.rabbitty.me/u/<handle>
+            const m = cleaned.match(/\/u\/([^/?#]+)/);
+            if (m) cleaned = decodeURIComponent(m[1]);
+          } else if (cleaned.startsWith("rc:")) {
+            // RabbittyCode neón (13 barras) escaneado como texto
+            cleaned = cleaned.slice(3).trim();
           }
           cleaned = cleaned.replace(/^@/, "").trim();
 
@@ -1557,6 +1564,17 @@ export default function PosPage() {
         return;
       }
     }
+    if (pendingMethod === "BUNZ") {
+      if (!selectedRabbitter?.id) {
+        toast.error("Vincula al Rabbitter (escanea su QR) antes de cobrar con Bunz.");
+        return;
+      }
+      const dueBunz = total + Number(posTip || 0);
+      if (Number(selectedRabbitter.bunzBalance || 0) < dueBunz) {
+        toast.error(`Saldo Bunz insuficiente: tiene ${Number(selectedRabbitter.bunzBalance || 0).toFixed(2)} de ${dueBunz.toFixed(2)}.`);
+        return;
+      }
+    }
     if (method.includes("STRIPE") && !stripeReady) {
       toast.error("Rabbitty Pay no está conectado. Selecciona Mi Terminal y registra la referencia.");
       return;
@@ -1608,7 +1626,8 @@ export default function PosPage() {
 
     // 1. Dispatch real order to backend DB (inventories, Bunz cashback, CRM)
     try {
-      if (mappedMethod === "BUNZ") {
+      if (mappedMethod === "BUNZ" && !selectedRabbitter?.id) {
+        // Sin cliente vinculado: QR para que el comensal pague desde su app.
         const result = await createPaymentIntentMutation.mutateAsync({
           tableId: selectedTableId || undefined,
           orderType: mappedOrderType,
@@ -1693,6 +1712,9 @@ export default function PosPage() {
           const rewardMsg = `+${checkoutResult.awardedBunz} Bunz acreditados a ${selectedRabbitter?.name || "cliente"}`;
           toast.success(`🐰 ¡Orden #${realOrderNumber} pagada! ${rewardMsg}.`);
           notifySystem(`🐰 Cobro concluido — ${rewardMsg}`, `Orden #${realOrderNumber} · ${selectedRabbitter?.name || "cliente"} recibió ${checkoutResult.awardedBunz} Bunz`);
+        } else if (mappedMethod === "BUNZ") {
+          toast.success(`🐰 Cobrado con Bunz — ${selectedRabbitter?.name || "cliente"} pagó $${Number(checkoutResult.total ?? total).toFixed(2)}.`);
+          notifySystem(`🐰 Cobro con Bunz`, `Orden #${realOrderNumber} · ${selectedRabbitter?.name || "cliente"}`);
         } else if (selectedRabbitter) {
           notifySystem(`⚠️ Cobro sin recompensa automática`, `Orden #${realOrderNumber} pagada pero el mint no confirmó — el cliente puede reclamar con el QR del ticket.`);
         } else {
@@ -3103,10 +3125,11 @@ export default function PosPage() {
         className="max-w-xl w-full"
       >
         {methodPicker === "select" && (
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
             {([
               ["EFECTIVO", Banknote, "Efectivo", "Cuenta en caja con cambio", "group-hover:border-emerald-400/60 group-hover:bg-emerald-400/10", "text-emerald-400"],
               ["TARJETA", CreditCard, "Tarjeta", "Rabbitty Pay o terminal física", "group-hover:border-cyan-400/60 group-hover:bg-cyan-400/10", "text-cyan-400"],
+              ["BUNZ", Wallet, "Bunz", "Saldo del Rabbitter vinculado", "group-hover:border-violet-400/60 group-hover:bg-violet-400/10", "text-violet-300"],
               ["DIVIDIDA", Split, "Dividida", "Parte efectivo + parte Bunz", "group-hover:border-amber-400/60 group-hover:bg-amber-400/10", "text-amber-400"],
             ] as const).map(([method, Icon, label, desc, hoverCls, iconCls]) => (
               <button
@@ -3124,6 +3147,13 @@ export default function PosPage() {
               </button>
             ))}
           </div>
+        )}
+        {methodPicker === "select" && (
+          <p className="mt-3 text-[10px] text-gray-500 leading-snug">
+            <span className="font-black text-violet-300">Bunz</span> cobra del saldo del Rabbitter vinculado:
+            escanea su QR (Mi Rabbitty Code) y elige este método. <span className="font-black text-gray-300">Dividida</span> combina
+            efectivo + Bunz. Si nadie está vinculado, Bunz abre el QR de pago para que el cliente lo escanee.
+          </p>
         )}
 
         {methodPicker === "confirm" && chosenMethod && (
@@ -3198,7 +3228,7 @@ export default function PosPage() {
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] uppercase font-black tracking-wider text-[#E91E63] bg-[#E91E63]/10 px-2 py-0.5 rounded-full border border-[#E91E63]/20">
-                    {pendingMethod === "VENTA DIRECTA" ? "Efectivo" : pendingMethod === "DIVIDIDA" ? "Efectivo + Bunz" : String(pendingMethod).replace("TARJETA", "Tarjeta")}
+                    {pendingMethod === "VENTA DIRECTA" ? "Efectivo" : pendingMethod === "DIVIDIDA" ? "Efectivo + Bunz" : pendingMethod === "BUNZ" ? "Bunz" : String(pendingMethod).replace("TARJETA", "Tarjeta")}
                   </span>
                   <p className="text-[11px] text-gray-500 mt-1">{cart.reduce((s, i) => s + i.quantity, 0)} artículo(s)</p>
                 </div>
@@ -3485,6 +3515,39 @@ export default function PosPage() {
                     )}
                   </div>
                 </div>
+              ) : pendingMethod === "BUNZ" ? (
+                <div className="py-2 space-y-3">
+                  <div className="p-3.5 rounded-2xl bg-violet-500/[0.06] border border-violet-400/25 space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-300 flex items-center gap-1.5">
+                      <Wallet size={12} /> Cobro 100% con Bunz
+                    </p>
+                    {selectedRabbitter ? (
+                      <>
+                        <div className="flex justify-between text-[12px]">
+                          <span className="text-gray-400">Rabbitter</span>
+                          <span className="font-black text-white">{selectedRabbitter.name}</span>
+                        </div>
+                        <div className="flex justify-between text-[12px]">
+                          <span className="text-gray-400">Saldo disponible</span>
+                          <span className="font-black text-violet-200">{Number(selectedRabbitter.bunzBalance || 0).toFixed(2)} Bunz</span>
+                        </div>
+                        <div className="flex justify-between text-[12px]">
+                          <span className="text-gray-400">Se cobrarán</span>
+                          <span className="font-black text-white">${(total + Number(posTip || 0)).toFixed(2)} MXN en Bunz</span>
+                        </div>
+                        {Number(selectedRabbitter.bunzBalance || 0) < total + Number(posTip || 0) && (
+                          <p className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                            <AlertTriangle size={11} /> Saldo insuficiente — usa Dividida o pide otro método.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-amber-300 font-bold flex items-center gap-1">
+                        <AlertTriangle size={11} /> Vincula al Rabbitter (escanea su QR) para cobrar con Bunz.
+                      </p>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="py-2 text-center text-sm text-gray-300">
                   ¿Confirmas el cobro de esta orden con <strong className="text-white">{pendingMethod}</strong>?
@@ -3492,7 +3555,7 @@ export default function PosPage() {
               )}
 
               {/* ── Propina opcional (solo en pagos presenciales: efectivo / venta directa / dividida; Rabbitty Pay lleva propina en su propio flujo web/móvil) ── */}
-              {(pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || (pendingMethod === "TARJETA" && cardFlowChoice === "external") || pendingMethod === "DIVIDIDA") && (
+              {(pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || (pendingMethod === "TARJETA" && cardFlowChoice === "external") || pendingMethod === "DIVIDIDA" || pendingMethod === "BUNZ") && (
                 <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-3.5">
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
@@ -3554,7 +3617,8 @@ export default function PosPage() {
                   id="pos-confirm-charge" 
                   disabled={
                     (isCash && cashReceived !== "" && numericReceived < total) ||
-                    (pendingMethod === "TARJETA" && cardFlowChoice === "external" && cardReference.trim().length < 3)
+                    (pendingMethod === "TARJETA" && cardFlowChoice === "external" && cardReference.trim().length < 3) ||
+                    (pendingMethod === "BUNZ" && (!selectedRabbitter || Number(selectedRabbitter.bunzBalance || 0) < total + Number(posTip || 0)))
                   }
                   onClick={() => {
                     const finalCash = isCash ? (numericReceived > 0 ? numericReceived : total) : undefined;
@@ -3566,7 +3630,8 @@ export default function PosPage() {
                   }} 
                   className={`rounded-2xl py-3.5 font-black text-sm border-none cursor-pointer transition-all ${
                     (isCash && cashReceived !== "" && numericReceived < total) ||
-                    (pendingMethod === "TARJETA" && cardFlowChoice === "external" && cardReference.trim().length < 3)
+                    (pendingMethod === "TARJETA" && cardFlowChoice === "external" && cardReference.trim().length < 3) ||
+                    (pendingMethod === "BUNZ" && (!selectedRabbitter || Number(selectedRabbitter.bunzBalance || 0) < total + Number(posTip || 0)))
                       ? "opacity-40 cursor-not-allowed bg-gray-700 text-gray-400"
                       : "bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-[0_10px_30px_-10px_rgba(233,30,99,0.55)] hover:opacity-90"
                   }`}
@@ -3577,6 +3642,8 @@ export default function PosPage() {
                     ? (cardFlowChoice === "external"
                         ? "Terminal aprobada · Cerrar cuenta"
                         : "Generar cobro Rabbitty Pay")
+                    : pendingMethod === "BUNZ"
+                    ? `Cobrar ${(total + Number(posTip || 0)).toFixed(2)} Bunz`
                     : "Confirmar y cobrar"}
                 </Button>
               </div>
@@ -5085,7 +5152,8 @@ export default function PosPage() {
       >
         <div className="space-y-4 p-1">
           <p className="text-xs text-gray-400">
-            Despacha la comanda actual directamente al móvil del Rabbitter vía Push nativo o WhatsApp para que revise su cuenta digital y previsualice sus Bunz antes de pagar en caja o mesa.
+            Envía la cuenta actual al móvil del Rabbitter para que la pague desde su app.
+            <span className="block mt-1 text-emerald-300/80 font-semibold">No crea un pedido ni manda nada a cocina: es solo un cobro.</span>
           </p>
 
           {/* ── Búsqueda dinámica de Rabbitter (mismo patrón del QR Neón) ── */}
@@ -5234,7 +5302,9 @@ export default function PosPage() {
                     orderType === "DELIVERY" ? "DELIVERY" : "DINE_IN";
 
                   const newOrder = await utils.client.pos.createOrder.mutate({
-                    tableId: selectedTableId || undefined,
+                    // Cuenta al móvil: NO es un pedido (no KDS, no seguimiento).
+                    billOnly: true,
+                    customerId: selectedRabbitter?.id,
                     orderType: mappedOrderType,
                     customerName: selectedRabbitter?.name || undefined,
                     customerPhone: waPhone || selectedRabbitter?.phoneNumber || undefined,
@@ -5254,6 +5324,10 @@ export default function PosPage() {
                     phone: waPhone || selectedRabbitter?.phoneNumber || undefined,
                     customerName: selectedRabbitter?.name || undefined,
                   });
+                  // La cuenta ya vive en el móvil: vaciamos el carrito para no
+                  // crear un segundo pedido si el cajero sigue tocando COBRAR.
+                  setCart([]);
+                  setSelectedBenefitIds([]);
                   refetchActiveTabs();
                 } catch (err: any) {
                   toast.error(err?.message || "Error al despachar la cuenta");

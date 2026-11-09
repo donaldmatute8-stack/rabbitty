@@ -184,6 +184,12 @@ export const orders = pgTable("orders", {
   customerPhone: text("customerPhone"),
   orderType: text("orderType").default("DINE_IN").notNull(),
   status: text("status").default("PENDING").notNull(),
+  /**
+   * Cuenta enviada al móvil para cobro (sin pedido): no va a KDS ni al
+   * seguimiento de pedidos del Rabbitter. Solo existe para cobrar y emitir
+   * comprobante. Las órdenes normales quedan en false.
+   */
+  billOnly: boolean("billOnly").default(false).notNull(),
   subtotal: real("subtotal").notNull(),
   tax: real("tax").default(0).notNull(),
   discount: real("discount").default(0).notNull(),

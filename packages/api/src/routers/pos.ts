@@ -358,6 +358,7 @@ export const posRouter = router({
           phoneNumber: coreUsers.phoneNumber,
           telegramId: coreUsers.telegramId,
           totalBunzEarned: coreUsers.totalBunzEarned,
+          totalBunzSpent: coreUsers.totalBunzSpent,
           hops: coreUsers.hops,
           levelId: coreUsers.levelId,
         })
@@ -404,7 +405,7 @@ export const posRouter = router({
         name: [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "Rabbitter",
         phoneNumber: user.phoneNumber,
         telegramId: user.telegramId,
-        bunzBalance: user.totalBunzEarned,
+        bunzBalance: Math.max(0, Number(user.totalBunzEarned || 0) - Number(user.totalBunzSpent || 0)),
         hops: user.hops,
         level: user.levelId || "Rookie",
         currentRewardRate: rewardRate,
@@ -799,15 +800,22 @@ export const posRouter = router({
       z.object({
         tableId: z.string().optional(),
         orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("DINE_IN"),
+        customerId: z.string().optional(),
         customerName: z.string().optional(),
         customerPhone: z.string().optional(),
+        /**
+         * Cuenta al móvil: crea una orden de COBRO, no un pedido. No va a KDS
+         * ni al seguimiento del Rabbitter; solo se usa para pagar/comprobante.
+         */
+        billOnly: z.boolean().default(false),
       })
     )
      .mutation(async ({ ctx, input }) => {
        const [order] = await ctx.restaurantDb.insert(orders).values({
          branchId: ctx.branchId,
-         tableId: input.tableId ?? null,
+         tableId: input.billOnly ? null : (input.tableId ?? null),
          orderType: input.orderType,
+         customerId: input.customerId ?? null,
          customerName: input.customerName ?? null,
          customerPhone: input.customerPhone ?? null,
          subtotal: 0,
@@ -815,9 +823,15 @@ export const posRouter = router({
          discount: 0,
          tip: 0,
          total: 0,
+         billOnly: input.billOnly,
+         status: input.billOnly ? "AWAITING_PAYMENT" : "PENDING",
        }).returning();
        if (!order) throw new Error("Error al crear la orden");
-       bus.emit(EventTypes.ORDER_CREATED, { orderId: order.id, tableId: input.tableId });
+       // Una cuenta al móvil NO es un pedido: no emite ORDER_CREATED (KDS,
+       // seguimiento, live activity) hasta que efectivamente se cobre.
+       if (!input.billOnly) {
+         bus.emit(EventTypes.ORDER_CREATED, { orderId: order.id, tableId: input.tableId });
+       }
        return order;
      }),
 
@@ -1768,12 +1782,6 @@ export const posRouter = router({
       if (input.paymentMethod === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }
-      if (input.paymentMethod === "BUNZ") {
-        throw new TRPCError({ 
-          code: "BAD_REQUEST", 
-          message: "Los pagos con BUNZ requieren verificación del sistema. Usa createPaymentIntent." 
-        });
-      }
       // P0-3: tarjeta exige referencia de terminal
       assertCardPaymentAllowed(input.paymentMethod, input.cardReference);
 
@@ -2114,6 +2122,80 @@ export const posRouter = router({
               message: "La gratificación debe ser una de las opciones publicadas por el negocio (sin montos arbitrarios ni por canal de pago).",
             });
           }
+        }
+      }
+
+      // ── Cobro 100% Bunz del Rabbitter ya vinculado (sin QR) ──
+      // Reutiliza el motor canónico: reserva, captura, libro, capacidad y
+      // comprobante. Solo procede si el cajero escaneó/vinculó al cliente.
+      if (input.paymentMethod === "BUNZ") {
+        if (!input.customerId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "BUNZ_REQUIRES_CUSTOMER: vincula al Rabbitter antes de cobrar con Bunz.",
+          });
+        }
+        try {
+          await ctx.restaurantDb
+            .update(orders)
+            .set({
+              subtotal: calcSubtotal,
+              tax: calcTaxAmt,
+              discount: calculatedDiscount,
+              total: calcTotal,
+              tip: posTip,
+            })
+            .where(eq(orders.id, order.id));
+
+          const { createOrGetPaymentIntent, confirmPaymentIntentSettled } = await import("../services/paymentCore");
+          const intent = await createOrGetPaymentIntent(ctx.restaurantDb, {
+            branchId: ctx.branchId,
+            orderId: order.id,
+            payerUserId: input.customerId,
+            bunzToApply: r2(calcTotal + posTip),
+            tipMxn: posTip,
+            provider: "BUNZ_ONLY",
+          });
+          if (Number(intent.netFiatCents) > 0) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: "BUNZ_INSUFFICIENT_FUNDS: el saldo Bunz del Rabbitter no cubre la cuenta.",
+            });
+          }
+          const settled = await confirmPaymentIntentSettled(ctx.restaurantDb, {
+            paymentIntentId: intent.intentId,
+            verifiedMethod: "BUNZ_ONLY",
+            expectedAmountCents: 0,
+            expectedCurrency: "MXN",
+            expectedBranchId: ctx.branchId,
+            paidAtExternal: new Date(),
+          });
+          if (!settled.success || settled.recoveryHold) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: settled.recoveryHold
+                ? "BUNZ_BACKING_INSUFFICIENT: el negocio no tiene capacidad para esta redención."
+                : "BUNZ_SETTLE_FAILED",
+            });
+          }
+
+          return {
+            orderId: order.id,
+            orderNumber: order.id.slice(-4).toUpperCase(),
+            total: calcTotal,
+            subtotal: calcSubtotal,
+            tax: calcTaxAmt,
+            customerName: input.customerName || null,
+            awardedBunz: 0,
+            rewardQueued: false,
+            claimToken: null,
+          };
+        } catch (err) {
+          // Si el cobro Bunz falla, se devuelven los beneficios de membresía.
+          for (const compensate of membershipCompensations) {
+            try { await compensate(); } catch (compErr) { console.error("[membership] compensación Bunz falló:", compErr); }
+          }
+          throw err;
         }
       }
 

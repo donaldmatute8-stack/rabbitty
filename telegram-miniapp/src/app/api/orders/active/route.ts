@@ -35,6 +35,9 @@ export async function GET(req: Request) {
       .from(orders)
       .where(and(
         eq(orders.customerId, userId),
+        // Las cuentas enviadas al móvil no son pedidos: no aparecen en el
+        // seguimiento (solo en /pay y en el historial).
+        eq(orders.billOnly, false),
         inArray(orders.status, ['PENDING', 'PENDING_PAYMENT', 'CASH_PAYMENT_REQUESTED', 'PAID']),
         gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '24 hours'`),
         isNull(orders.voidReason),
