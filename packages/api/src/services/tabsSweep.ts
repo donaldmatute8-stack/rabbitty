@@ -48,8 +48,9 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
           eq(paymentIntents.status, "PENDING_PAYMENT")
         )
       );
-    // 4) Borradores de vinculación en $0 SIN items: no son pedidos. Se
-    //    expiran solos para que no se queden en Operación/"Desde la App".
+    // 4) Órdenes en $0 (borradores de vinculación o un cierre a medias):
+    //    no son pedidos cobrables. Se expiran solas para que no se queden en
+    //    Operación/"Desde la App".
     const blanksRes: any = await db
       .select({ id: orders.id })
       .from(orders)
@@ -58,8 +59,7 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
           eq(orders.branchId, branchId),
           eq(orders.status, "PENDING"),
           eq(orders.total, 0),
-          lt(orders.createdAt, sql`now() - interval '10 minutes'`),
-          sql`NOT EXISTS (SELECT 1 FROM "order_items" oi WHERE oi."orderId" = ${orders.id})`
+          lt(orders.createdAt, sql`now() - interval '10 minutes'`)
         )
       )
       .limit(500);
@@ -67,7 +67,7 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
     if (blankIds.length > 0) {
       await db
         .update(orders)
-        .set({ status: "EXPIRED", voidReason: "EMPTY_DRAFT", updatedAt: new Date() })
+        .set({ status: "EXPIRED", voidReason: "ZERO_TOTAL_DRAFT", updatedAt: new Date() })
         .where(and(inArray(orders.id, blankIds), eq(orders.status, "PENDING")));
     }
   } catch (err) {

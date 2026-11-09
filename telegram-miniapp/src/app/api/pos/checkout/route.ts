@@ -242,6 +242,11 @@ export async function POST(req: Request) {
       }
       const typedItems = items as OrderItemInput[];
       const grandTotal = typedItems.reduce((sum: number, item: OrderItemInput) => sum + (item.price * item.quantity), 0);
+      // P0: un pedido sin monto no debe nacer (evita tabs "Desde la App" en $0
+      // que luego bloquean/confunden el cobro en el POS).
+      if (!(grandTotal > 0)) {
+        return NextResponse.json({ error: "El pedido no tiene monto. Agrega productos con precio." }, { status: 400 });
+      }
 
       // ── Fase C: ACUMULAR en el Tab abierto del PROPIO Rabbitter ──
       // Si reclamo la mesa (table_session OPEN con mi customerId) y hay una

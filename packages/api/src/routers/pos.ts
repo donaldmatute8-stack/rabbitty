@@ -1004,30 +1004,34 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-        const [cartOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+      // Ítem + totales en UNA transacción: nunca queda una orden con productos
+      // y total $0 si falla la actualización de totales.
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [cartOrder] = await tx.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
         if (!cartOrder || cartOrder.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
-        const [menuItem] = await ctx.restaurantDb.select().from(menuItems).where(eq(menuItems.id, input.menuItemId));
+        const [menuItem] = await tx.select().from(menuItems).where(eq(menuItems.id, input.menuItemId));
         if (!menuItem) {
           throw new Error("Producto no encontrado");
         }
         const unitPrice = menuItem.price;
-       const totalPrice = unitPrice * input.quantity;
-      const existingItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const nextSortOrder = existingItems.length;
-      const [orderItem] = await ctx.restaurantDb.insert(orderItems).values({
-        orderId: input.orderId,
-        menuItemId: input.menuItemId,
-        quantity: input.quantity,
-        unitPrice,
-        totalPrice,
-        sortOrder: nextSortOrder,
-        modifiers: input.modifiers ?? null,
-        notes: input.notes ?? null,
-      }).returning();
-      const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-      await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
-      return orderItem;
+        const totalPrice = unitPrice * input.quantity;
+        const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+        const nextSortOrder = existingItems.length;
+        const [orderItem] = await tx.insert(orderItems).values({
+          orderId: input.orderId,
+          menuItemId: input.menuItemId,
+          quantity: input.quantity,
+          unitPrice,
+          totalPrice,
+          sortOrder: nextSortOrder,
+          modifiers: input.modifiers ?? null,
+          notes: input.notes ?? null,
+        }).returning();
+        const allItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+        const { total, subtotal, tax } = calcTax(allItems.reduce((s: number, i: any) => s + Number(i.totalPrice), 0));
+        await tx.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
+        return orderItem;
+      });
     }),
 
   removeFromCart: posProcedure
