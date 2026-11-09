@@ -24,6 +24,7 @@ import { playLoaderSound } from '@/lib/loaderSound';
 import { useOrderTracking } from '@/lib/useOrderTracking';
 import { useAppFlags } from '@/lib/useAppFlags';
 import { OrderTrackingCard, OrderTrackSheet } from '@/components/affiliate/OrderTrackingCard';
+import { PendingChargeCard } from '@/components/affiliate/PendingChargeCard';
 import { PushPermissionBanner } from '@/components/notifications/PushPermissionBanner';
 import { openBunzy } from '@/lib/bunzyLaunch';
 import { MoodCheckInSheet } from '@/components/mood/MoodCheckInSheet';
@@ -874,6 +875,9 @@ export default function FeedPage() {
               }}
             />
           )}
+
+          {/* Cobro pendiente de caja (icono wallet, no pedido) */}
+          {trackingLoaded && user?.id != null && <PendingChargeCard />}
 
           {/* ── bunz'in tab ── */}
           {activeTab === "bunz'in" && (

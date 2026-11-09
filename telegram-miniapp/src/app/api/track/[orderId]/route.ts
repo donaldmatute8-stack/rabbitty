@@ -104,7 +104,7 @@ export async function GET(
     const stage = stageOf(row.status, delivery?.status, items.map((it) => it.status));
     // Con repartidor asignado, la cancelación la gestiona el local/la entrega:
     // cancelar en Rabbitty dejaría un courier despachado (y cobrado).
-    const canCancel = row.status === 'PENDING' && stage === 'RECEIVED' && !delivery;
+    const canCancel = (row.status === 'PENDING' || row.status === 'PENDING_PAYMENT') && stage === 'RECEIVED' && !delivery;
 
     return NextResponse.json({
       success: true,

@@ -297,6 +297,7 @@ export default function PosPage() {
   const [isSearchingRabbitter, setIsSearchingRabbitter] = useState(false);
   const [isScanningRabbitter, setIsScanningRabbitter] = useState(false);
   const [showBusinessQrModal, setShowBusinessQrModal] = useState(false);
+  const [businessQrMode, setBusinessQrMode] = useState<'checkin' | 'pay'>('checkin');
   const utils = trpc.useUtils();
 
   // Subscribe to PrintEngine state (connections, auto-reconnects)
@@ -4308,18 +4309,38 @@ export default function PosPage() {
       <Dialog
         open={showBusinessQrModal}
         onClose={() => setShowBusinessQrModal(false)}
-        title="QR Neón de Mostrador (Rabbitter Check-in)"
+        title={businessQrMode === 'pay' ? 'QR para pagar en caja' : 'QR Neón de Mostrador (Rabbitter Check-in)'}
         className="max-w-md w-full"
       >
         <div className="space-y-4 p-2 text-center flex flex-col items-center">
+          <div className="flex w-full rounded-2xl border border-white/10 bg-white/[0.04] p-1">
+            <button
+              type="button"
+              onClick={() => setBusinessQrMode('checkin')}
+              className={`flex-1 rounded-xl py-2 text-[11px] font-black transition-all ${businessQrMode === 'checkin' ? 'bg-pink-500/20 text-pink-200 border border-pink-400/30' : 'text-gray-400'}`}
+            >
+              Check-in / Bunz
+            </button>
+            <button
+              type="button"
+              onClick={() => setBusinessQrMode('pay')}
+              className={`flex-1 rounded-xl py-2 text-[11px] font-black transition-all ${businessQrMode === 'pay' ? 'bg-violet-500/20 text-violet-200 border border-violet-400/30' : 'text-gray-400'}`}
+            >
+              Pagar en caja
+            </button>
+          </div>
           <p className="text-xs text-gray-400 max-w-sm">
-            Muestra esta pantalla al cliente para que apunte con la cámara de su celular o abra su app de Rabbitty / Telegram y reciba sus Bunz.
+            {businessQrMode === 'pay'
+              ? 'El cliente escanea este QR y espera en su app mientras procesas el cobro. Al enviarlo, le pedirá confirmar el pago.'
+              : 'Muestra esta pantalla al cliente para que apunte con la cámara de su celular o abra su app de Rabbitty / Telegram y reciba sus Bunz.'}
           </p>
 
           <div className="relative p-6 rounded-[2.5rem] bg-gray-950 border-2 border-pink-500/60 shadow-[0_0_60px_rgba(236,72,153,0.4)] flex flex-col items-center">
             <div className="p-4 bg-white rounded-3xl shadow-2xl flex items-center justify-center">
               <QRCodeSVG
-                value={`https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&businessId=${encodeURIComponent(ticketContext?.restaurant?.businessId || "")}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`}
+                value={businessQrMode === 'pay'
+                  ? `https://app.rabbitty.me/pay/wait?branchId=${encodeURIComponent(ticketContext?.branch?.id || "default")}&businessId=${encodeURIComponent(ticketContext?.restaurant?.businessId || "")}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`
+                  : `https://rabbitty.me/scan?branchId=${ticketContext?.branch?.id || "default"}&businessId=${encodeURIComponent(ticketContext?.restaurant?.businessId || "")}&business=${encodeURIComponent(ticketContext?.restaurant?.name || "Rabbitty")}`}
                 size={220}
                 level="H"
                 includeMargin={false}
@@ -4340,7 +4361,7 @@ export default function PosPage() {
               </span>
             </div>
             <p className="text-[11px] text-gray-400 mt-1 font-mono">
-              rabbitty.me/scan
+              {businessQrMode === 'pay' ? 'app.rabbitty.me/pay/wait' : 'rabbitty.me/scan'}
             </p>
           </div>
 

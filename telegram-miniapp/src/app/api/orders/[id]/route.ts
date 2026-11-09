@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
-import { orders, orderItems, menuItems, tables, branches, restaurants } from '@rabbitty/database-restaurant/schema';
+import { orders, orderItems, menuItems, tables, branches, restaurants, deliveries } from '@rabbitty/database-restaurant/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { deriveOrderStage, ORDER_STAGE_META, orderStageStepIndex, ORDER_FIRST_STEPS, type OrderStage } from '@rabbitty/events';
 
@@ -89,6 +89,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const stage: OrderStage = deriveOrderStage({ order: { status: order.status }, items });
     const meta = ORDER_STAGE_META[stage];
+    const [delivery] = await restaurantDb
+      .select({ id: deliveries.id })
+      .from(deliveries)
+      .where(eq(deliveries.orderId, order.id))
+      .limit(1);
+    const canCancel = (order.status === 'PENDING' || order.status === 'PENDING_PAYMENT')
+      && stage === 'RECEIVED'
+      && !delivery
+      && items.every((it) => !it.status || it.status === 'PENDING');
 
     return NextResponse.json({
       success: true,
@@ -112,6 +121,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         stageStep: orderStageStepIndex(stage),
         stageCount: ORDER_FIRST_STEPS.length,
         canPay: stage !== 'DONE' && order.status !== 'PAID',
+        canCancel,
         items: items.map((it) => ({
           name: it.name ?? 'Producto',
           quantity: it.quantity,

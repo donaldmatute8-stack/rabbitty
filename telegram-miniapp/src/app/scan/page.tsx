@@ -505,6 +505,17 @@ export default function ScanPage() {
       return true;
     }
 
+    // 6.4. Espera de cobro en caja: el POS muestra este QR y el Rabbitter espera
+    // el loader hasta que caja procese el cobro (luego salta a la confirmación).
+    if (/^https?:\/\/[^/]+\/pay\/wait/i.test(res.url || '')) {
+      await stopScanning();
+      setScanLoader(null);
+      setScanLoaderCode(null);
+      const path = (res.url || '').replace(/^https?:\/\/[^/]+/, '');
+      router.push(path);
+      return true;
+    }
+
     // 6.5. Fase D: link de pago del comensal (admin /pay/[orderId]) → pagar IN-APP
     // sin salir de la app (QR digital de mostrador, cuenta enviada por el POS).
     if (/^https?:\/\/[^/]+\/pay\//i.test(res.url || '')) {

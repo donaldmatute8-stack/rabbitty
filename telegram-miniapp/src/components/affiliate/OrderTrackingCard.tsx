@@ -30,6 +30,7 @@ interface OrderDetail {
   stageStep: number;
   stageCount: number;
   canPay: boolean;
+  canCancel?: boolean;
   items: Array<{ name: string; quantity: number; totalPrice: number; status: string | null }>;
 }
 
@@ -332,7 +333,7 @@ export function OrderTrackSheet({
                       <span className="text-[11px] font-black text-emerald-300">{detail.status === 'PAID' ? 'Pago confirmado' : 'Pedido completado'}</span>
                     </div>
                   )}
-                  {(detail.status === 'PENDING' || detail.status === 'PENDING_PAYMENT') && (
+                  {(detail.canCancel ?? (detail.status === 'PENDING' || detail.status === 'PENDING_PAYMENT')) && (
                     cancelConfirm ? (
                       <div className="flex gap-2">
                         <button
