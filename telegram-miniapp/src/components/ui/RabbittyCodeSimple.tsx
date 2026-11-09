@@ -39,12 +39,13 @@ const TG_THEMES: Record<RabbittyCodeTheme, ThemeConfig> = {
   theme1: {
     id: 'theme1',
     title: 'Clásico',
-    from: '#1E6ED4',
-    to: '#7C22C8',
-    bgDark: '#06060E',
-    bgAccent: '#0D1A33',
+    // Identidad Rabbitty: rosa → morado (antes azul → morado).
+    from: '#FF2E93',
+    to: '#8B5CF6',
+    bgDark: '#0B0710',
+    bgAccent: '#2A0D22',
     handleColor: '#1a1a1a',
-    doodleColor: 'rgba(90,140,220,0.22)',
+    doodleColor: 'rgba(233,30,99,0.22)',
   },
   theme2: {
     id: 'theme2',
@@ -485,7 +486,7 @@ export default function RabbittyCodeSimple({
           <button
             type="button"
             onClick={onShare}
-            className="flex w-full items-center justify-center rounded-[18px] bg-[#3390EC] text-[16px] font-bold text-white active:scale-[0.98] hover:bg-[#2b82d9] transition-all"
+            className="flex w-full items-center justify-center rounded-[18px] bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-[16px] font-bold text-white shadow-[0_10px_24px_-10px_rgba(233,30,99,0.65)] active:scale-[0.98] hover:brightness-110 transition-all"
             style={{ height: 'var(--qr-btn-h, 52px)' }}
           >
             Compartir mi código
@@ -493,7 +494,7 @@ export default function RabbittyCodeSimple({
           <button
             type="button"
             onClick={onScan}
-            className="flex w-full items-center justify-center gap-2 rounded-[18px] bg-white/[0.07] text-[15px] font-semibold text-[#3390EC] hover:bg-white/[0.12] active:scale-[0.98] transition-all"
+            className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-[#E91E63]/25 bg-[#E91E63]/10 text-[15px] font-semibold text-[#FF6BB3] hover:bg-[#E91E63]/15 active:scale-[0.98] transition-all"
             style={{ height: 'var(--qr-btn2-h, 46px)' }}
           >
             <QrCode size={18} strokeWidth={2.2}/>
