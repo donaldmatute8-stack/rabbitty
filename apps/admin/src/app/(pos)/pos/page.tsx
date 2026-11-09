@@ -4917,7 +4917,7 @@ export default function PosPage() {
 
                   {/* ── H-TRACK · flujo grande: Recibido → Procesando → Despachando
                        → Cobrar. Cada paso empuja la etapa al móvil (bidireccional). ── */}
-                  {tab.fromApp && (() => {
+                  {(tab.fromApp || Boolean(tab.customer)) && (() => {
                     const stage = String(tab.stage ?? 'RECEIVED');
                     const isDelivery = tab.orderType === 'DELIVERY';
                     const steps = [

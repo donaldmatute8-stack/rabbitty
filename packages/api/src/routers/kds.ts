@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, inArray, or, isNotNull } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
@@ -10,7 +10,15 @@ export const kdsRouter = router({
   getOrders: protectedProcedure
     .input(z.object({ status: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      let where = and(eq(orders.branchId, ctx.branchId));
+      // KDS solo ve comandas activas. PENDING_PAYMENT de casa (sin mesa) NO
+      // se envía a cocina hasta que el pago esté confirmado (PAID).
+      let where = and(
+        eq(orders.branchId, ctx.branchId),
+        or(
+          inArray(orders.status, ["PENDING", "PAID", "CASH_PAYMENT_REQUESTED"]),
+          and(eq(orders.status, "PENDING_PAYMENT"), isNotNull(orders.tableId))
+        )
+      );
       if (input?.status) {
         where = and(where, eq(orders.status, input.status));
       }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, sql, inArray, or, ilike, gte, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, sql, inArray, or, ilike, gte, isNull, isNotNull } from "drizzle-orm";
 import crypto from "crypto";
 import { router, posProcedure, posPermission } from "../trpc";
 import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
@@ -675,12 +675,10 @@ export const posRouter = router({
         .where(and(
           eq(orders.branchId, ctx.branchId),
           eq(orders.customerId, input.customerId),
-          inArray(orders.status, [
-            ORDER_STATUS.PENDING,
-            ORDER_STATUS.PENDING_PAYMENT,
-            ORDER_STATUS.PAID,
-            ORDER_STATUS.CASH_REQUESTED,
-          ]),
+          or(
+            inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.PAID, ORDER_STATUS.CASH_REQUESTED]),
+            and(eq(orders.status, ORDER_STATUS.PENDING_PAYMENT), isNotNull(orders.tableId))
+          ),
           isNull(orders.voidReason),
           gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '12 hours'`),
         ))
@@ -2665,12 +2663,12 @@ export const posRouter = router({
         eq(orders.branchId, ctx.branchId),
         // PAID incluido: los pedidos pagados con Bunz en la app llegan igual
         // a la cola del POS (antes se quedaban fuera y nunca se preparaban).
-        inArray(orders.status, [
-          ORDER_STATUS.PENDING,
-          ORDER_STATUS.PENDING_PAYMENT,
-          ORDER_STATUS.PAID,
-          ORDER_STATUS.CASH_REQUESTED,
-        ])
+        or(
+          inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.PAID, ORDER_STATUS.CASH_REQUESTED]),
+          // PENDING_PAYMENT de local (con mesa) se prepara y se cobra al final.
+          // Los pedidos desde casa (sin mesa) NO entran hasta estar pagados.
+          and(eq(orders.status, ORDER_STATUS.PENDING_PAYMENT), isNotNull(orders.tableId))
+        )
       ))
       .orderBy(desc(orders.createdAt));
 

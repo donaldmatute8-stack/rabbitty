@@ -385,8 +385,12 @@ export async function POST(req: Request) {
             if (biz?.ownerId) {
               await sendEcosystemNotification({
                 userId: biz.ownerId,
-                title: table ? `🍽️ Nueva Comanda - Mesa #${table.number}` : '🛍️ Nueva Comanda — Para Llevar',
-                message: `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN).`,
+                title: table
+                  ? `🍽️ Nueva Comanda - Mesa #${table.number}`
+                  : '🛍️ Pedido pendiente de pago — Para Llevar / Domicilio',
+                message: table
+                  ? `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN).`
+                  : `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN). Cocina se activa al confirmar el pago.`,
                 type: 'SYSTEM',
                 route: '/business-dashboard',
                 threadId: 'table_orders',
