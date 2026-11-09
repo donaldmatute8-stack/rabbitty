@@ -139,7 +139,11 @@ export async function GET(req: NextRequest) {
           icon = "📤";
         }
       } else if (entry.type === "EARN") {
-        if (entry.payerSubjectId === "sys_referrals" || meta.source === "referral_program") {
+        if (meta.source === "test_injection") {
+          name = "Bunz de prueba (QA)";
+          category = "Prueba";
+          icon = "🧪";
+        } else if (entry.payerSubjectId === "sys_referrals" || meta.source === "referral_program") {
           name = "Recompensa por Referido";
           category = "Comunidad";
           icon = "👥";
