@@ -211,7 +211,7 @@ export default function PosPage() {
   const [activeTabsModal, setActiveTabsModal] = useState(false);
   // Alerta gigante + sonido cuando entra un pedido nuevo desde la app
   const [orderAlertOpen, setOrderAlertOpen] = useState(false);
-  const prevAppPendingRef = useRef<number | null>(null);
+  const alertedOrderIdsRef = useRef<Set<string>>(new Set());
   // B1: una sola superficie "Operación" con dos vistas dentro (comandas / app)
   const [tabsView, setTabsView] = useState<"ALL" | "APP">("ALL");
   /** Pedido al que se le está prometiendo un tiempo de preparación. */
@@ -362,19 +362,22 @@ export default function PosPage() {
     onError: () => toast.error("No se pudo guardar el ajuste de sonido"),
   });
   // B1: pedidos nuevos desde la app (sin tomar) — alimenta el badge del header
-  const appPendingCount = useMemo(
-    () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp && (t.stage ?? "RECEIVED") === "RECEIVED").length,
+  const appPendingOrders = useMemo(
+    () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp && (t.stage ?? "RECEIVED") === "RECEIVED"),
     [activeTabsData],
   );
+  const appPendingCount = appPendingOrders.length;
 
-  // ── Alerta GIGANTE + sonido: solo cuando ENTRA un pedido nuevo (no en cada poll)
+  // ── Alerta GIGANTE + sonido: por pedido pendiente nuevo, incluso al cargar.
+  // Antes se ignoraba el primer render, así que un pedido que ya existía al
+  // abrir/recargar el POS no sonaba. Ahora se alerta una vez por orderId.
   useEffect(() => {
-    const prev = prevAppPendingRef.current;
-    prevAppPendingRef.current = appPendingCount;
-    // El primer render no alerta: solo avisa cuando ENTRA uno nuevo.
-    if (prev === null) return;
-    if (appPendingCount > prev) setOrderAlertOpen(true);
-  }, [appPendingCount]);
+    if (appPendingOrders.length === 0) return;
+    const nuevos = appPendingOrders.filter((o) => !alertedOrderIdsRef.current.has(o.orderId));
+    if (nuevos.length === 0) return;
+    for (const o of nuevos) alertedOrderIdsRef.current.add(o.orderId);
+    setOrderAlertOpen(true);
+  }, [appPendingOrders]);
   const appTabsCount = useMemo(
     () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp).length,
     [activeTabsData],
