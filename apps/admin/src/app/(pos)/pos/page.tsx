@@ -421,7 +421,7 @@ export default function PosPage() {
       setApproval(null);
       setPendingMethod(null);
       setIsCharging(true);
-      void handleCheckout(ctxApproval.method, ctxApproval.cashGiven, ctxApproval.split)
+      void handleCheckout(ctxApproval.method, ctxApproval.cashGiven, ctxApproval.split, ctxApproval.requestId)
         .finally(() => setIsCharging(false));
     } else if (status === "REJECTED" || status === "EXPIRED" || status === "CANCELLED") {
       approvalHandledRef.current = true;
@@ -1704,6 +1704,7 @@ export default function PosPage() {
     method: string = "EFECTIVO",
     cashGiven?: number,
     splitOverride?: { cash: number; bunz: number },
+    chargeApprovalId?: string,
   ) => {
     if (cart.length === 0) return;
     // Defensa en profundidad: el servidor también valida POS_CHARGE.
@@ -1796,6 +1797,8 @@ export default function PosPage() {
           existingOrderId: draftOrderId && !draftHasItems ? draftOrderId : undefined,
           // RP-2A: si la red falla y el cajero reintenta, el server no duplica.
           idempotencyKey: checkoutKeyRef.current ?? undefined,
+          // Autorización del Rabbitter (obligatoria server-side si hay cliente)
+          chargeApprovalId,
         });
         checkoutKeyRef.current = null;
 

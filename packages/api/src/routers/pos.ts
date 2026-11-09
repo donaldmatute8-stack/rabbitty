@@ -1934,6 +1934,8 @@ export const posRouter = router({
         existingOrderId: z.string().uuid().optional(),
         /** RP-2A: clave de idempotencia del cobro (reintentos no duplican). */
         idempotencyKey: z.string().min(8).max(120).optional(),
+        /** Confirmación del Rabbitter (pos_charge_requests) obligatoria si hay customerId. */
+        chargeApprovalId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -2283,6 +2285,47 @@ export const posRouter = router({
         }
       }
 
+      // ── Confirmación del Rabbitter OBLIGATORIA (server-side) ──
+      // Un POS con bundle viejo (sin el paso de confirmación) no puede cobrar
+      // a un Rabbitter vinculado: debe actualizar y pedir la autorización.
+      if (input.customerId) {
+        if (!input.chargeApprovalId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "CHARGE_APPROVAL_REQUIRED: actualiza el POS (recarga) y pide la confirmación del Rabbitter antes de cobrar.",
+          });
+        }
+        const [approval] = await ctx.restaurantDb
+          .select()
+          .from(posChargeRequests)
+          .where(and(
+            eq(posChargeRequests.id, input.chargeApprovalId),
+            eq(posChargeRequests.branchId, ctx.branchId),
+            eq(posChargeRequests.customerId, input.customerId),
+          ))
+          .limit(1);
+        if (!approval || approval.status !== "APPROVED") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: approval?.status === "CHARGED"
+              ? "CHARGE_APPROVAL_USED: esta autorización ya se usó."
+              : "CHARGE_APPROVAL_REQUIRED: el Rabbitter debe autorizar el cobro en su app.",
+          });
+        }
+        if (new Date(approval.expiresAt) < new Date()) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "CHARGE_APPROVAL_EXPIRED: la autorización expiró. Genera el cobro de nuevo.",
+          });
+        }
+        if (r2(calcTotal + Number(posTip || 0)) > Number(approval.amount) + 0.01) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "CHARGE_APPROVAL_MISMATCH: el monto autorizado no cubre el cobro.",
+          });
+        }
+      }
+
       // ── Cobro 100% Bunz del Rabbitter ya vinculado (sin QR) ──
       // Reutiliza el motor canónico: reserva, captura, libro, capacidad y
       // comprobante. Solo procede si el cajero escaneó/vinculó al cliente.
@@ -2335,6 +2378,13 @@ export const posRouter = router({
                 ? "BUNZ_BACKING_INSUFFICIENT: el negocio no tiene capacidad para esta redención."
                 : "BUNZ_SETTLE_FAILED",
             });
+          }
+
+          if (input.chargeApprovalId) {
+            await ctx.restaurantDb
+              .update(posChargeRequests)
+              .set({ status: "CHARGED", orderId: order.id, updatedAt: new Date() })
+              .where(eq(posChargeRequests.id, input.chargeApprovalId));
           }
 
           return {
@@ -2714,6 +2764,13 @@ export const posRouter = router({
       bus.emit(EventTypes.ORDER_PAID, { orderId: order.id });
 
       const claimToken = generateTicketClaimToken(order.id, calcTotal, ctx.branchId);
+
+      if (input.chargeApprovalId) {
+        await ctx.restaurantDb
+          .update(posChargeRequests)
+          .set({ status: "CHARGED", orderId: order.id, updatedAt: new Date() })
+          .where(eq(posChargeRequests.id, input.chargeApprovalId));
+      }
 
       return {
         success: true,
