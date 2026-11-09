@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { and, eq, inArray, ne, or } from 'drizzle-orm';
+import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
-import { deliveries, orderItems, orders } from '@rabbitty/database-restaurant/schema';
+import { deliveries, orderItems, orders, payments, paymentIntents } from '@rabbitty/database-restaurant/schema';
 import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -43,9 +43,23 @@ export async function POST(
     if (order.customerId !== caller.id) {
       return NextResponse.json({ error: 'Este pedido no es tuyo' }, { status: 403 });
     }
-    if (order.status !== 'PENDING') {
+    // Se puede cancelar mientras no haya pago ni preparación: PENDING o
+    // PENDING_PAYMENT (pedido de la app aún sin pagar).
+    const cancellable = order.status === 'PENDING' || order.status === 'PENDING_PAYMENT';
+    if (!cancellable) {
       return NextResponse.json(
-        { error: 'El pedido ya fue pagado; habla con el local para cancelarlo.' },
+        { error: 'El pedido ya fue pagado o está en preparación; habla con el local para cancelarlo.' },
+        { status: 409 },
+      );
+    }
+
+    const [paid] = await restaurantDb
+      .select({ total: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
+      .from(payments)
+      .where(and(eq(payments.orderId, orderId), eq(payments.status, 'COMPLETED')));
+    if (Number(paid?.total ?? 0) > 0) {
+      return NextResponse.json(
+        { error: 'El pedido ya tiene un pago registrado; habla con el local para cancelarlo.' },
         { status: 409 },
       );
     }
@@ -88,9 +102,15 @@ export async function POST(
     }
 
     const now = new Date();
+    // Anular intents vigentes para que el link de pago no cobre después.
+    await restaurantDb
+      .update(paymentIntents)
+      .set({ status: 'CANCELLED', updatedAt: now })
+      .where(and(eq(paymentIntents.orderId, orderId), eq(paymentIntents.status, 'PENDING_PAYMENT')));
+
     await restaurantDb
       .update(orders)
-      .set({ status: 'CANCELLED', updatedAt: now })
+      .set({ status: 'CANCELLED', voidReason: 'CANCELLED_BY_CUSTOMER', updatedAt: now })
       .where(eq(orders.id, orderId));
 
     // Aviso al negocio (best-effort): que sepa que la comanda se cayó.

@@ -48,6 +48,28 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
           eq(paymentIntents.status, "PENDING_PAYMENT")
         )
       );
+    // 4) Borradores de vinculación en $0 SIN items: no son pedidos. Se
+    //    expiran solos para que no se queden en Operación/"Desde la App".
+    const blanksRes: any = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.branchId, branchId),
+          eq(orders.status, "PENDING"),
+          eq(orders.total, 0),
+          lt(orders.createdAt, sql`now() - interval '10 minutes'`),
+          sql`NOT EXISTS (SELECT 1 FROM "order_items" oi WHERE oi."orderId" = ${orders.id})`
+        )
+      )
+      .limit(500);
+    const blankIds: string[] = (blanksRes as Array<{ id: string }>).map((r) => r.id);
+    if (blankIds.length > 0) {
+      await db
+        .update(orders)
+        .set({ status: "EXPIRED", voidReason: "EMPTY_DRAFT", updatedAt: new Date() })
+        .where(and(inArray(orders.id, blankIds), eq(orders.status, "PENDING")));
+    }
   } catch (err) {
     console.warn("[TABS_SWEEP] expiración de tabs falló:", err);
   }

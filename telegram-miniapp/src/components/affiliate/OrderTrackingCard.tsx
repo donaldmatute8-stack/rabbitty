@@ -12,6 +12,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Package, ChefHat, CheckCircle2, X, Sparkles, ChevronRight, ChevronUp, Wallet, Utensils } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
+import { toast } from '@rabbitty/ui';
 import type { TrackedOrder } from '@/lib/useOrderTracking';
 import { InAppPaySheet } from './InAppPaySheet';
 
@@ -182,6 +183,30 @@ export function OrderTrackSheet({
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const cancelOrder = async () => {
+    if (!orderId || cancelling) return;
+    setCancelling(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/track/${encodeURIComponent(orderId)}/cancel`, {
+        method: 'POST',
+        headers,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'No se pudo cancelar el pedido');
+      toast.success('Pedido cancelado');
+      setCancelConfirm(false);
+      onUpdated();
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo cancelar el pedido');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   React.useEffect(() => {
     let alive = true;
@@ -306,6 +331,36 @@ export function OrderTrackSheet({
                       <CheckCircle2 size={15} className="text-emerald-400" />
                       <span className="text-[11px] font-black text-emerald-300">{detail.status === 'PAID' ? 'Pago confirmado' : 'Pedido completado'}</span>
                     </div>
+                  )}
+                  {(detail.status === 'PENDING' || detail.status === 'PENDING_PAYMENT') && (
+                    cancelConfirm ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={cancelling}
+                          onClick={() => setCancelConfirm(false)}
+                          className="flex-1 rounded-xl border border-white/15 bg-white/5 py-2.5 text-[11px] font-black text-white/75 active:scale-[0.99] disabled:opacity-50"
+                        >
+                          Mejor no
+                        </button>
+                        <button
+                          type="button"
+                          disabled={cancelling}
+                          onClick={() => void cancelOrder()}
+                          className="flex-1 rounded-xl border border-red-400/40 bg-red-500/15 py-2.5 text-[11px] font-black text-red-300 active:scale-[0.99] disabled:opacity-50"
+                        >
+                          {cancelling ? 'Cancelando…' : 'Sí, cancelar'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => { setCancelConfirm(true); PlatformBridge.hapticFeedback('light'); }}
+                        className="w-full rounded-xl border border-red-400/30 bg-red-500/10 py-2.5 text-[11px] font-black text-red-300 active:scale-[0.99]"
+                      >
+                        Cancelar pedido
+                      </button>
+                    )
                   )}
                   <button
                     type="button"

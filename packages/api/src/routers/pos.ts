@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, sql, inArray, or, ilike, gte, isNull, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, sql, inArray, or, ilike, gte, gt, isNull, isNotNull } from "drizzle-orm";
 import crypto from "crypto";
 import { router, posProcedure, posPermission } from "../trpc";
 import { validateGratuity, parseGratuityPcts, GRATUITY_MAX_PCT } from "../services/gratuityRules";
@@ -2998,6 +2998,9 @@ export const posRouter = router({
       .from(orders)
       .where(and(
         eq(orders.branchId, ctx.branchId),
+        // Un borrador en $0 (sin productos) no es un pedido: no debe ocupar
+        // un tab ni la cola "Desde la App".
+        gt(orders.total, 0),
         // PAID incluido: los pedidos pagados con Bunz en la app llegan igual
         // a la cola del POS (antes se quedaban fuera y nunca se preparaban).
         or(

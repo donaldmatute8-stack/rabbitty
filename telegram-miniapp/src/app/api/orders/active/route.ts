@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
-import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { restaurantDb } from '@/db/restaurant';
 import { orders, orderItems, menuItems, branches, restaurants } from '@rabbitty/database-restaurant/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -38,6 +38,8 @@ export async function GET(req: Request) {
         // Las cuentas enviadas al móvil no son pedidos: no aparecen en el
         // seguimiento (solo en /pay y en el historial).
         eq(orders.billOnly, false),
+        // Los borradores en $0 (vincular Rabbitter) no son pedidos.
+        gt(orders.total, 0),
         inArray(orders.status, ['PENDING', 'PENDING_PAYMENT', 'CASH_PAYMENT_REQUESTED', 'PAID']),
         gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '24 hours'`),
         isNull(orders.voidReason),
