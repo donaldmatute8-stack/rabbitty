@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
     const acceptedTerms = body?.acceptedTerms === true;
     const consentVersion = typeof body?.consentVersion === 'string' ? body.consentVersion.slice(0, 40) : null;
 
-    const isTesterDemo = process.env.NODE_ENV !== 'production' && (rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me');
-    const isAcceptedDemoCode = isTesterDemo && (code === '123456' || code === 'demo12' || code === 'demo123' || (code?.length === 6));
+    // Demo de App Review (también en producción): tester@rabbitty.me + 123456.
+    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
+    const isAcceptedDemoCode = isTesterDemo && code === '123456';
 
     if (!rawInput || !code) {
       return NextResponse.json({ error: 'Identificador y código son obligatorios' }, { status: 400 });

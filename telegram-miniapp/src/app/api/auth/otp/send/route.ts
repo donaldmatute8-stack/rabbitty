@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     let telegramId: string | null = null;
 
     const isEmail = rawInput.includes('@');
-    const isTesterDemo = process.env.NODE_ENV !== 'production' && (rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me');
+    // Demo de App Review: tester@rabbitty.me + 123456 debe funcionar también en producción.
+    // La cuenta es de pruebas (AFFILIATE, sin negocio ni saldo) y el código es fijo.
+    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
 
     if (isTesterDemo) {
       email = 'tester@rabbitty.me';
