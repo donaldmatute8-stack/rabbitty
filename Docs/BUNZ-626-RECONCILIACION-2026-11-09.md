@@ -93,3 +93,85 @@ WHERE "businessId" = 'fb7f4847-920f-4482-8ae3-c810a20e75ad';
 ```
 
 Resultado: **0** y **11**.
+
+---
+
+## 6. Ajuste de capacidad (2026-11-09)
+
+**Decisión:** capacidad conservadora a **1 mes** con las ventas observadas.
+
+| Concepto | Antes | Después |
+|---|---:|---:|
+| Capacidad total | 18,000 | **4,000** |
+| Incentivo promocional (40%) | 7,000 | **1,500** |
+| Capacidad adelantada (60%) | 11,000 | **2,500** |
+| Cobertura | 60 días | **30 días** |
+| Ventas mensuales base | 60,000 | **27,000** |
+| Recompensa | 15% | 15% |
+| `bunzBalance` | 18,011 | **4,011** |
+| `creditLimit` | 18,000 | **4,000** |
+| `creditOutstanding` | 11,000 | **2,500** |
+| `creditDisbursed` | 11,000 | **2,500** |
+| `available` | 18,000 | **4,000** |
+| Límite emisión/redenção 7d | 5,000 | **4,000 / 4,000** |
+| Límite liquidación 7d | 2,000 | 2,000 |
+
+El `bunzBalance` de **4,011** = 4,000 de capacidad + 11 del latte real ya emitido.
+
+### Evidencia del cambio
+
+- `merchant_capacity_events`:
+  - `CAPACITY_REONBOARDED` (4,000) por el alta oficial.
+  - `CAPACITY_ADJUSTED` (4,000) por la revisión del fundador.
+- `auditEntries`: `AFFILIATE_REONBOARDED` + `CAPACITY_ADJUSTED`.
+- `verificationData`:
+  - `contractSignature`: `2026.11-v1.2`, `approved`, firmante **Marco Arturo Muñoz Del Toro**.
+  - `contractSignatureHistory`: conserva la aceptación **draft** de Alfonso Herrera Ruiz (18,000 / 2 meses).
+  - `capacityAdjustment`: 18,000 → 4,000, ventas 27,000, 15%, 1 mes.
+  - `adminAttestation`: nota del fundador; aceptación formal de la versión aprobada pendiente.
+- Respaldos:
+  - `DOCS/data/backups/626-verification-before-2026-11-09.json`
+  - `DOCS/data/backups/626-capacity-before-2026-11-09.json`
+
+### Invariantes verificados
+
+- `ownedBusinesses.creditLimit` = `merchant_capacity_accounts.authorizedTotal` = 4,000.
+- `promoAuthorized` + `creditAuthorized` = 4,000.
+- `creditOutstanding` = `creditDisbursed` = 2,500.
+- `coverageDays` = 30.
+- `bunz_economic_limits` = 4,000 / 4,000 / 2,000.
+- `transactions` de 626: 1 (latte), 11 BZ; pre-reset: 0.
+- Ledger del latte: `user_wallet +11`, `emission_budget −11`, `EARN 11 BUNZ`.
+- Tokens de re-onboarding: ambos usados; ninguno reutilizable. El segundo se usó para
+  ejecutar el alta oficial desde el servidor (inyección), no se envió al afiliado.
+- Copia del contrato aprobado: enviada a `poncho.herreraru@gmail.com` el 2026-11-09,
+  `copyDeliveryStatus: sent`, `copyMessageId: 01a1be70-1a80-7758-9a6e-6dd0f294fbcf`.
+- `auditEntries`: `AFFILIATE_REONBOARDED`, `CAPACITY_ADJUSTED`, `CONTRACT_COPY_SENT`.
+
+---
+
+## 7. Solicitud de más capacidad (diseño futuro)
+
+Para afiliados que necesiten más capacidad, sin volver a un re-onboarding completo:
+
+1. **Tabla** `capacity_increase_requests`:
+   - `id`, `affiliateId`, `requestedBunz`, `monthlySales`, `rewardPct`, `coverageMonths`,
+   - `reason`, `status` (`PENDING`/`APPROVED`/`REJECTED`/`CANCELLED`),
+   - `reviewedBy`, `reviewedAt`, `reviewNote`, `createdAt`, `updatedAt`.
+2. **UI afiliado:** botón “Solicitar más capacidad” en `Mi negocio → Bunz` o `Ajustes → Legal`.
+   - Muestra capacidad actual, ventas observadas y una propuesta calculada.
+   - Exige motivo y aceptación de que la capacidad no es dinero.
+3. **UI GOD:** cola en `/god/economia` o `/god/tenants`.
+   - Revisa ventas, capacidad actual y propuesta.
+   - Aprueba o rechaza con nota; nunca automático.
+4. **Al aprobar:**
+   - Actualiza `ownedBusinesses.creditLimit`/`bunzBalance`.
+   - Actualiza `merchant_capacity_accounts` (autorizado, promo, crédito, disponible, outstanding).
+   - Actualiza `bunz_economic_limits` y `merchant_recovery_terms` si cambia cobertura.
+   - Inserta `CAPACITY_INCREASE_APPROVED` en `merchant_capacity_events` y `auditEntries`.
+   - Conserva la solicitud y la evidencia.
+5. **Guardrails:**
+   - Capacidad propuesta = ventas observadas × reward × cobertura.
+   - No superar 2–3 meses de cobertura sin evidencia.
+   - No aprobar si hay obligación pendiente alta o fraude.
+   - Revisión humana obligatoria.
