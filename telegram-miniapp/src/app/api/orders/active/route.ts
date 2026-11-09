@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       .from(orders)
       .where(and(
         eq(orders.customerId, userId),
-        inArray(orders.status, ['PENDING', 'CASH_PAYMENT_REQUESTED', 'PAID']),
+        inArray(orders.status, ['PENDING', 'PENDING_PAYMENT', 'CASH_PAYMENT_REQUESTED', 'PAID']),
         gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '24 hours'`),
         isNull(orders.voidReason),
       ))

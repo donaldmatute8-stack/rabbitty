@@ -675,7 +675,12 @@ export const posRouter = router({
         .where(and(
           eq(orders.branchId, ctx.branchId),
           eq(orders.customerId, input.customerId),
-          eq(orders.status, "PENDING"),
+          inArray(orders.status, [
+            ORDER_STATUS.PENDING,
+            ORDER_STATUS.PENDING_PAYMENT,
+            ORDER_STATUS.PAID,
+            ORDER_STATUS.CASH_REQUESTED,
+          ]),
           isNull(orders.voidReason),
           gte(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - interval '12 hours'`),
         ))
@@ -2660,7 +2665,12 @@ export const posRouter = router({
         eq(orders.branchId, ctx.branchId),
         // PAID incluido: los pedidos pagados con Bunz en la app llegan igual
         // a la cola del POS (antes se quedaban fuera y nunca se preparaban).
-        inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.PAID, ORDER_STATUS.CASH_REQUESTED])
+        inArray(orders.status, [
+          ORDER_STATUS.PENDING,
+          ORDER_STATUS.PENDING_PAYMENT,
+          ORDER_STATUS.PAID,
+          ORDER_STATUS.CASH_REQUESTED,
+        ])
       ))
       .orderBy(desc(orders.createdAt));
 
@@ -2763,7 +2773,10 @@ export const posRouter = router({
         order: { status: ord.status },
         items: items.map((it) => ({ status: it.status })),
       });
-      const fromApp = Boolean(resolvedCustomerId && !ord.tableId);
+      // PENDING_PAYMENT solo lo crea el checkout de la app; un pedido de mesa
+      // de la app también debe entrar a la cola/alert del POS.
+      const fromApp = Boolean(resolvedCustomerId) &&
+        (ord.status === ORDER_STATUS.PENDING_PAYMENT || !ord.tableId);
 
       return {
         orderId: ord.id,

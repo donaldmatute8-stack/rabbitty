@@ -354,7 +354,7 @@ export default function PosPage() {
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({}, { retry: false });
   const { data: tables } = trpc.pos.getTables.useQuery(undefined, { retry: false });
-  const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
+  const { data: activeTabsData, refetch: refetchActiveTabs } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 5000, retry: false });
   // Ajuste de sonido de la alerta de pedidos (por restaurante)
   const { data: orderAlertCfg } = trpc.pos.getOrderAlertSettings.useQuery(undefined, { retry: false, staleTime: 60_000 });
   const setOrderAlertSound = trpc.pos.setOrderAlertSound.useMutation({
