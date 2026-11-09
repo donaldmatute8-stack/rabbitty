@@ -132,6 +132,7 @@ Al responder **App Privacy** en App Store Connect para Rabbitty POS:
 - **¿Usa cifrado no exento?** **No.**
 - **Respuesta en App Store Connect:** **No** / “The app does not use non-exempt encryption.”
 - **Info.plist:** `<key>ITSAppUsesNonExemptEncryption</key><false/>`.
+- **Proyecto POS:** `apps/admin/ios/App/App.xcodeproj` (`com.rabbitty.pos`).
 - **Widget / extensiones:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` en el target.
 - Esto evita que App Store Connect pregunte en cada build. Si vuelve a preguntar, responde **No** y conserva esta nota en el expediente.
 
