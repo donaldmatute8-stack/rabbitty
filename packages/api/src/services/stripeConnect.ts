@@ -302,7 +302,55 @@ export async function createStripePaymentIntent(params: {
   if (!accountRecord || !accountRecord.chargesEnabled) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "La sucursal no tiene una cuenta de cobros Stripe habilitada y verificada.",
+      message:
+        "STRIPE_CONNECT_NOT_READY: La sucursal no tiene una cuenta de cobros Stripe habilitada. Reconecta Stripe en el panel.",
+    });
+  }
+
+  // Validación real contra Stripe: una cuenta de test/live distinta o eliminada
+  // pasa el flag local pero falla al crear el PaymentIntent con
+  // "No such destination: acct_...". La detectamos antes y marcamos el tenant.
+  try {
+    const connected = await stripe.accounts.retrieve(accountRecord.stripeAccountId);
+    if (!connected.charges_enabled) {
+      await params.db
+        .update(merchantPaymentAccounts)
+        .set({
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          metadata: {
+            ...((accountRecord.metadata as Record<string, unknown> | null) ?? {}),
+            stripeError: "charges_disabled",
+            stripeCheckedAt: new Date().toISOString(),
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(merchantPaymentAccounts.id, accountRecord.id));
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "STRIPE_CONNECT_NOT_READY: La cuenta de cobros del negocio aún no tiene cobros habilitados. Completa el onboarding de Stripe.",
+      });
+    }
+  } catch (err) {
+    if (err instanceof TRPCError) throw err;
+    await params.db
+      .update(merchantPaymentAccounts)
+      .set({
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        metadata: {
+          ...((accountRecord.metadata as Record<string, unknown> | null) ?? {}),
+          stripeError: "account_missing",
+          stripeCheckedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(merchantPaymentAccounts.id, accountRecord.id));
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "STRIPE_CONNECT_NOT_READY: La cuenta de cobros no existe en Stripe (test/live o eliminada). Reconecta Stripe en el panel.",
     });
   }
 

@@ -137,7 +137,18 @@ export async function POST(req: Request) {
       tipAmount,
     });
   } catch (err: any) {
-    console.error('[PAY_SETUP_ERROR]', err?.message || err);
-    return NextResponse.json({ success: false, error: err?.message?.slice(0, 160) || 'No se pudo preparar el pago' }, { status: 500 });
+    const raw = String(err?.message || '');
+    console.error('[PAY_SETUP_ERROR]', raw);
+    const notReady = raw.includes('STRIPE_CONNECT_NOT_READY');
+    return NextResponse.json(
+      {
+        success: false,
+        code: notReady ? 'TENANT_STRIPE_NOT_READY' : 'PAY_SETUP_FAILED',
+        error: notReady
+          ? 'Este negocio aún no tiene pagos con tarjeta activos. Puedes pagar con Bunz o en caja.'
+          : 'No se pudo preparar el pago. Intenta de nuevo.',
+      },
+      { status: notReady ? 409 : 500 }
+    );
   }
 }

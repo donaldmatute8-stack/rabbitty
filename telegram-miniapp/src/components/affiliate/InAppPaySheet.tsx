@@ -171,6 +171,8 @@ export function InAppPaySheet({
   const [amountTotal, setAmountTotal] = useState<number>(total);
   const [baseAmount, setBaseAmount] = useState<number>(total);
   const [setupError, setSetupError] = useState<string | null>(null);
+  // El tenant no tiene Stripe Connect listo: ocultamos tarjeta y dejamos Bunz/caja.
+  const [cardUnavailable, setCardUnavailable] = useState(false);
   const [amountTotalExtra, setAmountTotalExtra] = useState<number | null>(null);
   // Guard: evita que el effect se dispare 2 veces (StrictMode/re-renders) y
   // cree dos intents para la misma orden con la misma propina.
@@ -275,6 +277,7 @@ export function InAppPaySheet({
     startGuardRef.current = guardKey;
     setLoadingSetup(true);
     setSetupError(null);
+    setCardUnavailable(false);
     try {
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch('/api/pay/setup', {
@@ -288,6 +291,12 @@ export function InAppPaySheet({
         }),
       });
       const data = await res.json().catch(() => null);
+      if (data?.code === 'TENANT_STRIPE_NOT_READY') {
+        setCardUnavailable(true);
+        setSetupError(null);
+        setClientSecret(null);
+        return;
+      }
       if (!data?.success) throw new Error(data?.error || 'No se pudo iniciar el pago');
       if (!data.clientSecret || !data.publishableKey || !data.intentId) {
         throw new Error('El módulo de pago no está listo en este momento. Intenta de nuevo en unos segundos.');
@@ -500,6 +509,9 @@ export function InAppPaySheet({
             {bunzState && !bunzState.canPayWithBunz && bunzState.acceptsBunz && bunzState.balance < bunzState.owed && (
               <p className="text-[10px] text-white/30 px-1 mt-1">Nota: pagar con Bunz requiere saldo suficiente (${bunzState.balance.toFixed(2)} / ${bunzState.owed.toFixed(2)}).</p>
             )}
+            {cardUnavailable && bunzState && !bunzState.canPayWithBunz && (
+              <p className="text-[10px] text-amber-200/70 px-1 mt-1">Puedes pagar en caja con el personal del negocio.</p>
+            )}
             {tipAmount > 0 && (
               <p className="text-[10px] text-white/35 px-1 m-0">
                 Consumo ${round2(grandTotal - tipAmount).toFixed(2)} + propina ${tipAmount.toFixed(2)}
@@ -508,25 +520,31 @@ export function InAppPaySheet({
 
             {/* Pago */}
             <div className="flex-1 flex flex-col min-h-0 pt-3">
-              {setupError && (
+              {cardUnavailable && (
+                <div className="mb-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-200 font-medium">
+                  Este negocio aún no tiene pagos con tarjeta activos. Puedes pagar con Bunz o en caja.
+                </div>
+              )}
+
+              {!cardUnavailable && setupError && (
                 <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 font-medium">{setupError}</div>
               )}
 
-              {(loadingSetup || !clientSecret) && !setupError && (
+              {!cardUnavailable && (loadingSetup || !clientSecret) && !setupError && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
                   <p className="text-xs text-white/40">Preparando el pago…</p>
                 </div>
               )}
 
-              {clientSecret && stripeInstance === 'loading' && (
+              {!cardUnavailable && clientSecret && stripeInstance === 'loading' && (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
                   <p className="text-xs text-white/40">Cargando módulo de pago…</p>
                 </div>
               )}
 
-              {clientSecret && stripeInstance === null && (
+              {!cardUnavailable && clientSecret && stripeInstance === null && (
                 <div className="flex-1 flex flex-col items-center justify-center">
                   <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold space-y-3 max-w-sm">
                     <p>No se pudo cargar el módulo de pago (Stripe no respondió — revisa tu conexión).</p>
@@ -543,7 +561,7 @@ export function InAppPaySheet({
                 </div>
               )}
 
-              {clientSecret && stripeInstance && typeof stripeInstance !== 'string' && (
+              {!cardUnavailable && clientSecret && stripeInstance && typeof stripeInstance !== 'string' && (
                 <div className="flex-1 flex flex-col min-h-0">
                   <Elements
                     key={clientSecret}
