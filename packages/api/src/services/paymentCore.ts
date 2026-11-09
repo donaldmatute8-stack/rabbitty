@@ -359,7 +359,7 @@ export async function confirmPaymentIntentSettled(
   params: {
     paymentIntentId: string;
     externalTransactionId?: string;
-    verifiedMethod: "STRIPE_CARD" | "APPLE_PAY" | "CASH" | "BUNZ_ONLY";
+    verifiedMethod: "STRIPE_CARD" | "APPLE_PAY" | "CASH" | "BUNZ_ONLY" | "MERCADO_PAGO";
     expectedAmountCents?: number;
     expectedCurrency?: string;
     /** Sucursal esperada (el campo `merchantId` del intent guarda branchId). */
@@ -527,7 +527,12 @@ export async function confirmPaymentIntentSettled(
         tipAmount: intentTipMxn,
         reference: params.externalTransactionId ?? intent.idempotencyKey,
         status: "COMPLETED",
-        verificationMethod: params.verifiedMethod === "CASH" ? "CASHIER_CONFIRMED" : "STRIPE_WEBHOOK",
+        verificationMethod:
+          params.verifiedMethod === "CASH"
+            ? "CASHIER_CONFIRMED"
+            : params.verifiedMethod === "MERCADO_PAGO"
+              ? "MERCADO_PAGO_WEBHOOK"
+              : "STRIPE_WEBHOOK",
       });
       // Persistir la propina en la orden (idempotente: el settle corre una sola vez)
       if (intentTipMxn > 0) {

@@ -1113,4 +1113,93 @@ export const paymentsRouter = router({
         throw err;
       }
     }),
+
+  // ==========================================
+  // Mercado Pago (Checkout Pro) — config por tenant
+  // ==========================================
+  getMercadoPagoStatus: posProcedure
+    .input(z.object({ branchId: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { getMercadoPagoStatus } = await import("../services/mercadopago");
+      return await getMercadoPagoStatus(ctx.restaurantDb, branchId);
+    }),
+
+  saveMercadoPagoConfig: posPermission("POS_SETTINGS")
+    .input(z.object({
+      branchId: z.string().optional(),
+      accessToken: z.string().min(10),
+      terminalId: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { saveMercadoPagoConfig } = await import("../services/mercadopago");
+      return await saveMercadoPagoConfig({
+        db: ctx.restaurantDb,
+        branchId,
+        accessToken: input.accessToken,
+        terminalId: input.terminalId ?? null,
+      });
+    }),
+
+  disconnectMercadoPago: posPermission("POS_SETTINGS")
+    .input(z.object({ branchId: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { disconnectMercadoPago } = await import("../services/mercadopago");
+      return await disconnectMercadoPago(ctx.restaurantDb, branchId);
+    }),
+
+  /** ¿La sucursal de esta orden puede cobrar con Mercado Pago? */
+  getMercadoPagoAvailability: posProcedure
+    .input(z.object({ orderId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({ branchId: orders.branchId })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada." });
+      const { getMercadoPagoStatus } = await import("../services/mercadopago");
+      const status = await getMercadoPagoStatus(ctx.restaurantDb, String(order.branchId));
+      return { available: status.available, connected: status.connected, mode: status.mode };
+    }),
+
+  /** Crea el link/QR de Checkout Pro para liquidar una cuenta. */
+  createMercadoPagoCheckout: posProcedure
+    .input(z.object({
+      orderId: z.string(),
+      tipAmount: z.number().min(0).default(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({ id: orders.id, branchId: orders.branchId, customerId: orders.customerId, status: orders.status })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada." });
+      if (["COMPLETED", "PAID", "VOID", "CANCELLED"].includes(String(order.status))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta cuenta ya fue liquidada." });
+      }
+      if (ctx.userId && order.customerId && String(order.customerId) !== String(ctx.userId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No puedes pagar una cuenta que no es tuya." });
+      }
+
+      const { createMercadoPagoCheckout } = await import("../services/mercadopago");
+      return await createMercadoPagoCheckout({
+        db: ctx.restaurantDb,
+        branchId: String(order.branchId),
+        orderId: order.id,
+        payerUserId: ctx.userId ?? null,
+        tipMxn: input.tipAmount,
+      });
+    }),
+
+  /** "Ya pagué": verifica en Mercado Pago y liquida si el cobro fue aprobado. */
+  verifyMercadoPagoPayment: posProcedure
+    .input(z.object({ orderId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { verifyMercadoPagoForOrder } = await import("../services/mercadopago");
+      return await verifyMercadoPagoForOrder({ db: ctx.restaurantDb, orderId: input.orderId });
+    }),
 });

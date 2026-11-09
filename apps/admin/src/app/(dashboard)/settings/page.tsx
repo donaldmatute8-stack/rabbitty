@@ -12,7 +12,7 @@ import {
   Coffee, UtensilsCrossed, Wine, Truck, ChefHat, Zap, Settings, 
   ToggleLeft, ToggleRight, Table2, Package, Users, CalendarCheck, 
   Sparkles, BookUser, Receipt, Lock, Hash, AlertTriangle, ShieldCheck,
-  MessageSquare, CreditCard, ChevronRight
+  MessageSquare, CreditCard, ChevronRight, Wallet
 } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 import { ScannerPairModal } from "../../../components/ScannerPairModal";
@@ -230,7 +230,25 @@ export default function SettingsPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Listener para capturar el retorno in-app desde la ventana de Stripe
+  // ── Mercado Pago (config por sucursal, sin exponer credenciales) ──
+  const [mpToken, setMpToken] = useState("");
+  const [mpTerminal, setMpTerminal] = useState("");
+  const mpStatusQuery = trpc.payments.getMercadoPagoStatus.useQuery({});
+  const saveMpMutation = trpc.payments.saveMercadoPagoConfig.useMutation({
+    onSuccess: () => {
+      utils.payments.getMercadoPagoStatus.invalidate();
+      toast.success("Mercado Pago conectado correctamente");
+      setMpToken("");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const disconnectMpMutation = trpc.payments.disconnectMercadoPago.useMutation({
+    onSuccess: () => {
+      utils.payments.getMercadoPagoStatus.invalidate();
+      toast.success("Mercado Pago desconectado");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
       if (e.data?.type === "STRIPE_CONNECT_COMPLETED") {
@@ -1118,6 +1136,105 @@ export default function SettingsPage() {
                 <p className="text-[11px] text-gray-500 mt-1">Identificador seguro de Stripe Connect Express.</p>
               </div>
             </div>
+          </div>
+
+          {/* ══════════════════════════════════════════════════════════
+              MERCADO PAGO (método alternativo por sucursal)
+          ══════════════════════════════════════════════════════════ */}
+          <div className="rounded-3xl border border-sky-500/20 bg-gradient-to-br from-sky-950/40 to-black/80 p-6 backdrop-blur-xl">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+              <div>
+                <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-sky-400">
+                  <Wallet className="h-3.5 w-3.5" /> Mercado Pago
+                </span>
+                <h2 className="text-2xl font-black text-white mt-1">Cobros con Mercado Pago</h2>
+                <p className="text-sm text-gray-400 mt-1 max-w-2xl">
+                  Tus clientes podrán pagar con saldo de Mercado Pago, tarjeta o meses sin intereses.
+                  Pega el <span className="text-white font-bold">Access Token</span> de tu cuenta de Mercado Pago
+                  (Tus integraciones → Credenciales). Rabbitty lo guarda cifrado y nunca lo vuelve a mostrar.
+                </p>
+              </div>
+              <Badge variant={mpStatusQuery.data?.connected ? "success" : "warning"} className="shrink-0">
+                {mpStatusQuery.data?.connected ? "Conectado" : "Sin conectar"}
+              </Badge>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Access Token</label>
+                <Input
+                  type="password"
+                  value={mpToken}
+                  onChange={(e) => setMpToken(e.target.value)}
+                  placeholder={mpStatusQuery.data?.connected ? "••••••••  (guardado — pega uno nuevo para reemplazar)" : "APP_USR-... o TEST-..."}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Point terminal ID (opcional)</label>
+                <Input
+                  value={mpTerminal}
+                  onChange={(e) => setMpTerminal(e.target.value)}
+                  placeholder="Para cobrar con terminal física Point"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => saveMpMutation.mutate({ accessToken: mpToken.trim(), terminalId: mpTerminal.trim() || undefined })}
+                disabled={saveMpMutation.isPending || mpToken.trim().length < 10}
+                className="bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white font-black text-xs px-5 py-3 rounded-2xl shadow-lg shadow-sky-500/25"
+              >
+                {saveMpMutation.isPending ? "Validando con Mercado Pago…" : "Guardar credenciales"}
+              </Button>
+              {mpStatusQuery.data?.connected && (
+                <Button
+                  variant="secondary"
+                  onClick={() => disconnectMpMutation.mutate({})}
+                  disabled={disconnectMpMutation.isPending}
+                  className="text-xs px-4 py-3 rounded-2xl"
+                >
+                  Desconectar
+                </Button>
+              )}
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Estado</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className={cn("h-2.5 w-2.5 rounded-full", mpStatusQuery.data?.available ? "bg-emerald-400" : "bg-amber-400")} />
+                  <p className="text-sm font-black text-white">
+                    {mpStatusQuery.data?.available ? "Cobros habilitados" : "Pendiente de credenciales"}
+                  </p>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1">Se valida contra Mercado Pago al guardar.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Modo</p>
+                <p className={cn("mt-2 text-sm font-black", mpStatusQuery.data?.mode === "live" ? "text-emerald-400" : "text-amber-400")}>
+                  {mpStatusQuery.data?.mode === "live" ? "Producción (cobros reales)" : "Prueba (sandbox)"}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">El token TEST- activa sandbox; APP_USR- es producción.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Cuenta MP</p>
+                <p className="mt-2 text-sm font-mono font-bold text-sky-400">
+                  {mpStatusQuery.data?.mpUserId ? String(mpStatusQuery.data.mpUserId) : "Sin cuenta vinculada"}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {mpStatusQuery.data?.nickname ? `@${mpStatusQuery.data.nickname}` : "Nickname no disponible"}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-gray-500 mt-4">
+              Cómo funciona: en la app, el cliente elige <span className="text-white font-bold">Mercado Pago</span> y se abre
+              el checkout seguro. Al aprobarse el pago, el webhook de Rabbitty liquida la cuenta y el POS la marca como pagada.
+              Para terminal física Point, guarda el <span className="text-white font-bold">terminal ID</span> y avísanos para activar el cobro presencial.
+            </p>
           </div>
         </div>
       )}

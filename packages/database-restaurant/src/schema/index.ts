@@ -598,6 +598,26 @@ export const merchantPaymentAccounts = pgTable("merchant_payment_accounts", {
   ...timestamps,
 });
 
+/**
+ * ── Proveedores de pago alternativos por sucursal (Mercado Pago, etc.) ──
+ * Separado de `merchant_payment_accounts` (Stripe Connect) porque ese modelo
+ * exige `stripeAccountId` único y no aplica a otros proveedores.
+ * Las credenciales viven cifradas (AES-256-GCM) en `credentials`; `metadata`
+ * guarda solo datos no secretos (mpUserId, nickname, terminalId, lastCheckedAt).
+ */
+export const merchantPaymentProviderConfigs = pgTable("merchant_payment_provider_configs", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  provider: text("provider").notNull(), // 'MERCADO_PAGO'
+  status: text("status").default("DISCONNECTED").notNull(), // DISCONNECTED | ACTIVE | ERROR
+  mode: text("mode").default("test").notNull(), // test | live
+  credentials: jsonb("credentials"),
+  metadata: jsonb("metadata"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("merchant_payment_provider_branch_provider_idx").on(t.branchId, t.provider),
+]);
+
 export const paymentIntents = pgTable("payment_intents", {
   id: id(),
   orderId: fkIdOpt("orderId").references(() => orders.id),

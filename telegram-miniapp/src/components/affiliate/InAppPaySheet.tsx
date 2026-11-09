@@ -16,7 +16,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { loadStripe, type Stripe, type StripeElementsOptions } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { CheckCircle2, CreditCard, Loader2, HandCoins, X } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, HandCoins, X, Wallet, Banknote, ChevronRight } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { toast } from '@rabbitty/ui';
 import PaySheetShell from '@/components/ui/pay/PaySheetShell';
@@ -48,6 +48,59 @@ const APPEARANCE: StripeElementsOptions['appearance'] = {
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Tarjeta de método de pago (glass): selección clara, área grande. */
+function PayMethodCard({
+  tone,
+  icon,
+  title,
+  subtitle,
+  trailing,
+  selected,
+  onClick,
+}: {
+  tone: 'violet' | 'pink' | 'sky' | 'slate';
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  trailing?: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const tones = {
+    violet: { box: 'bg-violet-500/20 border-violet-400/30', text: 'text-violet-200', glow: 'shadow-[0_18px_50px_-32px_rgba(139,92,246,0.95)]' },
+    pink: { box: 'bg-pink-500/20 border-pink-400/30', text: 'text-pink-200', glow: 'shadow-[0_18px_50px_-32px_rgba(233,30,99,0.95)]' },
+    sky: { box: 'bg-sky-500/20 border-sky-400/30', text: 'text-sky-200', glow: 'shadow-[0_18px_50px_-32px_rgba(14,165,233,0.95)]' },
+    slate: { box: 'bg-white/10 border-white/15', text: 'text-white/70', glow: '' },
+  } as const;
+  const t = tones[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-2xl border px-3.5 py-3 backdrop-blur-xl transition-all text-left flex items-center gap-3 ${
+        selected
+          ? `border-white/30 bg-white/[0.11] ${t.glow}`
+          : 'border-white/[0.08] bg-white/[0.04] active:scale-[0.99]'
+      }`}
+    >
+      <span className={`h-11 w-11 rounded-2xl border flex items-center justify-center shrink-0 ${t.box} ${t.text}`}>
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14px] font-black text-white leading-tight">{title}</span>
+        <span className="block text-[11px] text-white/45 leading-tight mt-0.5 truncate">{subtitle}</span>
+      </span>
+      {trailing && (
+        <span className="shrink-0 rounded-full border border-white/15 bg-white/10 px-2 py-1 text-[8.5px] font-black uppercase tracking-wider text-white/70">
+          {trailing}
+        </span>
+      )}
+      <ChevronRight size={16} className={selected ? 'text-white' : 'text-white/25'} />
+    </button>
+  );
+}
 
 function InAppPaymentForm({
   intentId,
@@ -173,6 +226,16 @@ export function InAppPaySheet({
   const [setupError, setSetupError] = useState<string | null>(null);
   // El tenant no tiene Stripe Connect listo: ocultamos tarjeta y dejamos Bunz/caja.
   const [cardUnavailable, setCardUnavailable] = useState(false);
+  // ── Selección de método (glass) ──
+  type PayMethod = 'bunz' | 'card' | 'mp' | 'cash';
+  const [method, setMethod] = useState<PayMethod>('card');
+  const methodTouchedRef = useRef(false);
+  // ── Mercado Pago (Checkout Pro) ──
+  const [mpAvailable, setMpAvailable] = useState(false);
+  const [mpMode, setMpMode] = useState<'test' | 'live'>('live');
+  const [mpBusy, setMpBusy] = useState(false);
+  const [mpLink, setMpLink] = useState<string | null>(null);
+  const [mpMessage, setMpMessage] = useState<string | null>(null);
   const [amountTotalExtra, setAmountTotalExtra] = useState<number | null>(null);
   // Guard: evita que el effect se dispare 2 veces (StrictMode/re-renders) y
   // cree dos intents para la misma orden con la misma propina.
@@ -222,6 +285,11 @@ export function InAppPaySheet({
       setAmountTotal(total);
       setBaseAmount(total);
       setAmountTotalExtra(null);
+      setMethod('card');
+      methodTouchedRef.current = false;
+      setMpLink(null);
+      setMpMessage(null);
+      setMpBusy(false);
     }
   }, [isOpen, total]);
 
@@ -242,6 +310,8 @@ export function InAppPaySheet({
             canPayWithBunz: Boolean(d.canPayWithBunz),
             total: Number(d.total ?? 0),
           });
+          // Preferencia natural: si puede pagar todo con Bunz, ese es el método.
+          if (d.canPayWithBunz && !methodTouchedRef.current) setMethod('bunz');
         } else if (alive && d && !d.ok && d.status === 409) {
           // cuenta ya liquidada — sin UI de bunz
           setBunzState({ balance: 0, owed: 0, acceptsBunz: false, canPayWithBunz: false, total: 0 });
@@ -250,6 +320,35 @@ export function InAppPaySheet({
     })();
     return () => { alive = false; };
   }, [isOpen, orderId]);
+
+  // ── Mercado Pago: disponibilidad por sucursal (sin credenciales) ──
+  useEffect(() => {
+    if (!isOpen || !orderId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const r = await fetch(`/api/pay/mercadopago?orderId=${encodeURIComponent(orderId)}`, {
+          cache: 'no-store',
+          headers: headers || {},
+        });
+        const d = await r.json().catch(() => null);
+        if (alive && d?.ok) {
+          setMpAvailable(Boolean(d.available));
+          setMpMode(d.mode === 'test' ? 'test' : 'live');
+        }
+      } catch { /* silencioso: MP es opcional */ }
+    })();
+    return () => { alive = false; };
+  }, [isOpen, orderId]);
+
+  // Si Stripe no está listo y el método elegido era tarjeta, movemos al usuario
+  // a Bunz o caja para que nunca quede en una pantalla muerta.
+  useEffect(() => {
+    if (!cardUnavailable) return;
+    if (method !== 'card') return;
+    setMethod(bunzState?.canPayWithBunz ? 'bunz' : 'cash');
+  }, [cardUnavailable, method, bunzState?.canPayWithBunz]);
 
   // Total base cuando el caller no lo conoce
   useEffect(() => {
@@ -327,6 +426,65 @@ export function InAppPaySheet({
     setTipOverlay(false);
     if (round2(amount) === round2(tipAmount)) return;
     await startPayment(round2(amount), intentId);
+  };
+
+  /** Crea el checkout de Mercado Pago y lo abre en el navegador seguro. */
+  const startMercadoPago = async () => {
+    if (!orderId || mpBusy) return;
+    setMpBusy(true);
+    setMpMessage(null);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const r = await fetch('/api/pay/mercadopago', {
+        method: 'POST',
+        headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, tipAmount }),
+      });
+      const d = await r.json().catch(() => null);
+      if (!d?.ok || !d?.initPoint) {
+        setMpMessage(String(d?.error || 'No se pudo abrir Mercado Pago'));
+        return;
+      }
+      setMpLink(String(d.initPoint));
+      PlatformBridge.hapticFeedback('light');
+      await PlatformBridge.openExternalUrl(String(d.initPoint));
+    } catch (e: unknown) {
+      setMpMessage(String((e as Error)?.message || 'No se pudo abrir Mercado Pago'));
+    } finally {
+      setMpBusy(false);
+    }
+  };
+
+  /** "Ya pagué": consulta Mercado Pago y liquida si el cobro fue aprobado. */
+  const verifyMercadoPago = async () => {
+    if (!orderId || mpBusy) return;
+    setMpBusy(true);
+    setMpMessage(null);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const r = await fetch('/api/pay/mercadopago', {
+        method: 'PATCH',
+        headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      const d = await r.json().catch(() => null);
+      if (d?.settled) {
+        toast.success('✅ Pago confirmado con Mercado Pago');
+        PlatformBridge.hapticFeedback('success');
+        setStep('done');
+        onPaid?.(grandTotal);
+        return;
+      }
+      setMpMessage(
+        d?.status === 'pending'
+          ? 'Mercado Pago todavía está procesando el pago. Espera unos segundos y vuelve a verificar.'
+          : 'Aún no vemos el pago aprobado. Si ya pagaste, espera unos segundos y vuelve a verificar.'
+      );
+    } catch (e: unknown) {
+      setMpMessage(String((e as Error)?.message || 'No se pudo verificar el pago'));
+    } finally {
+      setMpBusy(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -409,173 +567,298 @@ export function InAppPaySheet({
         }
       >
         {step === 'pay' && (
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 gap-3">
 
-            {/* Pregunta de propina (mediana, con icono) — el pago va debajo */}
+            {/* ── HERO: monto gigante en tarjeta glass ── */}
+            <div className="relative overflow-hidden rounded-[28px] border border-white/12 bg-white/[0.07] backdrop-blur-2xl px-5 py-4 shadow-[0_24px_70px_-30px_rgba(233,30,99,0.65)]">
+              <div className="pointer-events-none absolute -top-20 -right-14 h-44 w-44 rounded-full bg-pink-500/25 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-24 -left-12 h-44 w-44 rounded-full bg-violet-500/25 blur-3xl" />
+              <div className="relative">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/40">Total a pagar</p>
+                <div className="flex items-end gap-2 mt-0.5">
+                  <span className="text-[50px] leading-none font-black text-white tabular-nums tracking-[-2px]">
+                    ${grandTotal.toFixed(2)}
+                  </span>
+                  <span className="text-[12px] font-bold text-white/35 mb-1.5">MXN</span>
+                </div>
+                {tipAmount > 0 ? (
+                  <p className="text-[11px] text-white/45 mt-1">
+                    Consumo ${round2(grandTotal - tipAmount).toFixed(2)} + propina ${tipAmount.toFixed(2)}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-white/45 mt-1">Liquidación segura · confirmación al instante</p>
+                )}
+              </div>
+            </div>
+
+            {/* ── Propina (glass) ── */}
             <button
               type="button"
               onClick={() => { setTipDraft(tipAmount); setTipDraftPct(null); setTipOverlay(true); PlatformBridge.hapticFeedback('light'); }}
-              className="w-full flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left active:scale-[0.99] transition-transform"
+              className="w-full flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.05] backdrop-blur-xl px-4 py-3 text-left active:scale-[0.99] transition-transform"
             >
               <span className="flex items-center gap-2.5 min-w-0">
-                <span className="w-9 h-9 rounded-xl bg-pink-500/15 border border-pink-500/30 flex items-center justify-center shrink-0">
-                  <HandCoins size={16} className="text-pink-300" />
+                <span className="w-10 h-10 rounded-2xl bg-pink-500/15 border border-pink-500/30 flex items-center justify-center shrink-0">
+                  <HandCoins size={17} className="text-pink-300" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[15px] font-black text-white leading-tight">
+                  <span className="block text-[14px] font-black text-white leading-tight">
                     {tipAmount > 0 ? `Propina: $${tipAmount.toFixed(2)}` : '¿Dejar propina?'}
                   </span>
                   <span className="block text-[10px] text-white/40 leading-tight mt-0.5">
-                    {tipAmount > 0 ? 'Toca para cambiar o quitarla' : '100% opcional · toca para agregar'}
+                    {tipAmount > 0 ? 'Toca para cambiar o quitarla' : '100% opcional · va directo al equipo'}
                   </span>
                 </span>
               </span>
               <span className="text-[11px] font-black text-pink-300 shrink-0">{tipAmount > 0 ? 'Cambiar' : 'Agregar'} ›</span>
             </button>
 
-            {/* Resumen del total */}
-            <div className="flex items-baseline justify-between px-1 pt-3 pb-1">
-              <span className="text-[11px] text-white/40">Total a pagar</span>
-              <span className="text-[15px] font-black text-white tabular-nums">${grandTotal.toFixed(2)} MXN</span>
+            {/* ── Métodos de pago ── */}
+            <div className="space-y-2">
+              <p className="px-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/30">Cómo quieres pagar</p>
+
+              {bunzState?.canPayWithBunz && (
+                <PayMethodCard
+                  tone="violet"
+                  selected={method === 'bunz'}
+                  icon={<Wallet size={18} />}
+                  title="Bunz"
+                  subtitle={`Saldo ${bunzState.balance.toFixed(2)} · cubre la cuenta`}
+                  trailing="Recomendado"
+                  onClick={() => { methodTouchedRef.current = true; setMethod('bunz'); PlatformBridge.hapticFeedback('light'); }}
+                />
+              )}
+
+              {!cardUnavailable && (
+                <PayMethodCard
+                  tone="pink"
+                  selected={method === 'card'}
+                  icon={<CreditCard size={18} />}
+                  title="Tarjeta · Apple Pay"
+                  subtitle="Crédito, débito o wallet"
+                  onClick={() => { methodTouchedRef.current = true; setMethod('card'); PlatformBridge.hapticFeedback('light'); }}
+                />
+              )}
+
+              {mpAvailable && (
+                <PayMethodCard
+                  tone="sky"
+                  selected={method === 'mp'}
+                  icon={<span className="text-[11px] font-black tracking-tight">MP</span>}
+                  title="Mercado Pago"
+                  subtitle={mpMode === 'test' ? 'Modo de prueba del negocio' : 'Saldo, tarjeta o meses sin intereses'}
+                  trailing={mpMode === 'test' ? 'TEST' : undefined}
+                  onClick={() => { methodTouchedRef.current = true; setMethod('mp'); PlatformBridge.hapticFeedback('light'); }}
+                />
+              )}
+
+              <PayMethodCard
+                tone="slate"
+                selected={method === 'cash'}
+                icon={<Banknote size={18} />}
+                title="Pagar en caja"
+                subtitle="El personal registra el cobro en el POS"
+                onClick={() => { methodTouchedRef.current = true; setMethod('cash'); PlatformBridge.hapticFeedback('light'); }}
+              />
             </div>
 
-            {/* ── H15: Pagar con Bunz (cuenta enviada, sin QR) ── */}
-            {bunzState && bunzState.canPayWithBunz && step === 'pay' && (
-              <div className="rounded-2xl border border-violet-400/30 bg-violet-500/[0.06] p-3 mt-2">
-                {bunzConfirm ? (
-                  <div className="space-y-2">
-                    <p className="text-[11px] text-white/70 m-0">Confirma pagar $${bunzState.owed.toFixed(2)} MXN con Bunz · saldo ${bunzState.balance.toFixed(2)}</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setBunzConfirm(false); PlatformBridge.hapticFeedback('light'); }}
-                        className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] py-2 text-[11px] font-black text-white/80 cursor-pointer"
-                      >Cancelar</button>
-                      <button
-                        type="button"
-                        disabled={bunzBusy}
-                        onClick={() => {
-                          setBunzBusy(true);
-                          void (async () => {
-                            try {
-                              const headers = await PlatformBridge.getAuthHeaders();
-                              const r = await fetch('/api/pay/bunz-pay', {
-                                method: 'POST',
-                                headers: { ...(headers || {}), 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ orderId, tipAmount }),
-                              });
-                              const d = await r.json().catch(() => null);
-                              if (d?.ok) {
-                                toast.success(`Cuenta liquidada con Bunz`);
-                                PlatformBridge.hapticFeedback('success');
-                                setStep('done');
-                              } else {
-                                toast.error(String(d?.error || 'No se pudo pagar con Bunz').slice(0, 140));
-                              }
-                            } catch (e: unknown) {
-                              toast.error(String((e as Error)?.message || 'Error al pagar con Bunz').slice(0, 140));
-                            } finally {
-                              setBunzBusy(false);
-                              setBunzConfirm(false);
-                            }
-                          })();
-                        }}
-                        className="flex-1 rounded-xl bg-violet-500 hover:bg-violet-400 py-2 text-[11px] font-black text-white cursor-pointer disabled:opacity-40"
-                      >{bunzBusy ? 'Procesando…' : 'Confirmar pago Bunz'}</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => { setBunzConfirm(true); PlatformBridge.hapticFeedback('light'); }}
-                    className="w-full flex items-center justify-between gap-3 rounded-xl border border-violet-400/25 bg-violet-500/[0.04] px-3 py-2.5 text-left active:scale-[0.99] transition-transform cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5 min-w-0">
-                      <span className="w-9 h-9 rounded-xl bg-violet-500/15 border border-violet-400/30 flex items-center justify-center shrink-0">
-                        <svg className="h-4 w-4 text-violet-300" viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="12" cy="12" r="10" opacity="0.15"/><path d="M12 3v18M9.5 7.5c0-1 .8-1.8 2.5-1.8s2.5.8 2.5 2c0 1.2-1 1.6-2.5 2s-2.5.8-2.5 2 0.8 2 2.5 2 2.5-.8 2.5-2" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-black text-white leading-tight">Pagar con Bunz</span>
-                        <span className="block text-[10px] text-white/40 leading-tight mt-0.5">
-                          Saldo: ${bunzState.balance.toFixed(2)} Bunz
-                        </span>
-                      </span>
-                    </span>
-                    <span className="text-[11px] font-black text-violet-300 shrink-0">Elegir ›</span>
-                  </button>
-                )}
-              </div>
-            )}
-            {bunzState && !bunzState.canPayWithBunz && bunzState.acceptsBunz && bunzState.balance < bunzState.owed && (
-              <p className="text-[10px] text-white/30 px-1 mt-1">Nota: pagar con Bunz requiere saldo suficiente (${bunzState.balance.toFixed(2)} / ${bunzState.owed.toFixed(2)}).</p>
-            )}
-            {cardUnavailable && bunzState && !bunzState.canPayWithBunz && (
-              <p className="text-[10px] text-amber-200/70 px-1 mt-1">Puedes pagar en caja con el personal del negocio.</p>
-            )}
-            {tipAmount > 0 && (
-              <p className="text-[10px] text-white/35 px-1 m-0">
-                Consumo ${round2(grandTotal - tipAmount).toFixed(2)} + propina ${tipAmount.toFixed(2)}
+            {cardUnavailable && (
+              <p className="px-1 text-[10px] text-amber-200/70">
+                Los pagos con tarjeta aún no están activos en este negocio.
               </p>
             )}
 
-            {/* Pago */}
-            <div className="flex-1 flex flex-col min-h-0 pt-3">
-              {cardUnavailable && (
-                <div className="mb-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-200 font-medium">
-                  Este negocio aún no tiene pagos con tarjeta activos. Puedes pagar con Bunz o en caja.
-                </div>
-              )}
+            {/* ── Panel del método elegido ── */}
+            <div className="flex-1 min-h-0 pt-1">
 
-              {!cardUnavailable && setupError && (
-                <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 font-medium">{setupError}</div>
-              )}
-
-              {!cardUnavailable && (loadingSetup || !clientSecret) && !setupError && (
-                <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
-                  <p className="text-xs text-white/40">Preparando el pago…</p>
-                </div>
-              )}
-
-              {!cardUnavailable && clientSecret && stripeInstance === 'loading' && (
-                <div className="flex-1 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
-                  <p className="text-xs text-white/40">Cargando módulo de pago…</p>
-                </div>
-              )}
-
-              {!cardUnavailable && clientSecret && stripeInstance === null && (
-                <div className="flex-1 flex flex-col items-center justify-center">
-                  <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold space-y-3 max-w-sm">
-                    <p>No se pudo cargar el módulo de pago (Stripe no respondió — revisa tu conexión).</p>
-                    {stripeLoadError && (
-                      <p className="text-[10px] font-mono text-red-200/70 break-all">
-                        Detalle: {stripeLoadError.slice(0, 160)}
+              {method === 'bunz' && bunzState?.canPayWithBunz && (
+                <div className="rounded-3xl border border-violet-400/25 bg-violet-500/[0.08] backdrop-blur-xl p-4 shadow-[0_18px_60px_-34px_rgba(139,92,246,0.95)]">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-white/40 font-black">Saldo Bunz</p>
+                      <p className="text-[30px] leading-none font-black text-white tabular-nums mt-1">
+                        {bunzState.balance.toFixed(2)}
                       </p>
-                    )}
-                    <button
-                      onClick={() => { if (publishableKey) loadStripeInstance(publishableKey); }}
-                      className="px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 font-black text-[11px]"
-                    >Reintentar</button>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase tracking-widest text-white/40 font-black">A pagar</p>
+                      <p className="text-[30px] leading-none font-black text-violet-200 tabular-nums mt-1">
+                        ${bunzState.owed.toFixed(2)}
+                      </p>
+                    </div>
                   </div>
+
+                  {bunzConfirm ? (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-[12px] text-white/60 m-0 leading-relaxed">
+                        Se descontarán <span className="font-black text-white">{bunzState.owed.toFixed(2)} Bunz</span> de tu saldo
+                        y tu cuenta quedará liquidada al instante.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setBunzConfirm(false); PlatformBridge.hapticFeedback('light'); }}
+                          className="flex-1 rounded-2xl border border-white/15 bg-white/[0.05] py-3 text-[12px] font-black text-white/75 active:scale-[0.99]"
+                        >Cancelar</button>
+                        <button
+                          type="button"
+                          disabled={bunzBusy}
+                          onClick={() => {
+                            setBunzBusy(true);
+                            void (async () => {
+                              try {
+                                const headers = await PlatformBridge.getAuthHeaders();
+                                const r = await fetch('/api/pay/bunz-pay', {
+                                  method: 'POST',
+                                  headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ orderId, tipAmount }),
+                                });
+                                const d = await r.json().catch(() => null);
+                                if (d?.ok) {
+                                  toast.success('Cuenta liquidada con Bunz');
+                                  PlatformBridge.hapticFeedback('success');
+                                  setStep('done');
+                                  onPaid?.(Number(d?.paid ?? grandTotal));
+                                } else {
+                                  toast.error(String(d?.error || 'No se pudo pagar con Bunz').slice(0, 140));
+                                }
+                              } catch (e: unknown) {
+                                toast.error(String((e as Error)?.message || 'Error al pagar con Bunz').slice(0, 140));
+                              } finally {
+                                setBunzBusy(false);
+                                setBunzConfirm(false);
+                              }
+                            })();
+                          }}
+                          className="flex-1 rounded-2xl bg-violet-500 hover:bg-violet-400 py-3 text-[12px] font-black text-white active:scale-[0.99] disabled:opacity-50"
+                        >{bunzBusy ? 'Procesando…' : 'Confirmar pago'}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setBunzConfirm(true); PlatformBridge.hapticFeedback('light'); }}
+                      className="mt-4 w-full rounded-2xl bg-linear-to-r from-violet-500 to-fuchsia-500 py-3.5 text-[14px] font-black text-white shadow-[0_16px_40px_-22px_rgba(139,92,246,0.9)] active:scale-[0.99] transition-transform"
+                    >
+                      Pagar ${bunzState.owed.toFixed(2)} con Bunz
+                    </button>
+                  )}
+
+                  {tipAmount > 0 && (
+                    <p className="mt-2 text-[10px] text-white/35">
+                      La propina de ${tipAmount.toFixed(2)} se cobra aparte (tarjeta o caja).
+                    </p>
+                  )}
                 </div>
               )}
 
-              {!cardUnavailable && clientSecret && stripeInstance && typeof stripeInstance !== 'string' && (
-                <div className="flex-1 flex flex-col min-h-0">
-                  <Elements
-                    key={clientSecret}
-                    stripe={stripeInstance}
-                    options={{ clientSecret, appearance: APPEARANCE }}
-                  >
-                    <InAppPaymentForm
-                      intentId={intentId || ''}
-                      amountHint={grandTotal}
-                      onDone={() => { setStep('done'); onPaid?.(grandTotal); }}
-                    />
-                  </Elements>
+              {method === 'card' && !cardUnavailable && (
+                <div className="rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-3.5">
+                  {setupError && (
+                    <div className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-2xl text-[11px] text-red-300 font-semibold">
+                      {setupError}
+                    </div>
+                  )}
+
+                  {(loadingSetup || !clientSecret) && !setupError && (
+                    <div className="py-10 flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
+                      <p className="text-xs text-white/40">Preparando el pago…</p>
+                    </div>
+                  )}
+
+                  {clientSecret && stripeInstance === 'loading' && (
+                    <div className="py-10 flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="h-6 w-6 animate-spin text-pink-400" />
+                      <p className="text-xs text-white/40">Cargando módulo de pago…</p>
+                    </div>
+                  )}
+
+                  {clientSecret && stripeInstance === null && (
+                    <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold space-y-3">
+                      <p>No se pudo cargar el módulo de pago (Stripe no respondió — revisa tu conexión).</p>
+                      {stripeLoadError && (
+                        <p className="text-[10px] font-mono text-red-200/70 break-all">
+                          Detalle: {stripeLoadError.slice(0, 160)}
+                        </p>
+                      )}
+                      <button
+                        onClick={() => { if (publishableKey) loadStripeInstance(publishableKey); }}
+                        className="px-3 py-1.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 font-black text-[11px]"
+                      >Reintentar</button>
+                    </div>
+                  )}
+
+                  {clientSecret && stripeInstance && typeof stripeInstance !== 'string' && (
+                    <Elements
+                      key={clientSecret}
+                      stripe={stripeInstance}
+                      options={{ clientSecret, appearance: APPEARANCE }}
+                    >
+                      <InAppPaymentForm
+                        intentId={intentId || ''}
+                        amountHint={grandTotal}
+                        onDone={() => { setStep('done'); onPaid?.(grandTotal); }}
+                      />
+                    </Elements>
+                  )}
                 </div>
               )}
+
+              {method === 'mp' && mpAvailable && (
+                <div className="rounded-3xl border border-sky-400/25 bg-sky-500/[0.08] backdrop-blur-xl p-4 shadow-[0_18px_60px_-34px_rgba(14,165,233,0.95)]">
+                  <div className="flex items-center gap-3">
+                    <span className="h-11 w-11 rounded-2xl bg-sky-400/20 border border-sky-300/30 flex items-center justify-center text-sky-100 text-[12px] font-black">MP</span>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-black text-white leading-tight m-0">Mercado Pago</p>
+                      <p className="text-[11px] text-white/45 leading-tight m-0">
+                        {mpMode === 'test' ? 'El negocio está en modo de prueba' : 'Saldo, tarjeta o meses sin intereses'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] text-white/55 mt-3 leading-relaxed m-0">
+                    Se abrirá la ventana segura de Mercado Pago. Al terminar, vuelve aquí y toca
+                    <span className="font-black text-white"> “Ya pagué”</span> para confirmar tu cuenta.
+                  </p>
+
+                  <div className="mt-3 space-y-2">
+                    <button
+                      type="button"
+                      disabled={mpBusy}
+                      onClick={() => void startMercadoPago()}
+                      className="w-full rounded-2xl bg-linear-to-r from-sky-500 to-cyan-400 py-3.5 text-[14px] font-black text-white shadow-[0_16px_40px_-22px_rgba(14,165,233,0.9)] active:scale-[0.99] transition-transform disabled:opacity-50"
+                    >
+                      {mpBusy && !mpLink ? 'Abriendo…' : mpLink ? 'Abrir Mercado Pago de nuevo' : 'Continuar con Mercado Pago'}
+                    </button>
+                    {mpLink && (
+                      <button
+                        type="button"
+                        disabled={mpBusy}
+                        onClick={() => void verifyMercadoPago()}
+                        className="w-full rounded-2xl border border-sky-300/40 bg-sky-400/10 py-3 text-[12px] font-black text-sky-100 active:scale-[0.99] disabled:opacity-50"
+                      >
+                        {mpBusy ? 'Verificando…' : 'Ya pagué, verificar'}
+                      </button>
+                    )}
+                  </div>
+
+                  {mpMessage && (
+                    <p className="mt-2 text-[11px] text-amber-200/80 leading-relaxed">{mpMessage}</p>
+                  )}
+                </div>
+              )}
+
+              {method === 'cash' && (
+                <div className="rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-xl p-4">
+                  <p className="text-[14px] font-black text-white m-0">Paga en caja</p>
+                  <p className="text-[12px] text-white/50 mt-1 leading-relaxed m-0">
+                    Tu cuenta queda abierta en el POS. El personal registra el cobro y tu pedido se marca como pagado.
+                  </p>
+                  <p className="text-[10px] text-white/30 mt-3 m-0">No cierres esta pantalla hasta que te confirmen el cobro.</p>
+                </div>
+              )}
+
             </div>
           </div>
         )}
@@ -635,7 +918,7 @@ export function InAppPaySheet({
               transition={{ delay: 0.2 }}
               className="text-[10.5px] text-white/40 mt-1 mb-2"
             >
-              Tu pago y tu cashback Bunz ya están acreditados 🐰
+              Tu pago quedó registrado — califica tu experiencia 🐰
             </motion.p>
 
             {/* Evaluación — ABAJO y compacta (secundaria, no la estrella del show) */}

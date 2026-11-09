@@ -31,10 +31,15 @@ export default function PaySheetShell({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 16 }}
       transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-      className="fixed inset-0 z-999 flex flex-col bg-[#0B0B10] text-white"
+      className="fixed inset-0 z-999 flex flex-col bg-[#0B0B10] text-white overflow-hidden"
     >
+      {/* Fondo glass: orbes suaves (no interfieren con el contenido) */}
+      <div className="pointer-events-none absolute -top-32 -right-24 h-72 w-72 rounded-full bg-pink-600/20 blur-[90px]" />
+      <div className="pointer-events-none absolute top-1/3 -left-28 h-72 w-72 rounded-full bg-violet-600/20 blur-[90px]" />
+      <div className="pointer-events-none absolute -bottom-32 right-0 h-72 w-72 rounded-full bg-sky-600/15 blur-[90px]" />
+
       {/* Header minimal */}
-      <div className="flex items-start justify-between px-5 pt-[calc(var(--safe-top,0px)+14px)] pb-3">
+      <div className="relative flex items-start justify-between px-5 pt-[calc(var(--safe-top,0px)+14px)] pb-3">
         <div>
           <h2 className="text-[15px] font-black tracking-tight m-0 flex items-center gap-2">
             {title}

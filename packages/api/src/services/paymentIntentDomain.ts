@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import crypto from "crypto";
 import { getRestaurantDb } from "../db";
 import { 
@@ -268,10 +268,13 @@ export class PaymentIntentService {
       }
 
       // 2. Pessimistic Row Lock & Balance Verification on Payer (within SAME transaction)
+      // El pagador llega como `users.id` (sesión web/nativa) o, en flujos
+      // legacy de Telegram, como `telegramId`. Antes solo se buscaba por
+      // telegramId y todo pago in-app con UUID terminaba en USER_NOT_FOUND.
       const [payerUser] = await tx
         .select()
         .from(users)
-        .where(eq(users.telegramId, payerSubjectId))
+        .where(or(eq(users.id, payerSubjectId), eq(users.telegramId, payerSubjectId)))
         .for("update");
 
       if (!payerUser) {
@@ -391,7 +394,7 @@ export class PaymentIntentService {
           await tx
             .update(users)
             .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${rewardAmount}` })
-            .where(eq(users.telegramId, payerSubjectId));
+            .where(eq(users.id, payerUser.id));
 
           await tx.insert(ledgerEntries).values({
             branchId: intent.merchantId,
