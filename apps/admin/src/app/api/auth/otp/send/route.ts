@@ -1,8 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCoreDb } from "@rabbitty/api/db";
-import { verificationTokens, users } from "@rabbitty/database-core";
+import { verificationTokens, users, ownedBusinesses } from "@rabbitty/database-core";
+import { isGodAdminIdentity } from "@rabbitty/api/services/god2fa";
 import { eq, or, sql } from "drizzle-orm";
 import crypto from "crypto";
+
+/**
+ * Solo pueden pedir código:
+ *  - el God Admin (allowlist),
+ *  - usuarios ADMIN/AFFILIATE (dueños de tenant),
+ *  - dueños de un negocio.
+ * Cualquier otro correo/teléfono recibe una respuesta genérica sin token ni envío.
+ */
+async function isAllowedAdminIdentity(db: any, email: string, phone: string | null): Promise<boolean> {
+  const cleanEmail = (email || "").trim().toLowerCase();
+  if (cleanEmail && isGodAdminIdentity(cleanEmail)) return true;
+
+  let user: { id: string; role: string | null } | undefined;
+  if (cleanEmail && !cleanEmail.endsWith("@phone.rabbitty.me")) {
+    [user] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.email, cleanEmail))
+      .limit(1);
+  }
+  if (!user && phone) {
+    const digits = phone.replace(/\D/g, "").slice(-10);
+    [user] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(sql`regexp_replace(${users.phoneNumber}, '\D', '', 'g') LIKE ${'%' + digits}`)
+      .limit(1);
+  }
+  if (!user) return false;
+  if (user.role === "ADMIN" || user.role === "AFFILIATE") return true;
+
+  const [owner] = await db
+    .select({ id: ownedBusinesses.id })
+    .from(ownedBusinesses)
+    .where(eq(ownedBusinesses.ownerId, user.id))
+    .limit(1);
+  return Boolean(owner);
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -62,6 +101,18 @@ export async function POST(req: NextRequest) {
       email = cleanInput.includes("@") ? cleanInput : `${cleanInput}@rabbitty.me`;
     }
 
+    const allowed = await isAllowedAdminIdentity(db, email, phone);
+    if (!allowed) {
+      // Respuesta genérica: no revelamos si la cuenta existe y no enviamos nada.
+      console.warn("[AUTH OTP] Identidad no autorizada para el panel:", email);
+      return NextResponse.json({
+        success: true,
+        mode,
+        target: rawInput,
+        message: "Si la cuenta está autorizada, recibirás un código.",
+      });
+    }
+
     // 1. Generar código OTP (123456 fijo para el revisor de Apple, aleatorio para usuarios reales)
     const otpCode = isReviewerDemo ? "123456" : crypto.randomInt(100000, 999999).toString();
     const expires = new Date(Date.now() + (isReviewerDemo ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000)); // 24h para demo
@@ -98,7 +149,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log(`[AUTH OTP GENERATED] Mode: ${mode} | Target: ${rawInput} | Email: ${email} | OTP: ${otpCode}`);
+    console.log(`[AUTH OTP GENERATED] Mode: ${mode} | Destino autorizado: ${email}`);
 
     // 4. Intentar enviar correo con Resend si hay API key configurada
     const apiKey = process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;

@@ -217,6 +217,7 @@ const GROUPS = [
       "packages/legal/src/index.ts",
       "packages/legal/src/contract.ts",
       "DOCS/BUNZ-626-RECONCILIACION-2026-11-09.md",
+      "scripts/verify-affiliate-capacity.sql",
     ],
   },
   {

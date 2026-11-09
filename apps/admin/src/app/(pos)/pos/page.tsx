@@ -811,11 +811,20 @@ export default function PosPage() {
         customerName: selectedRabbitter.name,
         customerPhone: selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || undefined,
         orderType: "TO_GO",
+        // Vincular NO crea una comanda vacía. Solo reutiliza un pedido real
+        // existente. Si no hay pedido, el cajero agrega productos manualmente.
+        createIfMissing: false,
       },
       {
         onSuccess: (r) => {
-          setDraftOrderId(r.orderId);
+          const orderId = r.orderId ?? null;
+          setDraftOrderId(orderId);
           setDraftHasItems(Boolean((r as { hasItems?: boolean }).hasItems));
+          if (orderId && (r as { hasItems?: boolean }).hasItems) {
+            // Sí hay pedido real: abrirlo en Operación para cobrarlo/atenderlo.
+            setTabsView("ALL");
+            setActiveTabsModal(true);
+          }
           void refetchActiveTabs();
         },
         onError: () => {

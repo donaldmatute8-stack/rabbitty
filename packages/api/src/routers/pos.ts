@@ -665,6 +665,8 @@ export const posRouter = router({
       customerPhone: z.string().optional(),
       orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("TO_GO"),
       tableId: z.string().optional(),
+      /** Si false, solo reutiliza una comanda existente CON productos; no crea borradores. */
+      createIfMissing: z.boolean().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
       const candidates = await ctx.restaurantDb
@@ -693,14 +695,33 @@ export const posRouter = router({
         : [];
       const withItems = new Set(itemRows.map((r) => r.orderId));
 
-      // 1º una comanda con productos (pedido del móvil o comanda viva),
-      // 2º un borrador vacío reutilizable.
+      // 1º una comanda con productos (pedido del móvil o comanda viva).
+      // Solo si `createIfMissing` se permite reutilizar un borrador vacío.
       let existing: { id: string; total: unknown } | undefined =
-        candidates.find((c) => withItems.has(c.id)) ?? candidates.find((c) => !withItems.has(c.id));
+        candidates.find((c) => withItems.has(c.id));
+      if (!existing && input.createIfMissing) {
+        existing = candidates.find((c) => !withItems.has(c.id));
+      }
 
       if (existing && !withItems.has(existing.id) && Number(existing.total || 0) > 0) {
         // Borrador con total pero sin items = dato inconsistente: no reutilizar.
         existing = undefined;
+      }
+
+      if (!existing && !input.createIfMissing) {
+        // Vincular sin crear comanda: el cajero agrega productos manualmente y
+        // el cobro se liga al cliente con `customerId`. Limpiamos borradores $0
+        // que hayan quedado del comportamiento anterior.
+        const blankIds = candidates
+          .filter((c) => !withItems.has(c.id) && Number(c.total || 0) === 0)
+          .map((c) => c.id);
+        if (blankIds.length > 0) {
+          await ctx.restaurantDb
+            .update(orders)
+            .set({ status: "EXPIRED", voidReason: "DRAFT_RELEASED", updatedAt: new Date() })
+            .where(and(inArray(orders.id, blankIds), eq(orders.status, "PENDING")));
+        }
+        return { orderId: null, created: false, total: 0, hasItems: false };
       }
 
       if (existing) {

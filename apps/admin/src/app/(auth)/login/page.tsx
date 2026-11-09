@@ -179,7 +179,6 @@ export default function LoginPage() {
         const parsed: string[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setRecentEmails(parsed);
-          setInputVal(parsed[0]);
         }
       }
     } catch {
@@ -263,25 +262,11 @@ export default function LoginPage() {
         }
         setSent(true);
       } else {
-        // Fallback a NextAuth signIn("resend") si el endpoint reporta error
-        if (isEmail) {
-          await signIn("resend", { email: recipient, redirect: false });
-          setSentMode("email");
-          setTargetDisplay(recipient);
-          setSent(true);
-        } else {
-          setOtpError(data.error || "No pudimos enviar el código. Revisa el número ingresado.");
-        }
+        // Sin fallback de magic link: el único canal es el OTP del endpoint.
+        setOtpError(data.error || "No pudimos enviar el código. Revisa el correo o número.");
       }
     } catch {
-      if (isEmail) {
-        await signIn("resend", { email: recipient, redirect: false });
-        setSentMode("email");
-        setTargetDisplay(recipient);
-        setSent(true);
-      } else {
-        setOtpError("Error al procesar la solicitud. Intenta nuevamente.");
-      }
+      setOtpError("Error al procesar la solicitud. Intenta nuevamente.");
     } finally {
       setSubmitLoading(false);
     }

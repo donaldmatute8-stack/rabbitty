@@ -5,6 +5,7 @@ import { users, ownedBusinesses, webSessions } from "@rabbitty/database-core";
 import { bunzEconomicLimits } from "@rabbitty/database-restaurant/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import { isGodAdminIdentity } from "@rabbitty/api/services/god2fa";
 
 const TELEGRAM_BOT_TOKEN = process.env.AUTH_TELEGRAM_BOT_TOKEN;
 const ADMIN_URL = process.env.NEXT_PUBLIC_APP_URL || "https://admin.rabbitty.me";
@@ -14,6 +15,9 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!isGodAdminIdentity(session.user.email, session.user.name)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const db = getCoreDb();

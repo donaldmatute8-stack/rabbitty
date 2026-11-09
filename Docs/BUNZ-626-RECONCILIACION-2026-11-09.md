@@ -147,6 +147,9 @@ El `bunzBalance` de **4,011** = 4,000 de capacidad + 11 del latte real ya emitid
 - Copia del contrato aprobado: enviada a `poncho.herreraru@gmail.com` el 2026-11-09,
   `copyDeliveryStatus: sent`, `copyMessageId: 01a1be70-1a80-7758-9a6e-6dd0f294fbcf`.
 - `auditEntries`: `AFFILIATE_REONBOARDED`, `CAPACITY_ADJUSTED`, `CONTRACT_COPY_SENT`.
+- Verificador reutilizable: `scripts/verify-affiliate-capacity.sql`.
+  Ejecutado contra 626: **13/13 checks en `true`** (capacidad, split, outstanding,
+  cobertura, `bunzBalance`, límites, contrato aprobado, copia, pre-reset y ledger).
 
 ---
 

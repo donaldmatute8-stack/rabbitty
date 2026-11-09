@@ -3,7 +3,8 @@ import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
 import crypto, { createHash } from "crypto";
 import { getCoreDb } from "@rabbitty/api/db";
-import { verificationTokens, users } from "@rabbitty/database-core";
+import { verificationTokens, users, ownedBusinesses } from "@rabbitty/database-core";
+import { isGodAdminIdentity } from "@rabbitty/api/services/god2fa";
 import { eq, sql } from "drizzle-orm";
 
 if (process.env.NODE_ENV === "production") {
@@ -45,6 +46,35 @@ async function getPool() {
       ? { rejectUnauthorized: false }
       : false,
   });
+}
+
+/**
+ * El proveedor Resend (magic link) solo debe enviar a identidades del panel:
+ * God Admin, ADMIN/AFFILIATE o dueños de negocio. Evita magic links a correos
+ * externos o de otros tenants.
+ */
+async function isAllowedAdminEmail(email: string): Promise<boolean> {
+  const clean = (email || "").trim().toLowerCase();
+  if (!clean) return false;
+  if (isGodAdminIdentity(clean)) return true;
+  try {
+    const db = getCoreDb();
+    const [u] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.email, clean))
+      .limit(1);
+    if (!u) return false;
+    if (u.role === "ADMIN" || u.role === "AFFILIATE") return true;
+    const [owner] = await db
+      .select({ id: ownedBusinesses.id })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.ownerId, u.id))
+      .limit(1);
+    return Boolean(owner);
+  } catch {
+    return false;
+  }
 }
 
 // Ensure admin_auth_users table exists
@@ -189,6 +219,10 @@ const authResult = NextAuth({
         const apiKey = process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
         if (!apiKey) {
           console.error("[Auth Resend] API Key no encontrada");
+          return;
+        }
+        if (!(await isAllowedAdminEmail(email))) {
+          console.warn("[Auth Resend] Magic link bloqueado para identidad no autorizada:", email);
           return;
         }
 
