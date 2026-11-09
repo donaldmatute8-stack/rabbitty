@@ -59,11 +59,21 @@ async function isAllowedAdminEmail(email: string): Promise<boolean> {
   if (isGodAdminIdentity(clean)) return true;
   try {
     const db = getCoreDb();
-    const [u] = await db
-      .select({ id: users.id, role: users.role })
-      .from(users)
-      .where(eq(users.email, clean))
-      .limit(1);
+    let u: { id: string; role: string | null } | undefined;
+    if (clean.endsWith("@phone.rabbitty.me")) {
+      const digits = clean.replace(/\D/g, "").slice(-10);
+      [u] = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(sql`regexp_replace(${users.phoneNumber}, '\D', '', 'g') LIKE ${'%' + digits}`)
+        .limit(1);
+    } else {
+      [u] = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.email, clean))
+        .limit(1);
+    }
     if (!u) return false;
     if (u.role === "ADMIN" || u.role === "AFFILIATE") return true;
     const [owner] = await db
@@ -493,6 +503,11 @@ const authResult = NextAuth({
             } else {
               resolvedEmail = `${digits}@phone.rabbitty.me`;
             }
+          }
+
+          if (!(await isAllowedAdminEmail(resolvedEmail))) {
+            console.warn("[email-token] Identidad no autorizada:", resolvedEmail);
+            return null;
           }
 
           // 5. Upsert user and return
