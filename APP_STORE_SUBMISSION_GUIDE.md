@@ -153,6 +153,17 @@ Al responder las preguntas de privacidad de datos en App Store Connect:
 
 ---
 
+## 🔐 Export Compliance (cifrado)
+
+- **¿La app usa cifrado?** Solo el cifrado estándar del sistema para HTTPS/TLS.
+- **¿Usa cifrado no exento?** **No.**
+- **Respuesta en App Store Connect:** **No** / “The app does not use non-exempt encryption.”
+- **Info.plist:** `<key>ITSAppUsesNonExemptEncryption</key><false/>`.
+- **Widget / extensiones:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` en el target.
+- Esto evita que App Store Connect pregunte en cada build. Si vuelve a preguntar, responde **No** y conserva esta nota en el expediente.
+
+---
+
 ## 🛠️ 5. Pasos para Compilar y Subir el Archivo a App Store Connect
 
 En tu Mac:
@@ -411,6 +422,17 @@ Ya generadas con la resolución oficial exigida por Apple (**2732 × 2048 px** e
      - _Propósito:_ `App Functionality`
      - _Linked to identity:_ `No`
      - _Tracking:_ `No`
+
+---
+
+## 🔐 Export Compliance (cifrado)
+
+- **¿La app usa cifrado?** Solo el cifrado estándar del sistema para HTTPS/TLS.
+- **¿Usa cifrado no exento?** **No.**
+- **Respuesta en App Store Connect:** **No** / “The app does not use non-exempt encryption.”
+- **Info.plist:** `<key>ITSAppUsesNonExemptEncryption</key><false/>`.
+- **Widget / extensiones:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` en el target.
+- Esto evita que App Store Connect pregunte en cada build. Si vuelve a preguntar, responde **No** y conserva esta nota en el expediente.
 
 ---
 

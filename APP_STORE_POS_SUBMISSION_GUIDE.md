@@ -126,6 +126,17 @@ Al responder **App Privacy** en App Store Connect para Rabbitty POS:
 
 ---
 
+## 🔐 Export Compliance (cifrado)
+
+- **¿La app usa cifrado?** Solo el cifrado estándar del sistema para HTTPS/TLS.
+- **¿Usa cifrado no exento?** **No.**
+- **Respuesta en App Store Connect:** **No** / “The app does not use non-exempt encryption.”
+- **Info.plist:** `<key>ITSAppUsesNonExemptEncryption</key><false/>`.
+- **Widget / extensiones:** `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` en el target.
+- Esto evita que App Store Connect pregunte en cada build. Si vuelve a preguntar, responde **No** y conserva esta nota en el expediente.
+
+---
+
 ## 🔞 7. Clasificación por Edad (Age Rating)
 - Controles parentales: **No**
 - Acceso web irrestricto: **No**
