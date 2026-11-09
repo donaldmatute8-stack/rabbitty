@@ -3506,7 +3506,8 @@ export const posRouter = router({
             userId: targetUserId,
             title: `🧾 Cuenta lista en ${businessName} (${totalFormatted})`,
             message: `Tu cuenta de ${totalFormatted} está lista. Toca aquí para ver el detalle y pagar con Apple Pay, Tarjeta o Bunz.`,
-            type: "AFFILIATE",
+            // Aviso de cuenta/pago: categoría ORDERS y no silenciable.
+            type: "ACCOUNT_BILL_SENT",
             route: `/pay/${order.id}`,
           });
           pushSent = true;
