@@ -40,13 +40,13 @@ input, textarea, [contenteditable="true"], .selectable, code, pre, .font-mono {
 
 /* ── Mi Código (QR): escala compacta en pantallas bajas ─────────────── */
 .qr-screen {
-  --qr-top-pad: 40px;
-  --qr-card-pt: 48px;
-  --qr-card-pb: 20px;
-  --qr-handle-mt: 16px;
-  --qr-grid-h: 92px;
-  --qr-btn-h: 52px;
-  --qr-btn2-h: 46px;
+  --qr-top-pad: 24px;
+  --qr-card-pt: 40px;
+  --qr-card-pb: 18px;
+  --qr-handle-mt: 14px;
+  --qr-grid-h: 86px;
+  --qr-btn-h: 50px;
+  --qr-btn2-h: 44px;
 }
 @media (max-height: 820px) {
   .qr-screen {

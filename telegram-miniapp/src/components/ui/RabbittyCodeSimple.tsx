@@ -318,7 +318,7 @@ export default function RabbittyCodeSimple({
 
   return (
     <div
-      className="qr-screen relative flex w-full flex-1 flex-col items-center justify-between overflow-hidden min-h-[100dvh]"
+      className="qr-screen relative flex w-full flex-1 flex-col items-center justify-between overflow-hidden min-h-[calc(100dvh-var(--safe-top,0px)-8px)]"
       style={{
         background: showBackdrop
           ? `radial-gradient(ellipse at 50% 0%, ${currentTheme.bgAccent} 0%, ${currentTheme.bgDark} 70%)`
@@ -341,7 +341,7 @@ export default function RabbittyCodeSimple({
         type="button"
         onClick={onClose ?? onScan}
         className="absolute left-4 z-30 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/35 text-white backdrop-blur-md active:scale-95"
-        style={{ top: 'calc(var(--safe-top, 0px) + 10px)' }}
+        style={{ top: '10px' }}
         aria-label="Volver"
         title="Volver"
       >
@@ -438,7 +438,7 @@ export default function RabbittyCodeSimple({
 
       {/* ── ÁREA INFERIOR: Bottom Sheet ── */}
       <div className="relative z-20 mt-auto flex w-full flex-col rounded-t-[30px] border-t border-white/10 bg-[#1c1c1e]/85 px-4 pt-3 shadow-[0_-10px_36px_rgba(0,0,0,0.65)] backdrop-blur-xl"
-        style={{ paddingBottom: 'calc(14px + max(env(safe-area-inset-bottom, 0px), 12px))' }}
+        style={{ paddingBottom: 'calc(18px + max(env(safe-area-inset-bottom, 0px), 12px))' }}
       >
         {/* Header del sheet */}
         <div className="flex w-full items-center justify-between px-1 py-2">

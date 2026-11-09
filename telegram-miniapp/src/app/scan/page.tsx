@@ -1066,7 +1066,7 @@ export default function ScanPage() {
                 }}
                 aria-label="Volver a Mi Código"
                 className="absolute left-4 z-30 flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white backdrop-blur-md active:scale-95"
-                style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+                style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
               >
                 <ArrowLeft size={20} />
               </button>
