@@ -216,7 +216,7 @@ const GROUPS = [
       "packages/legal/package.json",
       "packages/legal/src/index.ts",
       "packages/legal/src/contract.ts",
-      "Docs/BUNZ-626-RECONCILIACION-2026-11-09.md",
+      "DOCS/BUNZ-626-RECONCILIACION-2026-11-09.md",
     ],
   },
   {
