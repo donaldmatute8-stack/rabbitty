@@ -218,6 +218,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // Push Notifications native registration (iOS APNs / Android FCM)
   // Gate: respeta los ajustes del usuario (settings → push nativo).
   const [pushSettingVersion, setPushSettingVersion] = useState(0);
+  // ── Push en PRIMER PLANO ──
+  // iOS no muestra banner si la app está abierta. Sin esto, un cobro
+  // (CHARGE_APPROVAL) o una cuenta enviada se pierden visualmente aunque
+  // APNs los acepte. Mostramos un banner in-app tappable.
+  const [foregroundPush, setForegroundPush] = useState<{ title: string; body: string; route: string } | null>(null);
   useEffect(() => {
     if (user?.id && PlatformBridge.isNative() && readSettings().nativePush) {
       PlatformBridge.initPushNotifications({
@@ -231,6 +236,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             }).catch((err) => console.warn('[Push] Error syncing token:', err));
           });
         },
+        // Push recibido con la app ABIERTA: iOS no pinta banner del sistema.
+        // Lo mostramos in-app para no perder cobros/avisos.
+        onNotificationReceived: (notification: any) => {
+          try {
+            const data = (notification?.data || {}) as Record<string, unknown>;
+            const route = String(data.route || data.link || '');
+            setForegroundPush({
+              title: String(notification?.title || 'Rabbitty'),
+              body: String(notification?.body || ''),
+              route,
+            });
+            PlatformBridge.hapticFeedback('light');
+          } catch { /* noop */ }
+        },
         // Tap del push → deep-link (membresías, chat, conciliación, ofertas…)
         onNotificationTap: (route) => {
           try {
@@ -242,6 +261,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       });
     }
   }, [user?.id, pushSettingVersion]);
+
+  // El banner de primer plano se cierra solo a los 14s.
+  useEffect(() => {
+    if (!foregroundPush) return;
+    const t = setTimeout(() => setForegroundPush(null), 14000);
+    return () => clearTimeout(t);
+  }, [foregroundPush]);
 
   // Re-registro cuando el usuario re-enciende el push en settings
   useEffect(() => {
@@ -273,6 +299,66 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   return (
     <AuthContext.Provider value={{ user, loading, sessionToken, isTelegram, isNative, checkAuth, logout }}>
       {children}
+      {foregroundPush && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 'calc(env(safe-area-inset-top, 0px) + 10px)',
+            left: 12,
+            right: 12,
+            zIndex: 99999,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: 12,
+              borderRadius: 18,
+              background: 'linear-gradient(135deg, rgba(35,18,32,0.98), rgba(12,12,20,0.98))',
+              border: '1px solid rgba(233,30,99,0.45)',
+              boxShadow: '0 16px 44px rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(16px)',
+            }}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(233,30,99,0.18)', border: '1px solid rgba(233,30,99,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>
+              🐰
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: '#fff', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {foregroundPush.title}
+              </p>
+              {foregroundPush.body && (
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.6)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {foregroundPush.body}
+                </p>
+              )}
+            </div>
+            {foregroundPush.route && (
+              <button
+                type="button"
+                onClick={() => {
+                  const route = foregroundPush.route;
+                  setForegroundPush(null);
+                  try { router.push(route); } catch { /* noop */ }
+                }}
+                style={{ flexShrink: 0, border: 'none', borderRadius: 12, background: '#E91E63', color: '#fff', fontSize: 11, fontWeight: 900, padding: '9px 12px', cursor: 'pointer' }}
+              >
+                Ver
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Cerrar"
+              onClick={() => setForegroundPush(null)}
+              style={{ flexShrink: 0, border: 'none', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', width: 28, height: 28, borderRadius: 999, cursor: 'pointer', fontSize: 13 }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 }
