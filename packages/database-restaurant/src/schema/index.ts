@@ -624,6 +624,32 @@ export const merchantPaymentProviderConfigs = pgTable("merchant_payment_provider
   uniqueIndex("merchant_payment_provider_branch_provider_idx").on(t.branchId, t.provider),
 ]);
 
+/**
+ * ── Confirmación de cobro del Rabbitter ──
+ * El POS escanea al cliente, arma el cobro y pide autorización a su app antes
+ * de ejecutar el cargo. Es una autorización, no el pago: al aprobar, el POS
+ * continúa con su flujo normal (Bunz, efectivo, tarjeta o dividida).
+ */
+export const posChargeRequests = pgTable("pos_charge_requests", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  customerId: text("customerId").notNull(),
+  staffId: text("staffId"),
+  method: text("method").notNull(), // BUNZ | CASH | CARD | SPLIT | EXTERNAL_TERMINAL
+  amount: real("amount").notNull(),
+  tipAmount: real("tipAmount").default(0).notNull(),
+  items: jsonb("items").notNull(), // [{ name, quantity, totalPrice }]
+  businessName: text("businessName"),
+  status: text("status").default("PENDING").notNull(), // PENDING | APPROVED | REJECTED | EXPIRED | CANCELLED
+  orderId: text("orderId"),
+  respondedAt: timestamp("respondedAt"),
+  expiresAt: timestamp("expiresAt").notNull(),
+  ...timestamps,
+}, (t) => [
+  index("pos_charge_requests_customer_idx").on(t.customerId),
+  index("pos_charge_requests_status_idx").on(t.status),
+]);
+
 export const paymentIntents = pgTable("payment_intents", {
   id: id(),
   orderId: fkIdOpt("orderId").references(() => orders.id),

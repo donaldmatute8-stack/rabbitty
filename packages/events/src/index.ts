@@ -108,7 +108,7 @@ export const PushCategory = {
 export type PushCategoryKey = (typeof PushCategory)[keyof typeof PushCategory];
 
 /** Tipos NO silenciables (críticos/sistema): siempre notifican. */
-export const UNMUTABLE_TYPES = new Set(["TIP_PAYOUT", "SYSTEM", "ACCOUNT_BILL_SENT"]);
+export const UNMUTABLE_TYPES = new Set(["TIP_PAYOUT", "SYSTEM", "ACCOUNT_BILL_SENT", "CHARGE_APPROVAL"]);
 
 export function categoryForType(type: string): PushCategoryKey {
   switch (type) {
@@ -122,6 +122,7 @@ export function categoryForType(type: string): PushCategoryKey {
     case "ORDER_COMPLETED":
     case "ORDER_VOIDED":
     case "ACCOUNT_BILL_SENT":
+    case "CHARGE_APPROVAL":
     case "TIP_PAYOUT":
       return PushCategory.ORDERS;
     case "ARRIVAL":

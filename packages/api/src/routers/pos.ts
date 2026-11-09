@@ -9,7 +9,7 @@ import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayable
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
-import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState } from "@rabbitty/database-restaurant/schema";
+import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
 import {
   uberDirectConfigured,
@@ -410,6 +410,164 @@ export const posRouter = router({
         level: user.levelId || "Rookie",
         currentRewardRate: rewardRate,
       };
+    }),
+
+  /** POS: resuelve un código de negocio (QR del afiliado) para no confundirlo con un Rabbitter. */
+  lookupBusinessByCode: posProcedure
+    .input(z.object({ code: z.string().min(1).max(20) }))
+    .query(async ({ ctx, input }) => {
+      const code = Number(String(input.code).replace(/\D/g, ""));
+      if (!code) return null;
+      const [biz] = await ctx.coreDb
+        .select({ id: coreBusinesses.id, name: coreBusinesses.name, scanCode: coreBusinesses.scanCode })
+        .from(coreBusinesses)
+        .where(eq(coreBusinesses.scanCode, code))
+        .limit(1);
+      return biz ?? null;
+    }),
+
+  /**
+   * POS: pide autorización al Rabbitter ANTES de ejecutar el cobro.
+   * Crea la solicitud con precios/nombres del menú server-side y envía un push
+   * con deep-link /pay/confirm/<id>. El POS espera APPROVED para continuar.
+   */
+  requestChargeApproval: posPermission("POS_CHARGE")
+    .input(z.object({
+      customerId: z.string().uuid(),
+      customerName: z.string().optional(),
+      method: z.string().min(1).max(40),
+      tipAmount: z.number().min(0).max(5000).default(0),
+      items: z.array(z.object({
+        menuItemId: z.string(),
+        quantity: z.number().min(1),
+        /** Precio unitario del POS (incluye modificadores); se valida el ítem. */
+        unitPrice: z.number().min(0).optional(),
+      })).min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [customer] = await ctx.coreDb
+        .select({ id: coreUsers.id, firstName: coreUsers.firstName, lastName: coreUsers.lastName })
+        .from(coreUsers)
+        .where(eq(coreUsers.id, input.customerId))
+        .limit(1);
+      if (!customer) throw new TRPCError({ code: "NOT_FOUND", message: "Rabbitter no encontrado." });
+
+      const menu = await ctx.restaurantDb
+        .select({ id: menuItems.id, name: menuItems.name, price: menuItems.price })
+        .from(menuItems)
+        .where(eq(menuItems.branchId, ctx.branchId));
+      const priceMap = new Map(menu.map((m: any) => [m.id, m]));
+
+      const items = input.items.map((it) => {
+        const m = priceMap.get(it.menuItemId);
+        if (!m) throw new TRPCError({ code: "BAD_REQUEST", message: "Producto inválido para esta sucursal." });
+        const unit = Number(it.unitPrice ?? m.price);
+        return {
+          name: String(m.name),
+          quantity: Number(it.quantity),
+          totalPrice: r2(unit * Number(it.quantity)),
+        };
+      });
+      const subtotal = r2(items.reduce((sum, i) => sum + i.totalPrice, 0));
+      const amount = r2(subtotal + Number(input.tipAmount || 0));
+      if (amount <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "El cobro no tiene monto." });
+
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+      const [rest] = branch?.restaurantId
+        ? await ctx.restaurantDb
+            .select({ name: restaurants.name })
+            .from(restaurants)
+            .where(eq(restaurants.id, branch.restaurantId))
+            .limit(1)
+        : [];
+      const businessName = rest?.name || "Rabbitty";
+
+      const [request] = await ctx.restaurantDb
+        .insert(posChargeRequests)
+        .values({
+          branchId: ctx.branchId,
+          customerId: input.customerId,
+          staffId: ctx.userId ?? null,
+          method: input.method,
+          amount,
+          tipAmount: Number(input.tipAmount || 0),
+          items,
+          businessName,
+          status: "PENDING",
+          expiresAt: new Date(Date.now() + 2 * 60 * 1000),
+        })
+        .returning();
+      if (!request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la solicitud." });
+
+      const methodLabel =
+        input.method === "BUNZ" ? "Pago con Bunz" :
+        input.method === "DIVIDIDA" ? "Efectivo + Bunz" :
+        input.method === "TARJETA_EXTERNA" ? "Tarjeta (terminal)" :
+        input.method === "TARJETA" ? "Tarjeta" : "Efectivo";
+
+      try {
+        await miniappClient.sendNotification({
+          userId: input.customerId,
+          title: `🐰 Confirma tu cobro en ${businessName}`,
+          message: `${methodLabel} · $${amount.toFixed(2)}. Abre Rabbitty y confirma para que el negocio cobre.`,
+          type: "CHARGE_APPROVAL",
+          route: `/pay/confirm/${request.id}`,
+          dedupeKey: `charge_approval_${request.id}`,
+          priority: "high",
+        } as any);
+      } catch (notifyErr) {
+        console.warn("[POS] push de confirmación falló:", notifyErr);
+      }
+
+      return { requestId: request.id, amount, expiresAt: request.expiresAt, method: input.method };
+    }),
+
+  /** POS: estado de la solicitud (polling mientras espera al Rabbitter). */
+  getChargeApproval: posProcedure
+    .input(z.object({ requestId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [request] = await ctx.restaurantDb
+        .select()
+        .from(posChargeRequests)
+        .where(and(eq(posChargeRequests.id, input.requestId), eq(posChargeRequests.branchId, ctx.branchId)))
+        .limit(1);
+      if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "Solicitud no encontrada." });
+
+      let status = request.status;
+      if (status === "PENDING" && request.expiresAt < new Date()) {
+        await ctx.restaurantDb
+          .update(posChargeRequests)
+          .set({ status: "EXPIRED", updatedAt: new Date() })
+          .where(eq(posChargeRequests.id, request.id));
+        status = "EXPIRED";
+      }
+      return {
+        requestId: request.id,
+        status,
+        amount: request.amount,
+        method: request.method,
+        customerId: request.customerId,
+        respondedAt: request.respondedAt,
+      };
+    }),
+
+  /** POS: el cajero cancela la espera (el Rabbitter ya no puede aprobar). */
+  cancelChargeApproval: posProcedure
+    .input(z.object({ requestId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.restaurantDb
+        .update(posChargeRequests)
+        .set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(and(
+          eq(posChargeRequests.id, input.requestId),
+          eq(posChargeRequests.branchId, ctx.branchId),
+          eq(posChargeRequests.status, "PENDING"),
+        ));
+      return { ok: true };
     }),
 
   getTables: posProcedure.query(async ({ ctx }) => {

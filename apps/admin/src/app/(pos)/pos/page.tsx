@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -399,6 +399,42 @@ export default function PosPage() {
     { status: "COMPLETED" },
     { enabled: recentOrdersModal, retry: false }
   );
+  // ── Confirmación del Rabbitter antes de cobrar (escaneo) ──
+  const requestApprovalMutation = trpc.pos.requestChargeApproval.useMutation();
+  const cancelApprovalMutation = trpc.pos.cancelChargeApproval.useMutation();
+  const [approval, setApproval] = useState<{
+    requestId: string; amount: number; method: string; cashGiven?: number;
+    split?: { cash: number; bunz: number }; customerName: string;
+  } | null>(null);
+  const approvalHandledRef = useRef(false);
+  const approvalQuery = trpc.pos.getChargeApproval.useQuery(
+    { requestId: approval?.requestId ?? "" },
+    { enabled: !!approval, refetchInterval: 1500 },
+  );
+  useEffect(() => {
+    if (!approval || approvalHandledRef.current) return;
+    if (approvalQuery.data?.requestId !== approval.requestId) return;
+    const status = approvalQuery.data?.status;
+    if (status === "APPROVED") {
+      approvalHandledRef.current = true;
+      const ctxApproval = approval;
+      setApproval(null);
+      setPendingMethod(null);
+      setIsCharging(true);
+      void handleCheckout(ctxApproval.method, ctxApproval.cashGiven, ctxApproval.split)
+        .finally(() => setIsCharging(false));
+    } else if (status === "REJECTED" || status === "EXPIRED" || status === "CANCELLED") {
+      approvalHandledRef.current = true;
+      toast.info(
+        status === "REJECTED"
+          ? "El Rabbitter no autorizó el cobro."
+          : "La solicitud expiró. Genera el cobro de nuevo.",
+      );
+      setApproval(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [approvalQuery.data?.status, approvalQuery.data?.requestId, approval]);
+
   const sendBillMutation = trpc.pos.sendBillToCustomer.useMutation({
     onSuccess: (data) => {
       toast.success(`🧾 Cuenta enviada a ${data.customerName}!`);
@@ -600,8 +636,24 @@ export default function PosPage() {
             const m = cleaned.match(/\/u\/([^/?#]+)/);
             if (m) cleaned = decodeURIComponent(m[1]);
           } else if (cleaned.startsWith("rc:")) {
-            // RabbittyCode neón (13 barras) escaneado como texto
-            cleaned = cleaned.slice(3).trim();
+            // RabbittyCode neón (13 barras) escaneado como texto.
+            // Puede ser del NEGOCIO (QR del afiliado) → no es un Rabbitter.
+            const rcCode = cleaned.slice(3).trim();
+            try {
+              const biz = await utils.pos.lookupBusinessByCode.fetch({ code: rcCode });
+              if (biz) {
+                toast.info(`Ese QR es del negocio ${biz.name}. Pide al Rabbitter su QR personal (Mi Rabbitty Code).`);
+                setIsSearchingRabbitter(false);
+                return;
+              }
+            } catch { /* si falla, seguimos como Rabbitter */ }
+            cleaned = rcCode;
+          }
+          // URLs de negocio/afiliado: no son un Rabbitter
+          if (/\/(affiliate|business)\//.test(cleaned)) {
+            toast.info("Ese QR es del negocio. Pide al Rabbitter su QR personal para vincularlo.");
+            setIsSearchingRabbitter(false);
+            return;
           }
           cleaned = cleaned.replace(/^@/, "").trim();
 
@@ -1583,6 +1635,45 @@ export default function PosPage() {
       toast.error("Registra la referencia o autorización de la terminal antes de cobrar con tarjeta.");
       return;
     }
+    // ── Confirmación del Rabbitter (escaneo) ──
+    // El cobro NO se ejecuta hasta que el cliente autoriza en su app.
+    // Tarjeta Rabbitty Pay se excluye: el cliente ya confirma pagando.
+    if (selectedRabbitter?.id && !method.includes("STRIPE")) {
+      const splitOverride = pendingMethod === "DIVIDIDA"
+        ? {
+            cash: parseFloat(cashReceived) || 0,
+            bunz: Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100),
+          }
+        : undefined;
+      setIsCharging(true);
+      try {
+        const req = await requestApprovalMutation.mutateAsync({
+          customerId: selectedRabbitter.id,
+          customerName: selectedRabbitter.name,
+          method,
+          tipAmount: Number(posTip || 0),
+          items: cart.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity, unitPrice: i.price })),
+        });
+        approvalHandledRef.current = false;
+        setApproval({
+          requestId: req.requestId,
+          amount: Number(req.amount || total),
+          method,
+          cashGiven: customCashGiven,
+          split: splitOverride,
+          customerName: selectedRabbitter.name,
+        });
+        setPendingMethod(null);
+        setCashReceived("");
+        return;
+      } catch (err: any) {
+        toast.error(err?.message || "No se pudo pedir la confirmación del Rabbitter");
+        return;
+      } finally {
+        setIsCharging(false);
+      }
+    }
+
     setPendingMethod(null);
     setIsCharging(true);
     try {
@@ -1609,7 +1700,11 @@ export default function PosPage() {
     });
   };
 
-  const handleCheckout = async (method: string = "EFECTIVO", cashGiven?: number) => {
+  const handleCheckout = async (
+    method: string = "EFECTIVO",
+    cashGiven?: number,
+    splitOverride?: { cash: number; bunz: number },
+  ) => {
     if (cart.length === 0) return;
     // Defensa en profundidad: el servidor también valida POS_CHARGE.
     if (!requirePermission("POS_CHARGE")) return;
@@ -1693,8 +1788,8 @@ export default function PosPage() {
           entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
           // ── Propina (opcional) + split DIVIDIDA (efectivo + Bunz) ──
           tip: Number(posTip || 0),
-          splitCash: pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
-          splitBunz: pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
+          splitCash: splitOverride ? splitOverride.cash : pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
+          splitBunz: splitOverride ? splitOverride.bunz : pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
           // H-PERSIST: reutiliza la comanda abierta del cliente vinculado.
           // Solo se reutiliza un BORRADOR vacío. Si la comanda vinculada ya
           // es el pedido real del móvil, se cobra desde su tarjeta en Operación.
@@ -3650,6 +3745,50 @@ export default function PosPage() {
             </div>
           );
         })()}
+      </Dialog>
+
+      {/* Confirmación del Rabbitter antes de ejecutar el cobro */}
+      <Dialog
+        open={!!approval}
+        onClose={() => {
+          if (approval) cancelApprovalMutation.mutate({ requestId: approval.requestId });
+          setApproval(null);
+        }}
+        title="Confirmación del Rabbitter"
+        kicker="Autorización del cobro"
+        className="max-w-md w-full"
+      >
+        <div className="space-y-4 p-1">
+          <div className="rounded-2xl bg-violet-500/[0.07] border border-violet-400/25 p-4 text-center">
+            <p className="text-[11px] text-gray-400">
+              Esperando que <b className="text-white">{approval?.customerName}</b> confirme en su app…
+            </p>
+            <p className="text-3xl font-black text-white mt-1">${Number(approval?.amount || 0).toFixed(2)}</p>
+            <p className="text-[10px] text-gray-500 mt-1">
+              {approval?.method === "BUNZ" ? "Bunz" :
+               approval?.method === "DIVIDIDA" ? "Efectivo + Bunz" :
+               approval?.method === "TARJETA_EXTERNA" ? "Tarjeta (terminal)" :
+               approval?.method === "EFECTIVO" ? "Efectivo" : String(approval?.method || "")}
+            </p>
+            <div className="mt-3 flex justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-violet-300" />
+            </div>
+            <p className="text-[10px] text-gray-500 mt-2 leading-snug">
+              El cobro no se ejecuta hasta que el Rabbitter autorice. Le enviamos una notificación;
+              si no le llegó, pídele abrir la campana de Rabbitty.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              if (approval) cancelApprovalMutation.mutate({ requestId: approval.requestId });
+              setApproval(null);
+            }}
+            className="w-full rounded-2xl py-3 font-bold border-white/10 bg-white/[0.04] hover:bg-white/10"
+          >
+            Cancelar espera
+          </Button>
+        </div>
       </Dialog>
 
       {/* Modal de Ticket de Venta / Comprobante de Cobro */}
