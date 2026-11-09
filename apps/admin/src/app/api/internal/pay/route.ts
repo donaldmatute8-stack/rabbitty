@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getRestaurantDb } from "@rabbitty/api/db";
-import { orders, payments } from "@rabbitty/database-restaurant/schema";
+import { orders, payments, paymentIntents } from "@rabbitty/database-restaurant/schema";
 import { and, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
@@ -128,6 +128,32 @@ export async function POST(req: Request) {
       });
       const approved = await PaymentIntentService.approveIntent(intent.id, userId);
       return NextResponse.json({ ok: true, intentId: intent.id, approved });
+    }
+
+    /* ── Cancelar un intent (al cancelar el pedido desde la app) ── */
+    if (action === "cancel-payment-intent") {
+      const intentId = String(body?.intentId || "");
+      if (!intentId) return NextResponse.json({ ok: false, error: "intentId requerido." }, { status: 400 });
+      const [intent] = await db.select().from(paymentIntents).where(eq(paymentIntents.id, intentId)).limit(1);
+      if (!intent) return NextResponse.json({ ok: false, error: "Intent no encontrado." }, { status: 404 });
+      if (intent.orderId) {
+        const [order] = await db.select({ customerId: orders.customerId }).from(orders).where(eq(orders.id, intent.orderId)).limit(1);
+        if (order?.customerId && String(order.customerId) !== String(userId)) {
+          return NextResponse.json({ ok: false, error: "El intent no pertenece al cliente." }, { status: 403 });
+        }
+      }
+      await db.update(paymentIntents)
+        .set({ status: "CANCELLED", updatedAt: new Date() })
+        .where(eq(paymentIntents.id, intent.id));
+      if (intent.provider === "STRIPE" && intent.externalIntentId) {
+        try {
+          const { cancelStripePaymentIntent } = await import("@rabbitty/api/services/stripeConnect");
+          await cancelStripePaymentIntent(intent.externalIntentId);
+        } catch (stripeErr) {
+          console.warn("[INTERNAL PAY] no se pudo cancelar en Stripe:", stripeErr);
+        }
+      }
+      return NextResponse.json({ ok: true, intentId: intent.id, status: "CANCELLED" });
     }
 
     /* ── Mercado Pago: crear checkout ── */

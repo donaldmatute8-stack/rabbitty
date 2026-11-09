@@ -5,6 +5,7 @@ import { deliveries, orderItems, orders, payments, paymentIntents } from '@rabbi
 import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { callInternalPay } from '@/lib/internalPay';
 
 export const runtime = 'nodejs';
 
@@ -102,7 +103,18 @@ export async function POST(
     }
 
     const now = new Date();
-    // Anular intents vigentes para que el link de pago no cobre después.
+    // Anular intents vigentes (DB + Stripe) para que el link viejo no cobre.
+    const pendingIntents = await restaurantDb
+      .select({ id: paymentIntents.id })
+      .from(paymentIntents)
+      .where(and(eq(paymentIntents.orderId, orderId), eq(paymentIntents.status, 'PENDING_PAYMENT')));
+    for (const intent of pendingIntents) {
+      try {
+        await callInternalPay({ action: 'cancel-payment-intent', intentId: intent.id, userId: caller.id });
+      } catch (cancelErr) {
+        console.warn('[TRACK CANCEL] no se pudo cancelar el intent:', cancelErr);
+      }
+    }
     await restaurantDb
       .update(paymentIntents)
       .set({ status: 'CANCELLED', updatedAt: now })
