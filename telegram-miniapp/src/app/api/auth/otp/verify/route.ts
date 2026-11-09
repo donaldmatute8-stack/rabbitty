@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
     const consentVersion = typeof body?.consentVersion === 'string' ? body.consentVersion.slice(0, 40) : null;
 
     // Demo de App Review (también en producción): tester@rabbitty.me + 123456.
-    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
+    const demoInput = rawInput.toLowerCase();
+    const isTesterDemo = ['tester', 'tester@rabbitty.me', 'appreview', 'appreview@rabbitty.me'].includes(demoInput);
     const isAcceptedDemoCode = isTesterDemo && code === '123456';
 
     if (!rawInput || !code) {
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     const isEmail = rawInput.includes('@');
 
     if (isTesterDemo) {
-      email = 'tester@rabbitty.me';
+      email = rawInput.includes('@') ? rawInput.toLowerCase() : `${rawInput.toLowerCase()}@rabbitty.me`;
     } else if (isEmail) {
       email = rawInput.toLowerCase();
     } else {

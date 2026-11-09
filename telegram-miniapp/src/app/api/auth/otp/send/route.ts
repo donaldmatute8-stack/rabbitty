@@ -35,10 +35,12 @@ export async function POST(req: NextRequest) {
     const isEmail = rawInput.includes('@');
     // Demo de App Review: tester@rabbitty.me + 123456 debe funcionar también en producción.
     // La cuenta es de pruebas (AFFILIATE, sin negocio ni saldo) y el código es fijo.
-    const isTesterDemo = rawInput.toLowerCase() === 'tester' || rawInput.toLowerCase() === 'tester@rabbitty.me';
+    // Demo de App Review: tester (admin/afiliado) y appreview (consumidor).
+    const demoInput = rawInput.toLowerCase();
+    const isTesterDemo = ['tester', 'tester@rabbitty.me', 'appreview', 'appreview@rabbitty.me'].includes(demoInput);
 
     if (isTesterDemo) {
-      email = 'tester@rabbitty.me';
+      email = demoInput.includes('@') ? demoInput : `${demoInput}@rabbitty.me`;
       mode = 'email';
     } else if (isEmail) {
       email = rawInput.toLowerCase();

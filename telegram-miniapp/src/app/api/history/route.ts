@@ -139,7 +139,11 @@ export async function GET(req: NextRequest) {
           icon = "📤";
         }
       } else if (entry.type === "EARN") {
-        if (meta.source === "test_injection") {
+        if (meta.source === "app_review_demo") {
+          name = "Bunz de demo (App Review)";
+          category = "Demo";
+          icon = "🧪";
+        } else if (meta.source === "test_injection") {
           name = "Bunz de prueba (QA)";
           category = "Prueba";
           icon = "🧪";
