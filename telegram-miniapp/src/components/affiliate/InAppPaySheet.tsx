@@ -25,6 +25,42 @@ import TipPills from '@/components/ui/pay/TipPills';
 import SwipeAction from '@/components/ui/pay/SwipeAction';
 import RatingSheet from '@/components/affiliate/RatingSheet';
 
+interface PayReceiptPayment {
+  id: string;
+  method: string;
+  verificationMethod?: string | null;
+  amount: number;
+  tipAmount?: number;
+  createdAt?: string | null;
+}
+
+interface PayReceipt {
+  settled: boolean;
+  paid?: number;
+  businessName?: string | null;
+  branchName?: string | null;
+  order?: {
+    id: string;
+    status: string;
+    total: number;
+    tip?: number;
+    bunzPaid?: number;
+    createdAt?: string | null;
+  };
+  payments: PayReceiptPayment[];
+  items: { id: string; name: string; quantity: number; totalPrice: number }[];
+}
+
+/** Etiqueta legible por método de pago (incluye Mercado Pago vía verificación). */
+function paymentMethodLabel(method: string, verification?: string | null) {
+  const m = String(method || '').toUpperCase();
+  if (m === 'BUNZ') return { label: 'Bunz', icon: '🐰' };
+  if (String(verification || '').includes('MERCADO_PAGO')) return { label: 'Mercado Pago', icon: '💙' };
+  if (m === 'CASH') return { label: 'Efectivo', icon: '💵' };
+  if (m.includes('CARD')) return { label: 'Tarjeta / Apple Pay', icon: '💳' };
+  return { label: method || 'Pago', icon: '💳' };
+}
+
 interface InAppPaySheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -205,7 +241,7 @@ export function InAppPaySheet({
   businessName,
   onPaid,
 }: InAppPaySheetProps) {
-  const [step, setStep] = useState<'pay' | 'done'>('pay');
+  const [step, setStep] = useState<'pay' | 'done' | 'settled'>('pay');
   const [tipAmount, setTipAmount] = useState(0);
   // ── H15: Pagar con Bunz (cuenta enviada, sin QR) ──
   const [bunzState, setBunzState] = useState<{
@@ -236,6 +272,10 @@ export function InAppPaySheet({
   const [mpBusy, setMpBusy] = useState(false);
   const [mpLink, setMpLink] = useState<string | null>(null);
   const [mpMessage, setMpMessage] = useState<string | null>(null);
+  // ── Comprobante/estado de la cuenta: si ya está liquidada no se vuelve a cobrar ──
+  const [receipt, setReceipt] = useState<PayReceipt | null>(null);
+  const [receiptChecked, setReceiptChecked] = useState(false);
+  const [resolvedBusiness, setResolvedBusiness] = useState<string | null>(null);
   const [amountTotalExtra, setAmountTotalExtra] = useState<number | null>(null);
   // Guard: evita que el effect se dispare 2 veces (StrictMode/re-renders) y
   // cree dos intents para la misma orden con la misma propina.
@@ -290,8 +330,39 @@ export function InAppPaySheet({
       setMpLink(null);
       setMpMessage(null);
       setMpBusy(false);
+      setReceipt(null);
+      setReceiptChecked(false);
+      setResolvedBusiness(null);
     }
   }, [isOpen, total]);
+
+  // ── Estado real de la cuenta: si YA está liquidada mostramos el detalle ──
+  useEffect(() => {
+    if (!isOpen || !orderId) return;
+    let alive = true;
+    setReceiptChecked(false);
+    setReceipt(null); // evita reusar el comprobante de otra orden
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const r = await fetch(`/api/pay/receipt?orderId=${encodeURIComponent(orderId)}`, {
+          cache: 'no-store',
+          headers: headers || {},
+        });
+        const d = await r.json().catch(() => null);
+        if (!alive) return;
+        if (d?.ok) {
+          setReceipt(d as PayReceipt);
+          if (d.businessName) setResolvedBusiness(String(d.businessName));
+          if (d.settled) setStep('settled');
+        }
+      } catch { /* si falla, el flujo normal de pago sigue disponible */ }
+      finally {
+        if (alive) setReceiptChecked(true);
+      }
+    })();
+    return () => { alive = false; };
+  }, [isOpen, orderId]);
 
   // ── H15: config de pago con Bunz (saldo vs deuda; si el negocio lo permite) ──
   useEffect(() => {
@@ -310,6 +381,8 @@ export function InAppPaySheet({
             canPayWithBunz: Boolean(d.canPayWithBunz),
             total: Number(d.total ?? 0),
           });
+          if (Number(d.total) > 0) setAmountTotalExtra(Number(d.total));
+          if (d.businessName) setResolvedBusiness(String(d.businessName));
           // Preferencia natural: si puede pagar todo con Bunz, ese es el método.
           if (d.canPayWithBunz && !methodTouchedRef.current) setMethod('bunz');
         } else if (alive && d && !d.ok && d.status === 409) {
@@ -422,11 +495,13 @@ export function InAppPaySheet({
 
   // Un solo paso: al abrir se prepara el intent (propina $0)
   useEffect(() => {
+    // Espera al comprobante: si la cuenta ya está liquidada no se crea intent.
+    if (!receiptChecked || receipt?.settled) return;
     if (isOpen && orderId && !clientSecret && !loadingSetup) {
       void startPayment(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, orderId, clientSecret]);
+  }, [isOpen, orderId, clientSecret, receiptChecked, receipt?.settled]);
 
   // Aplica una propina y reemplaza el intent (no cierra el pago)
   const applyTip = async (amount: number) => {
@@ -508,7 +583,7 @@ export function InAppPaySheet({
     <AnimatePresence>
       <PaySheetShell
         title="Paga tu cuenta"
-        subtitle={businessName || 'Tu consumo en el local'}
+        subtitle={resolvedBusiness || businessName || 'Tu consumo en el local'}
         onClose={onClose}
         overlay={
           <AnimatePresence>
@@ -951,6 +1026,108 @@ export function InAppPaySheet({
                 onSubmitted={() => onClose()}
               />
             </motion.div>
+          </div>
+        )}
+
+        {step === 'settled' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-y-auto pb-4">
+            <div className="flex flex-col items-center text-center pt-1">
+              <motion.div
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', damping: 14, stiffness: 260 }}
+                className="relative w-20 h-20 rounded-full flex items-center justify-center"
+                style={{
+                  background: 'radial-gradient(circle at 32% 26%, rgba(255,255,255,0.16), rgba(16,68,47,0.7) 62%, rgba(4,24,17,0.92))',
+                  border: '1px solid rgba(52,211,153,0.45)',
+                  boxShadow: '0 0 38px rgba(52,211,153,0.25)',
+                }}
+              >
+                <CheckCircle2 size={40} strokeWidth={2.6} className="text-emerald-400" />
+              </motion.div>
+              <h3 className="m-0 mt-3 text-[24px] font-black text-white leading-tight">Cuenta liquidada</h3>
+              <p className="m-0 mt-1 text-[11px] text-white/45 px-6">
+                Este pedido ya fue pagado. No necesitas volver a pagar.
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-3xl border border-white/12 bg-white/[0.06] backdrop-blur-2xl p-4 shadow-[0_24px_70px_-34px_rgba(16,185,129,0.55)]">
+              <div className="flex items-baseline justify-between gap-3">
+                <div>
+                  <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Total pagado</p>
+                  {receipt?.businessName && (
+                    <p className="m-0 mt-0.5 text-[11px] text-white/45">{receipt.businessName}</p>
+                  )}
+                </div>
+                <span className="text-[28px] leading-none font-black text-white tabular-nums">
+                  ${Number(receipt?.paid ?? receipt?.order?.total ?? 0).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {(receipt?.payments ?? []).map((pay) => {
+                  const meta = paymentMethodLabel(pay.method, pay.verificationMethod);
+                  return (
+                    <div
+                      key={pay.id}
+                      className="flex items-center justify-between gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5"
+                    >
+                      <span className="flex items-center gap-2 text-[12px] font-bold text-white/85 min-w-0">
+                        <span className="text-[15px]">{meta.icon}</span>
+                        <span className="truncate">{meta.label}</span>
+                        {Number(pay.tipAmount || 0) > 0 && (
+                          <span className="text-[9px] text-white/35 font-semibold">
+                            incl. propina ${Number(pay.tipAmount).toFixed(2)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[13px] font-black text-white tabular-nums shrink-0">
+                        ${Number(pay.amount || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
+                {(receipt?.payments?.length ?? 0) === 0 && (
+                  <p className="m-0 text-[11px] text-white/45">Pago registrado en caja por el negocio.</p>
+                )}
+              </div>
+
+              {(receipt?.items?.length ?? 0) > 0 && (
+                <>
+                  <p className="m-0 mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Detalle</p>
+                  <div className="mt-1.5 space-y-1.5">
+                    {(receipt?.items ?? []).map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-3 text-[12px] text-white/60">
+                        <span className="truncate">
+                          <span className="text-white/40">{item.quantity}×</span> {item.name}
+                        </span>
+                        <span className="tabular-nums shrink-0">${Number(item.totalPrice || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {Number(receipt?.order?.bunzPaid || 0) > 0 && (
+                <p className="m-0 mt-3 text-[10px] font-semibold text-violet-200/75">
+                  🐰 Incluye {Number(receipt?.order?.bunzPaid || 0).toFixed(0)} Bunz aplicados a esta cuenta.
+                </p>
+              )}
+
+              {receipt?.order?.createdAt && (
+                <p className="m-0 mt-2 text-[10px] text-white/25">
+                  {new Date(receipt.order.createdAt).toLocaleString('es-MX')}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 w-full rounded-2xl border border-white/15 bg-white/[0.08] py-3.5 text-[13px] font-black text-white active:scale-[0.99] transition-transform"
+            >
+              Cerrar
+            </button>
           </div>
         )}
 

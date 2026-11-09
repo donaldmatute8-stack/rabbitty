@@ -7,7 +7,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
 
-const FILTERS = ["Todos", "Ganado", "Gastado", "Comida", "Fitness", "Tecnología"];
+const FILTERS = ["Todos", "Ganado", "Gastado", "Pagos", "Comida", "Fitness", "Tecnología"];
 
 interface TxHistory {
   id: string;
@@ -17,6 +17,8 @@ interface TxHistory {
   type: string;
   date: string;
   icon: string;
+  currency?: 'BUNZ' | 'MXN';
+  detail?: string | null;
 }
 
 export default function HistoryPage() {
@@ -62,13 +64,18 @@ export default function HistoryPage() {
     }).catch(() => {});
   }, []);
 
-  const totalEarned = transactions.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '') || '0', 10), 0);
-  const totalSpent = transactions.filter(t => t.type === 'spent').reduce((s, t) => s + parseInt(t.amount.replace('-', '') || '0', 10), 0);
+  const bunzTx = transactions.filter(t => (t.currency ?? 'BUNZ') === 'BUNZ');
+  const totalEarned = bunzTx.filter(t => t.type === 'earned').reduce((s, t) => s + parseInt(t.amount.replace('+', '') || '0', 10), 0);
+  const totalSpent = bunzTx.filter(t => t.type === 'spent').reduce((s, t) => s + Math.abs(parseInt(t.amount.replace('-', '') || '0', 10)), 0);
+  const totalPaidMxn = transactions
+    .filter(t => t.currency === 'MXN')
+    .reduce((s, t) => s + Math.abs(parseFloat(t.amount.replace('-', '')) || 0), 0);
 
   const filteredTransactions = transactions.filter(tx => {
     if (activeFilter === 'Todos') return true;
-    if (activeFilter === 'Ganado') return tx.type === 'earned';
+    if (activeFilter === 'Ganado') return tx.type === 'earned' && (tx.currency ?? 'BUNZ') === 'BUNZ';
     if (activeFilter === 'Gastado') return tx.type === 'spent';
+    if (activeFilter === 'Pagos') return tx.currency === 'MXN';
     return tx.category === activeFilter;
   });
 
@@ -102,6 +109,19 @@ export default function HistoryPage() {
             </div>
             <span className="text-[24px] font-extrabold text-(--text-primary)">{totalSpent}</span>
             <span className="text-[13px] text-(--text-muted) ml-1">bunz</span>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="flex-1 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-3.5 py-3"
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[12px] text-sky-400 font-semibold">Pagado</span>
+            </div>
+            <span className="text-[24px] font-extrabold text-(--text-primary)">${totalPaidMxn.toFixed(0)}</span>
+            <span className="text-[13px] text-(--text-muted) ml-1">mxn</span>
           </motion.div>
         </div>
 
@@ -148,15 +168,19 @@ export default function HistoryPage() {
                   <div>
                     <h4 className="m-0 text-[16px] font-bold text-(--text-primary)">{tx.name}</h4>
                     <p className="m-0 text-[13px] text-(--text-muted) mt-0.5">
-                      {tx.category} — {new Date(tx.date).toLocaleDateString()}
+                      {tx.detail ? `${tx.detail} · ` : ''}{tx.category} — {new Date(tx.date).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-[16px] font-extrabold" style={{ color: tx.type === 'earned' ? "#4CAF50" : "var(--text-primary)" }}>
-                    {tx.amount}
+                    {tx.currency === 'MXN'
+                      ? `-$${Math.abs(parseFloat(tx.amount.replace('-', '')) || 0).toFixed(2)}`
+                      : tx.amount}
                   </span>
-                  <span className="text-[11px] text-[#AAA] font-semibold">bunz</span>
+                  <span className="text-[11px] text-[#AAA] font-semibold">
+                    {tx.currency === 'MXN' ? 'MXN' : 'bunz'}
+                  </span>
                 </div>
               </motion.div>
             ))

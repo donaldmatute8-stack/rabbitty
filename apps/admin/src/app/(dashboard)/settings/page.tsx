@@ -1065,6 +1065,22 @@ export default function SettingsPage() {
       ══════════════════════════════════════════════════════════════ */}
       {activeTab === "payments" && (
         <div className="space-y-6">
+          {/* Encabezado único: Stripe Connect y Mercado Pago viven en la MISMA
+              sección de cobros para que el afiliado los configure juntos. */}
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-pink-500/30 bg-pink-500/10">
+              <CreditCard className="h-5 w-5 text-pink-400" />
+            </span>
+            <div>
+              <h1 className="text-xl font-black text-white">Cobros y pasarelas de pago</h1>
+              <p className="text-xs text-gray-400 mt-0.5 max-w-2xl">
+                Todos los métodos digitales del negocio en un solo lugar: Stripe Connect
+                (tarjeta, Apple Pay y Google Pay) y Mercado Pago (saldo, tarjeta y meses sin
+                intereses). Bunz y el cobro en caja no requieren configuración aquí.
+              </p>
+            </div>
+          </div>
+
           <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-gray-900/60 to-black/80 p-6 backdrop-blur-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>

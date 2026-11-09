@@ -39,9 +39,8 @@ export default function PayBillPage() {
         total={0}
         businessName="Tu cuenta en el local"
         onPaid={() => {
-          // La liquidación llegó server-side (cashback incluido); llevamos al
-          // Rabbitter a su cartera para ver el movimiento.
-          setTimeout(() => router.replace('/profile/wallet'), 1800);
+          // Misma experiencia que el cobro desde el POS: nos quedamos en el
+          // módulo (rating incluido) en lugar de saltar a la cartera.
         }}
       />
     </div>
