@@ -27,6 +27,7 @@ interface Membership {
   currentPeriodEnd: string | null;
   noExpiration: boolean;
   membershipOrigin: string | null;
+  paymentProvider: string | null;
   giftNote: string | null;
   cancelAtPeriodEnd: boolean;
   planName: string | null;
@@ -149,6 +150,7 @@ export default function MembershipsPage() {
   const [tab, setTab] = useState<'mine' | 'discover'>('mine');
   const [celebrate, setCelebrate] = useState<{ planName?: string } | null>(null);
   const [activating, setActivating] = useState(false);
+  const [managing, setManaging] = useState(false);
   const dragControls = useDragControls();
 
   useEffect(() => {
@@ -265,6 +267,51 @@ export default function MembershipsPage() {
       .finally(() => { if (alive) setUsageLoading(false); });
     return () => { alive = false; };
   }, [historyOpen, active]);
+
+  const openBillingPortal = async () => {
+    if (!active) return;
+    setManaging(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/memberships/manage?subscriptionId=${encodeURIComponent(active.id)}`, { headers });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || 'No se pudo abrir el portal');
+      window.location.href = data.url;
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo abrir el portal', 'error');
+    } finally {
+      setManaging(false);
+    }
+  };
+
+  const cancelMembership = async () => {
+    if (!active) return;
+    const isPaid = active.paymentProvider === 'STRIPE';
+    const ok = window.confirm(
+      isPaid
+        ? '¿Cancelar la renovación? Conservarás el acceso hasta el final del periodo.'
+        : '¿Cancelar tu membresía? Perderás el acceso inmediatamente.',
+    );
+    if (!ok) return;
+    setManaging(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/memberships/manage', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId: active.id, action: 'cancel' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo cancelar');
+      showToast(isPaid ? 'Renovación cancelada' : 'Membresía cancelada', 'success');
+      await refreshMemberships();
+      setActive(null);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo cancelar', 'error');
+    } finally {
+      setManaging(false);
+    }
+  };
 
   return (
     <ProfileSubpageLayout title="Mis Membresías">
@@ -492,6 +539,29 @@ export default function MembershipsPage() {
                   </div>
                 )}
               </div>
+
+              {active.status === 'ACTIVE' && (
+                <div className="mt-4 flex w-[min(82vw,370px)] gap-2">
+                  {active.paymentProvider === 'STRIPE' && (
+                    <button
+                      type="button"
+                      onClick={openBillingPortal}
+                      disabled={managing}
+                      className="flex-1 rounded-xl border border-white/10 bg-white/[.06] py-2.5 text-[11px] font-bold text-white/75 disabled:opacity-50"
+                    >
+                      Gestionar pago
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={cancelMembership}
+                    disabled={managing}
+                    className="flex-1 rounded-xl border border-rose-500/25 bg-rose-500/10 py-2.5 text-[11px] font-bold text-rose-300 disabled:opacity-50"
+                  >
+                    {active.paymentProvider === 'STRIPE' ? 'Cancelar renovación' : 'Cancelar membresía'}
+                  </button>
+                </div>
+              )}
               </div>
                 </div>
               </div>

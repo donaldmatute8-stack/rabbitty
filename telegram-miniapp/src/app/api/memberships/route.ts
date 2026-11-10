@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
         currentPeriodEnd: membershipSubscriptions.currentPeriodEnd,
         noExpiration: membershipSubscriptions.noExpiration,
         membershipOrigin: membershipSubscriptions.membershipOrigin,
+        paymentProvider: membershipSubscriptions.paymentProvider,
         giftNote: membershipSubscriptions.giftNote,
         cancelAtPeriodEnd: membershipSubscriptions.cancelAtPeriodEnd,
         planName: membershipPlans.name,

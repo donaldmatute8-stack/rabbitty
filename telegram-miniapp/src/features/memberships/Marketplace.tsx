@@ -248,7 +248,7 @@ export default function MembershipMarketplace({
                 key={plan.id}
                 type="button"
                 onClick={() => open(plan)}
-                className="w-[220px] shrink-0 text-left active:scale-[0.98] transition-transform"
+                className="w-[190px] shrink-0 text-left active:scale-[0.98] transition-transform"
               >
                 <MembershipCard data={cardData(plan)} preview />
                 <div className="mt-2 flex items-center justify-between px-1">

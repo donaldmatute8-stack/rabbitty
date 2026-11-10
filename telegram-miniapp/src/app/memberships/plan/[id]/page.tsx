@@ -234,7 +234,7 @@ export default function MembershipPlanPage() {
           <p className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300">{error}</p>
         )}
 
-        <div className="sticky bottom-3 z-20">
+        <div className="sticky bottom-[calc(92px+env(safe-area-inset-bottom))] z-20">
           {plan.alreadySubscribed ? (
             <button
               type="button"
