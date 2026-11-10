@@ -135,7 +135,7 @@ export default function GamificationPage() {
           </PremiumHero>
 
           {/* Tabs */}
-          <div className="flex bg-(--bg-subtle) border border-(--border-subtle) rounded-xl p-1 mb-5">
+          <div className="mt-4 flex bg-(--bg-subtle) border border-(--border-subtle) rounded-xl p-1 mb-5">
             <button 
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');

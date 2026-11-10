@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -326,6 +327,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                   onClick={() => {
                     PlatformBridge.hapticFeedback('light');
                     setFeedbackType('FEEDBACK');
+                    onClose();
                     setFeedbackOpen(true);
                   }}
                   className="flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all active:scale-[0.98] group hover:bg-(--bg-pressed) cursor-pointer"
@@ -343,11 +345,15 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               </div>
             </div>
 
-            <FeedbackModal
-              isOpen={feedbackOpen}
-              onClose={() => setFeedbackOpen(false)}
-              initialType={feedbackType}
-            />
+            {typeof document !== 'undefined' &&
+              createPortal(
+                <FeedbackModal
+                  isOpen={feedbackOpen}
+                  onClose={() => setFeedbackOpen(false)}
+                  initialType={feedbackType}
+                />,
+                document.body,
+              )}
 
             {/* Bottom section: theme toggle + logout, perfectly vertically centered and compact */}
             <div 

@@ -108,7 +108,7 @@ export default function HistoryPage() {
         </PremiumHero>
 
         {/* Filters */}
-        <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
           {FILTERS.map((f) => (
             <button 
               key={f} 
@@ -127,7 +127,7 @@ export default function HistoryPage() {
         </div>
 
         {/* Feed List */}
-        <div className="flex flex-col gap-3">
+        <div className="mt-3 flex flex-col gap-3">
           {loading ? (
             <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
           ) : filteredTransactions.length === 0 ? (
