@@ -196,9 +196,10 @@ export async function grantReferralReward(args: GrantArgs): Promise<ReferralGran
       }
     }
 
-    // Un premio por referido y negocio, de por vida.
+    // Un premio por referido y negocio, de por vida. Un PENDING (bóveda sin saldo)
+    // sí se puede reintentar cuando el comercio recarga.
     const [already] = await db
-      .select({ id: membershipReferralRewards.id })
+      .select({ id: membershipReferralRewards.id, status: membershipReferralRewards.status })
       .from(membershipReferralRewards)
       .where(
         and(
@@ -207,7 +208,9 @@ export async function grantReferralReward(args: GrantArgs): Promise<ReferralGran
         ),
       )
       .limit(1);
-    if (already) return { status: "SKIPPED", reason: "ALREADY_REWARDED" };
+    if (already && already.status !== "PENDING") {
+      return { status: "SKIPPED", reason: "ALREADY_REWARDED" };
+    }
 
     const [monthlyRow] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -336,7 +339,17 @@ export async function grantReferralReward(args: GrantArgs): Promise<ReferralGran
           ledgerKey,
           grantedAt: new Date(),
         })
-        .onConflictDoNothing()
+        .onConflictDoUpdate({
+          target: [membershipReferralRewards.businessId, membershipReferralRewards.referredUserId],
+          set: {
+            status: "GRANTED",
+            value: amount,
+            reason: null,
+            ledgerKey,
+            grantedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        })
         .returning({ id: membershipReferralRewards.id });
 
       return {
