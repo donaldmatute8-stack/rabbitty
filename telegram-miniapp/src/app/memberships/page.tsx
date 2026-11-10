@@ -275,16 +275,18 @@ export default function MembershipsPage() {
       <AnimatePresence>
         {active && activeCard && (
           <motion.div
-            className="fixed inset-0 z-[100] overflow-y-auto"
+            className="fixed inset-0 z-[100]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setActive(null)} />
-            <div className="relative min-h-[100dvh] flex flex-col items-center justify-center px-4 pt-16 pb-10">
+
+            {/* Navegación fija: siempre visible */}
+            <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))]">
               <button
                 onClick={() => setActive(null)}
-                className="absolute top-4 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[.07] px-3 py-2 text-[11px] font-bold text-white/70 backdrop-blur-md active:scale-95 transition-all"
+                className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[.07] px-3 py-2 text-[11px] font-bold text-white/70 backdrop-blur-md active:scale-95 transition-all"
                 aria-label="Volver"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -294,12 +296,17 @@ export default function MembershipsPage() {
               </button>
               <button
                 onClick={() => setActive(null)}
-                className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full border border-white/10 bg-white/[.07] text-white/60 backdrop-blur-md flex items-center justify-center"
+                className="w-9 h-9 rounded-full border border-white/10 bg-white/[.07] text-white/60 backdrop-blur-md flex items-center justify-center"
                 aria-label="Cerrar"
               >
                 ✕
               </button>
+            </div>
 
+            {/* Contenido desplazable; el wrapper con my-auto centra cuando cabe */}
+            <div className="relative h-full overflow-y-auto">
+              <div className="min-h-full flex flex-col items-center px-4 pt-20 pb-8">
+                <div className="my-auto flex w-full flex-col items-center">
               <motion.div
                 drag="y"
                 dragConstraints={{ top: 0, bottom: 0 }}
@@ -312,7 +319,7 @@ export default function MembershipsPage() {
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.94, y: 16, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 160, damping: 20 }}
-                className="w-[min(92vw,420px)] touch-none"
+                className="w-[min(84vw,380px)] touch-none"
               >
                 <div className="mb-2 flex flex-col items-center gap-1">
                   <span className="h-1 w-10 rounded-full bg-white/25" />
@@ -343,7 +350,7 @@ export default function MembershipsPage() {
               </button>
 
               {/* Historial integrado: se despliega hacia abajo */}
-              <div className="w-[min(92vw,420px)] mt-3">
+              <div className="w-[min(84vw,380px)] mt-3">
                 <button
                   onClick={() => setHistoryOpen((v) => !v)}
                   className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-[12px] font-bold text-white/80"
@@ -377,7 +384,7 @@ export default function MembershipsPage() {
               </div>
 
               {/* Beneficios del ciclo */}
-              <div className="w-[min(92vw,420px)] mt-4 rounded-2xl border border-white/10 bg-white/[.035] p-3 space-y-2.5">
+              <div className="w-[min(84vw,380px)] mt-4 rounded-2xl border border-white/10 bg-white/[.035] p-3 space-y-2.5">
                 <p className="text-[10px] font-black uppercase tracking-wider text-white/50">Beneficios de este ciclo</p>
                 {active.entitlements.map((e) => {
                   const left = Math.max(0, e.quotaPerCycle - e.used);
@@ -396,6 +403,8 @@ export default function MembershipsPage() {
                     </div>
                   );
                 })}
+              </div>
+                </div>
               </div>
             </div>
           </motion.div>

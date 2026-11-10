@@ -36,6 +36,19 @@ const BENEFIT_LABEL: Record<BenefitType, string> = {
 };
 const RESET_LABEL: Record<Reset, string> = { DAILY: "Diario", WEEKLY: "Semanal", MONTHLY: "Mensual", FIXED: "Toda la vigencia" };
 
+const ACCENT_PRESETS = [
+  { name: "Neón 626", color: "#FF2D95" },
+  { name: "Uva", color: "#A855F7" },
+  { name: "Cian", color: "#22D3EE" },
+  { name: "Menta", color: "#34D399" },
+  { name: "Limón", color: "#EAB308" },
+  { name: "Fuego", color: "#F97316" },
+  { name: "Rubí", color: "#EF4444" },
+  { name: "Café", color: "#C2703D" },
+  { name: "Oro", color: "#D4AF37" },
+  { name: "Plata", color: "#94A3B8" },
+];
+
 const NICHE_PRESETS: Record<string, { label: string; detail: string; tagline: string }> = {
   cafe: { label: "Café", detail: "Solo en {business}", tagline: "UNA FAMILIA, MÁS BENEFICIOS" },
   restaurant: { label: "Restaurante", detail: "Solo en {business}", tagline: "MESA DE FAMILIA" },
@@ -525,10 +538,34 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
               />
             </label>
           </div>
-          <div className="flex items-center gap-3">
-            <label className="text-[11px] text-white/50">Color de acento</label>
-            <input type="color" value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} className="h-8 w-12 rounded bg-transparent cursor-pointer" />
-            <input className={cn(inputCls, "!w-28")} value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} />
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] text-white/50">Paleta del template</label>
+              <span className="text-[10px] text-white/35">{badgeColor.toUpperCase()}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ACCENT_PRESETS.map((p) => {
+                const active = badgeColor.toLowerCase() === p.color.toLowerCase();
+                return (
+                  <button
+                    key={p.color}
+                    type="button"
+                    title={p.name}
+                    onClick={() => setBadgeColor(p.color)}
+                    className={cn(
+                      "h-7 w-7 rounded-full border-2 transition-all active:scale-95",
+                      active ? "border-white scale-110" : "border-white/15 hover:border-white/40",
+                    )}
+                    style={{ background: p.color, boxShadow: active ? `0 0 12px ${p.color}99` : `0 0 6px ${p.color}44` }}
+                  />
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="color" value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} className="h-8 w-12 rounded bg-transparent cursor-pointer" />
+              <input className={cn(inputCls, "!w-32")} value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} />
+              <span className="text-[10px] text-white/35">Preset o color libre</span>
+            </div>
           </div>
           {coverImageUrl && (
             <img src={coverImageUrl} alt="" className="h-24 w-full object-cover rounded-lg border border-white/10" />
@@ -628,7 +665,7 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
         </div>
 
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 md:sticky md:top-0 self-start">
           <p className="text-[11px] font-black uppercase tracking-wider text-white/40">Preview de la tarjeta</p>
           <MembershipCard
             preview
