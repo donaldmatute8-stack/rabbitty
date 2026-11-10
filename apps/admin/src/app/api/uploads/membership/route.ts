@@ -44,7 +44,12 @@ export async function POST(req: NextRequest) {
     const filename = `${id}.${ext}`;
     await writeFile(path.join(dir, filename), Buffer.from(await file.arrayBuffer()));
 
-    const origin = req.nextUrl.origin;
+    const origin = (
+      process.env.ADMIN_PUBLIC_URL?.trim() ||
+      `${req.headers.get("x-forwarded-proto") ?? "https"}://${
+        req.headers.get("x-forwarded-host") ?? req.nextUrl.host
+      }`
+    ).replace(/\/$/, "");
     return NextResponse.json({
       success: true,
       url: `${origin}/api/uploads/membership/${filename}`,
