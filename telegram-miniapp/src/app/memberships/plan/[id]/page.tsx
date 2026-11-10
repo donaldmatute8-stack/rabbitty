@@ -152,7 +152,7 @@ export default function MembershipPlanPage() {
   return (
     <ProfileSubpageLayout title="Membresía">
       <div className="space-y-4 pb-6">
-        <div className="mx-auto w-[min(84vw,360px)]">
+        <div className="mx-auto w-[min(80vw,350px)]">
           <MembershipCard
             preview
             data={{
@@ -234,7 +234,7 @@ export default function MembershipPlanPage() {
           <p className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-300">{error}</p>
         )}
 
-        <div className="sticky bottom-[calc(92px+env(safe-area-inset-bottom))] z-20">
+        <div className="sticky bottom-[calc(92px+env(safe-area-inset-bottom))] z-20 -mx-4 bg-gradient-to-t from-[#070308] via-[#070308]/95 to-transparent px-4 pb-2 pt-4">
           {plan.alreadySubscribed ? (
             <button
               type="button"
