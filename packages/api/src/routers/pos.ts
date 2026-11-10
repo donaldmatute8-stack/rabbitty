@@ -1550,6 +1550,8 @@ export const posRouter = router({
       bunzToApply: z.number().int().min(0).default(0),
       // GAP 1: beneficios de membresía también en cobro con tarjeta / Rabbitty Pay
       entitlementIds: z.array(z.string().uuid()).max(5).optional(),
+      /** Ítems del carrito que son consumo del socio (MEMBER_CONSUMPTION). */
+      memberMenuItemIds: z.array(z.string()).max(50).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Compensaciones si la tx de la orden falla después de consumir beneficios
@@ -1607,6 +1609,7 @@ export const posRouter = router({
               items: itemRows.map((r) => ({ menuItemId: r.menuItemId, quantity: r.quantity, unitPrice: r.unitPrice })),
               customerId: input.customerId,
               entitlementIds: input.entitlementIds,
+              memberMenuItemIds: input.memberMenuItemIds,
               baseAmount: calcSubtotal,
             });
             membershipCompensations.push(...applied.compensations);
@@ -1938,6 +1941,8 @@ export const posRouter = router({
         // DISCOUNT_PCT, CREDIT_BALANCE). El server re-verifica propiedad y cuota —
         // el POS solo puede pedir, no forzar.
         entitlementIds: z.array(z.string().uuid()).max(5).optional(),
+        /** Ítems del carrito que son consumo del socio (MEMBER_CONSUMPTION). */
+        memberMenuItemIds: z.array(z.string()).max(50).optional(),
         // ── Propina + split DIVIDIDA (efectivo + Bunz) ──
         tip: z.number().min(0).max(5000).optional(),
         splitCash: z.number().min(0).optional(),
@@ -2120,10 +2125,8 @@ export const posRouter = router({
       }
 
       // ── GAP 1: beneficios de membresía aplicados a la venta ──
-      // INCLUDED_PRODUCT → 1 unidad gratis del platillo (debe ir en el carrito).
-      // DISCOUNT_PCT → % sobre el neto restante. CREDIT_BALANCE → pago parcial
-      // con el saldo del pase (jamás cubre el 100%: siempre queda el settle
-      // normal para que el cashback/CRM corran por su camino canónico).
+      // La lógica vive en membershipBenefits.ts (la misma que usa Rabbitty Pay):
+      // INCLUDED_PRODUCT, DISCOUNT_PCT, CREDIT_BALANCE y MEMBER_CONSUMPTION.
       let creditApplied = 0;
       // RP-2A: si el cierre atómico falla, se devuelven los beneficios ya
       // consumidos (crédito/cuota) para no cobrarle al cliente dos veces.
@@ -2132,126 +2135,27 @@ export const posRouter = router({
         if (!input.customerId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Vincula al Rabbitter antes de aplicar su beneficio de membresía." });
         }
-        const [branchRow] = await ctx.restaurantDb
-          .select({ restaurantId: branches.restaurantId })
-          .from(branches)
-          .where(eq(branches.id, ctx.branchId))
-          .limit(1);
-        const [restRow] = branchRow
-          ? await ctx.restaurantDb.select({ businessId: dbSchema.restaurants.businessId }).from(dbSchema.restaurants).where(eq(dbSchema.restaurants.id, branchRow.restaurantId)).limit(1)
-          : [];
-        const membershipBizId = restRow?.businessId ?? null;
-        let runningNet = r2(finalAmount);
-
-        for (const entId of input.entitlementIds) {
-          const [ent] = await ctx.coreDb
-            .select()
-            .from(coreMembershipEnts)
-            .where(eq(coreMembershipEnts.id, entId))
-            .limit(1);
-          if (!ent) continue;
-          const [sub] = await ctx.coreDb
-            .select()
-            .from(coreMembershipSubs)
-            .where(eq(coreMembershipSubs.id, ent.subscriptionId))
-            .limit(1);
-          if (!sub) continue;
-          if (sub.businessId !== membershipBizId) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "El beneficio no pertenece a este negocio." });
-          }
-          if (sub.userId !== input.customerId) {
-            throw new TRPCError({ code: "FORBIDDEN", message: "El beneficio no pertenece al cliente vinculado." });
-          }
-          if (sub.status !== "ACTIVE") {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "La membresía no está activa." });
-          }
-          if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: "La membresía está expirada." });
-          }
-          // Idempotencia por orden: si el mismo beneficio ya se aplicó a ESTA orden, skip
-          const [priorUse] = await ctx.coreDb
-            .select({ id: coreEntUsages.id })
-            .from(coreEntUsages)
-            .where(eq(coreEntUsages.idempotencyKey, `ord_${order.id}_ent_${ent.id}`))
-            .limit(1);
-          if (priorUse) continue;
-
-          let applied = 0;
-          if (ent.benefitType === "INCLUDED_PRODUCT" && ent.targetRefId) {
-            const freeItem = input.items.find((i) => i.menuItemId === ent.targetRefId);
-            if (!freeItem) {
-              throw new TRPCError({ code: "BAD_REQUEST", message: "El platillo incluido no está en la cuenta — agrégalo para usar el beneficio." });
-            }
-            applied = r2(freeItem.price); // 1 unidad
-          } else if (ent.benefitType === "DISCOUNT_PCT" && ent.discountPct != null) {
-            applied = r2(runningNet * (Number(ent.discountPct) / 100));
-          } else if (ent.benefitType === "CREDIT_BALANCE") {
-            const avail = Number(ent.creditBalance || 0);
-            applied = r2(Math.min(avail, Math.max(0, runningNet - 0.50)));
-            if (applied <= 0) {
-              throw new TRPCError({ code: "BAD_REQUEST", message: "El saldo de crédito de la membresía es insuficiente." });
-            }
-          } else {
-            continue; // OTROS tipos (EVENT_ACCESS, BULK_PACK) no impactan el ticket en F1
-          }
-
-          // Consumo atómico: cuota (o crédito) condicional — sin sobre-giro
-          if (ent.benefitType === "CREDIT_BALANCE") {
-            const res = await ctx.coreDb
-              .update(coreMembershipEnts)
-              .set({ creditBalance: sql`GREATEST(0, COALESCE(${coreMembershipEnts.creditBalance}, 0) - ${applied})` })
-              .where(and(eq(coreMembershipEnts.id, ent.id), sql`COALESCE(${coreMembershipEnts.creditBalance}, 0) >= ${applied}`))
-              .returning({ id: coreMembershipEnts.id });
-            if (res.length === 0) {
-              throw new TRPCError({ code: "CONFLICT", message: "El saldo de la membresía cambió — revisa y vuelve a aplicar." });
-            }
-            creditApplied = r2(creditApplied + applied);
-            membershipCompensations.push(() =>
-              ctx.coreDb
-                .update(coreMembershipEnts)
-                .set({
-                  creditBalance: sql`COALESCE(${coreMembershipEnts.creditBalance}, 0) + ${applied}`,
-                })
-                .where(eq(coreMembershipEnts.id, ent.id))
-            );
-          } else {
-            const res = await ctx.coreDb
-              .update(coreMembershipEnts)
-              .set({ currentUsageInCycle: sql`COALESCE(${coreMembershipEnts.currentUsageInCycle}, 0) + 1` })
-              .where(and(
-                eq(coreMembershipEnts.id, ent.id),
-                sql`COALESCE(${coreMembershipEnts.currentUsageInCycle}, 0) < COALESCE(${coreMembershipEnts.quotaPerCycle}, 2147483647)`
-              ))
-              .returning({ id: coreMembershipEnts.id });
-            if (res.length === 0) {
-              throw new TRPCError({ code: "CONFLICT", message: "El beneficio no tiene usos disponibles este ciclo." });
-            }
-            calculatedDiscount = r2(calculatedDiscount + applied);
-            finalAmount = r2(Math.max(0, finalAmount - applied));
-            membershipCompensations.push(async () => {
-              await ctx.coreDb
-                .update(coreMembershipEnts)
-                .set({
-                  currentUsageInCycle: sql`GREATEST(0, COALESCE(${coreMembershipEnts.currentUsageInCycle}, 0) - 1)`,
-                })
-                .where(eq(coreMembershipEnts.id, ent.id));
-              await ctx.coreDb
-                .delete(coreEntUsages)
-                .where(eq(coreEntUsages.idempotencyKey, `ord_${order.id}_ent_${ent.id}`));
-            });
-          }
-          runningNet = r2(Math.max(0, runningNet - applied));
-          // Registro de uso ligado a la orden (auditable + anti-doble)
-          await ctx.coreDb.insert(coreEntUsages).values({
-            entitlementId: ent.id,
-            subscriptionId: ent.subscriptionId,
-            branchId: ctx.branchId,
-            staffId: ctx.userId,
-            orderId: order.id,
-            quantityUsed: 1,
-            idempotencyKey: `ord_${order.id}_ent_${ent.id}`,
-          }).onConflictDoNothing();
-        }
+        const { applyMembershipBenefitsToOrder } = await import("../services/membershipBenefits");
+        const applied = await applyMembershipBenefitsToOrder({
+          coreDb: ctx.coreDb,
+          restaurantDb: ctx.restaurantDb,
+          branchId: ctx.branchId,
+          staffId: ctx.userId ?? null,
+          orderId: order.id,
+          items: input.items.map((i) => ({
+            menuItemId: i.menuItemId,
+            quantity: i.quantity,
+            unitPrice: i.price,
+          })),
+          customerId: input.customerId,
+          entitlementIds: input.entitlementIds,
+          memberMenuItemIds: input.memberMenuItemIds,
+          baseAmount: finalAmount,
+        });
+        membershipCompensations.push(...applied.compensations);
+        creditApplied = applied.creditApplied;
+        calculatedDiscount = r2(calculatedDiscount + applied.discount);
+        finalAmount = applied.finalAmount;
       }
       // fin GAP 1
 

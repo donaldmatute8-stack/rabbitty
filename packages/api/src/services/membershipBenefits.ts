@@ -43,6 +43,8 @@ export async function applyMembershipBenefitsToOrder(params: {
   items: Array<{ menuItemId: string; quantity: number; unitPrice: number }>;
   customerId?: string | null;
   entitlementIds?: string[];
+  /** Ítems del carrito que son consumo del socio (MEMBER_CONSUMPTION). */
+  memberMenuItemIds?: string[];
   /** Monto antes de impuestos sobre el que se calculan descuentos. */
   baseAmount: number;
 }): Promise<{
@@ -80,14 +82,27 @@ export async function applyMembershipBenefitsToOrder(params: {
     : [];
   const membershipBizId = restRow?.businessId ?? null;
 
+  // Se cargan y ordenan por prioridad: primero el consumo del socio (100%),
+  // luego productos incluidos, luego el % y al final el crédito. Así el 10%
+  // de los acompañantes se calcula sobre lo que queda, no al revés.
+  const loaded: any[] = [];
   for (const entId of params.entitlementIds) {
     const [ent] = await params.coreDb
       .select()
       .from(membershipEntitlements)
       .where(eq(membershipEntitlements.id, entId))
       .limit(1);
-    if (!ent) continue;
+    if (ent) loaded.push(ent);
+  }
+  const priority: Record<string, number> = {
+    MEMBER_CONSUMPTION: 0,
+    INCLUDED_PRODUCT: 1,
+    DISCOUNT_PCT: 2,
+    CREDIT_BALANCE: 3,
+  };
+  loaded.sort((a, b) => (priority[a.benefitType] ?? 9) - (priority[b.benefitType] ?? 9));
 
+  for (const ent of loaded) {
     const [sub] = await params.coreDb
       .select()
       .from(membershipSubscriptions)
@@ -149,7 +164,25 @@ export async function applyMembershipBenefitsToOrder(params: {
     if (priorUse) continue;
 
     let applied = 0;
-    if (ent.benefitType === "INCLUDED_PRODUCT" && ent.targetRefId) {
+    if (ent.benefitType === "MEMBER_CONSUMPTION") {
+      const marked = params.memberMenuItemIds ?? [];
+      if (marked.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Marca los artículos del socio para aplicar su consumo.",
+        });
+      }
+      const memberAmount = params.items
+        .filter((i) => marked.includes(i.menuItemId))
+        .reduce((sum, i) => sum + (Number(i.unitPrice) || 0) * (Number(i.quantity) || 1), 0);
+      if (memberAmount <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Los artículos marcados del socio no están en la cuenta.",
+        });
+      }
+      applied = Math.round(Math.min(runningNet, memberAmount) * 100) / 100;
+    } else if (ent.benefitType === "INCLUDED_PRODUCT" && ent.targetRefId) {
       const freeItem = params.items.find((i) => i.menuItemId === ent.targetRefId);
       if (!freeItem) {
         throw new TRPCError({

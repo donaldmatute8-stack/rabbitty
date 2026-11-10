@@ -21,7 +21,7 @@ import { miniappClient } from "../services/miniapp-client";
 const QR_WINDOW_SECONDS = 30;
 
 const benefitRuleSchema = z.object({
-  type: z.enum(["INCLUDED_PRODUCT", "DISCOUNT_PCT", "CREDIT_BALANCE", "EVENT_ACCESS", "BULK_PACK"]),
+  type: z.enum(["INCLUDED_PRODUCT", "DISCOUNT_PCT", "CREDIT_BALANCE", "EVENT_ACCESS", "BULK_PACK", "MEMBER_CONSUMPTION"]),
   targetRefId: z.string().optional(),
   quotaPerCycle: z.number().int().min(1),
   cycleResetType: z.enum(["DAILY", "WEEKLY", "MONTHLY", "FIXED"]),

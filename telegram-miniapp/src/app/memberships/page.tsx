@@ -43,6 +43,7 @@ const BENEFIT_LABEL: Record<string, string> = {
   CREDIT_BALANCE: 'Crédito',
   EVENT_ACCESS: 'Acceso a evento',
   BULK_PACK: 'Bolsa de consumos',
+  MEMBER_CONSUMPTION: '1 café por visita',
 };
 const RESET_LABEL: Record<string, string> = { DAILY: 'hoy', WEEKLY: 'esta semana', MONTHLY: 'este mes', FIXED: 'en total' };
 const STATUS_LABEL: Record<string, string> = {

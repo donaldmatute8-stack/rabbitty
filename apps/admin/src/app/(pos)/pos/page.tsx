@@ -133,6 +133,8 @@ export default function PosPage() {
   // ── GAP 1: beneficios de membresía seleccionables al cobrar ──
   const posBizCtx = trpc.memberships.myBusinessForContext.useQuery(undefined, { staleTime: 5 * 60_000 });
   const [selectedBenefitIds, setSelectedBenefitIds] = useState<string[]>([]);
+  // MEMBER_CONSUMPTION: ítems del carrito que son consumo del socio.
+  const [memberMenuItemIds, setMemberMenuItemIds] = useState<string[]>([]);
   const [cashReceived, setCashReceived] = useState<string>("");
   const [isCharging, setIsCharging] = useState(false);
   const [paidTicketData, setPaidTicketData] = useState<TicketData | null>(null);
@@ -1755,6 +1757,7 @@ export default function PosPage() {
           bunzToApply: 0,
           // GAP 1: mismos beneficios de membresía que el cobro directo
           entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
+          memberMenuItemIds: memberMenuItemIds.length > 0 ? memberMenuItemIds : undefined,
         });
         stripeIntentId.current = charge.intentId;
         setStripePaid(false);
@@ -1788,6 +1791,7 @@ export default function PosPage() {
           })),
           // GAP 1: beneficios de membresía seleccionados en el modal de cobro
           entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
+          memberMenuItemIds: memberMenuItemIds.length > 0 ? memberMenuItemIds : undefined,
           // ── Propina (opcional) + split DIVIDIDA (efectivo + Bunz) ──
           tip: Number(posTip || 0),
           splitCash: splitOverride ? splitOverride.cash : pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
@@ -1831,6 +1835,7 @@ export default function PosPage() {
         );
         setLastPaidOrderId(checkoutResult.orderId ?? null);
         setSelectedBenefitIds([]); // beneficios ya consumidos y ligados al ticket
+        setMemberMenuItemIds([]);
         return;
       }
     } catch (err: any) {
@@ -3369,6 +3374,8 @@ export default function PosPage() {
                   cart={cart}
                   selected={selectedBenefitIds}
                   onToggle={(id) => setSelectedBenefitIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])}
+                  memberItemIds={memberMenuItemIds}
+                  onMemberItemsChange={setMemberMenuItemIds}
                 />
               )}
 
@@ -5491,6 +5498,7 @@ export default function PosPage() {
                   // crear un segundo pedido si el cajero sigue tocando COBRAR.
                   setCart([]);
                   setSelectedBenefitIds([]);
+                  setMemberMenuItemIds([]);
                   refetchActiveTabs();
                 } catch (err: any) {
                   toast.error(err?.message || "Error al despachar la cuenta");
@@ -5915,12 +5923,16 @@ function BenefitsPanel({
   cart,
   selected,
   onToggle,
+  memberItemIds,
+  onMemberItemsChange,
 }: {
   businessId: string;
   customerId: string;
-  cart: Array<{ menuItemId: string; price: number; quantity: number } & { name?: string }>;
+  cart: Array<{ menuItemId: string; price: number; quantity: number; name?: string }>;
   selected: string[];
   onToggle: (id: string) => void;
+  memberItemIds: string[];
+  onMemberItemsChange: (ids: string[]) => void;
 }) {
   const benefits = trpc.memberships.getMembershipBenefits.useQuery(
     { businessId, customerId },
@@ -5932,7 +5944,9 @@ function BenefitsPanel({
       // Solo es aplicable si el platillo incluido está en el carrito actual
       return b.targetRefId && cart.some((i) => i.menuItemId === b.targetRefId);
     }
-    return b.benefitType === "DISCOUNT_PCT" || b.benefitType === "CREDIT_BALANCE";
+    return b.benefitType === "DISCOUNT_PCT"
+      || b.benefitType === "CREDIT_BALANCE"
+      || b.benefitType === "MEMBER_CONSUMPTION";
   });
 
   if (rows.length === 0) return null;
@@ -5944,8 +5958,16 @@ function BenefitsPanel({
     }
     if (b.benefitType === "DISCOUNT_PCT") return `${b.discountPct}% de descuento`;
     if (b.benefitType === "CREDIT_BALANCE") return `Saldo $${(b.creditBalance ?? 0).toFixed(2)} como pago`;
+    if (b.benefitType === "MEMBER_CONSUMPTION") return "Consumo del socio";
     return b.benefitType;
   };
+
+  const memberSelected = rows.some(
+    (b) => b.benefitType === "MEMBER_CONSUMPTION" && selected.includes(b.entitlementId),
+  );
+  const uniqueItems = Array.from(
+    new Map(cart.map((i) => [i.menuItemId, i])).values(),
+  );
 
   return (
     <div className="rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 space-y-2">
@@ -5955,13 +5977,19 @@ function BenefitsPanel({
       {rows.map((b: BenefitRow) => {
         const isSel = selected.includes(b.entitlementId);
         const exhausted = b.benefitType !== "CREDIT_BALANCE" && (b.remaining ?? 0) <= 0;
-        const dup = selected.filter((id) => id === b.entitlementId).length > 1;
-        void dup;
         return (
           <button
             key={b.entitlementId}
             type="button"
-            onClick={() => { if (!exhausted) onToggle(b.entitlementId); }}
+            onClick={() => {
+              if (exhausted) return;
+              onToggle(b.entitlementId);
+              if (b.benefitType === "MEMBER_CONSUMPTION") {
+                onMemberItemsChange(
+                  isSel ? [] : Array.from(new Set(cart.map((i) => i.menuItemId))),
+                );
+              }
+            }}
             className={`w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[11px] font-bold border transition-all cursor-pointer ${
               isSel
                 ? "bg-amber-500/25 border-amber-400 text-white"
@@ -5980,6 +6008,41 @@ function BenefitsPanel({
           </button>
         );
       })}
+
+      {memberSelected && (
+        <div className="rounded-xl bg-white/5 border border-white/10 p-2 space-y-1">
+          <p className="text-[9px] font-black uppercase tracking-wider text-amber-300/80">
+            Artículos del socio
+          </p>
+          {uniqueItems.map((i) => {
+            const on = memberItemIds.includes(i.menuItemId);
+            return (
+              <label
+                key={i.menuItemId}
+                className="flex items-center gap-2 text-[10px] text-gray-200 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() =>
+                    onMemberItemsChange(
+                      on
+                        ? memberItemIds.filter((x) => x !== i.menuItemId)
+                        : [...memberItemIds, i.menuItemId],
+                    )
+                  }
+                />
+                <span className="flex-1">{i.name || "Producto"}</span>
+                <span className="text-gray-400">${(i.price * i.quantity).toFixed(2)}</span>
+              </label>
+            );
+          })}
+          <p className="text-[9px] text-gray-400 leading-snug">
+            Los marcados van sin costo; el resto recibe el descuento de acompañantes.
+          </p>
+        </div>
+      )}
+
       <p className="text-[9px] text-gray-400 leading-snug">El total se ajusta automáticamente al liquidar. Los usos quedan ligados al ticket.</p>
     </div>
   );
