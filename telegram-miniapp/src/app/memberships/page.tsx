@@ -284,19 +284,40 @@ export default function MembershipsPage() {
             <div className="relative min-h-[100dvh] flex flex-col items-center justify-center px-4 pt-16 pb-10">
               <button
                 onClick={() => setActive(null)}
-                className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center"
+                className="absolute top-4 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[.07] px-3 py-2 text-[11px] font-bold text-white/70 backdrop-blur-md active:scale-95 transition-all"
+                aria-label="Volver"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+                Volver
+              </button>
+              <button
+                onClick={() => setActive(null)}
+                className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full border border-white/10 bg-white/[.07] text-white/60 backdrop-blur-md flex items-center justify-center"
                 aria-label="Cerrar"
               >
                 ✕
               </button>
 
               <motion.div
+                drag="y"
+                dragConstraints={{ top: 0, bottom: 0 }}
+                dragElastic={{ top: 0, bottom: 0.55 }}
+                onDragEnd={(_, info) => {
+                  if (info.offset.y > 110 || info.velocity.y > 700) setActive(null);
+                }}
+                whileDrag={{ scale: 0.985 }}
                 initial={{ scale: 0.92, y: 24, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.94, y: 16, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 160, damping: 20 }}
-                className="w-[min(92vw,420px)]"
+                className="w-[min(92vw,420px)] touch-none"
               >
+                <div className="mb-2 flex flex-col items-center gap-1">
+                  <span className="h-1 w-10 rounded-full bg-white/25" />
+                  <span className="text-[10px] text-white/35">Desliza hacia abajo para cerrar</span>
+                </div>
                 <MembershipCard
                   data={activeCard}
                   flipped={flipped}
