@@ -321,6 +321,19 @@ export default function PosPage() {
     setSelectedBenefitIds([]);
     memberSeenRef.current = new Set();
   };
+
+  // Membresía = 1 artículo por visita. Si ya había una cuenta con varios,
+  // se conserva el primero y el cajero puede eliminarlo para elegir otro.
+  const enforceMembershipCartLimit = () => {
+    setCart((prev) => {
+      if (prev.length === 0) return prev;
+      if (prev.length === 1 && prev[0].quantity === 1) return prev;
+      return [{ ...prev[0], quantity: 1 }];
+    });
+    if (cart.length > 1) {
+      toast.info("Membresía: solo se conserva el primer artículo. Elimínalo si quieres otro.");
+    }
+  };
   const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
   const [cardFlowChoice, setCardFlowChoice] = useState<"stripe" | "external" | null>(null);
   const stripeReady = Boolean(stripeStatus?.data?.chargesEnabled);
@@ -663,6 +676,7 @@ export default function PosPage() {
 
               setDetectedMembership(pass);
               setMembershipModalOpen(true);
+              enforceMembershipCartLimit();
 
               // Escaneo DESPUÉS del cobro: se vincula al ticket ya pagado y se
               // actualiza el ticket virtual con el bloque de membresía.
@@ -941,6 +955,7 @@ export default function PosPage() {
     const rows = memberBenefitsForBanner.data ?? [];
     if (!rows.length) return;
     const first = rows[0] as any;
+    enforceMembershipCartLimit();
     setDetectedMembership({
       subscriptionId: first.subscriptionId,
       userId: selectedRabbitter.id,
@@ -948,6 +963,9 @@ export default function PosPage() {
       planName: first.planName,
       badgeColor: first.badgeColor,
       coverImageUrl: first.coverImageUrl,
+      cardNiche: first.cardNiche,
+      cardDetail: first.cardDetail,
+      cardTagline: first.cardTagline,
       businessName: ticketContext?.restaurant?.name ?? "",
       noExpiration: first.noExpiration,
       currentPeriodEnd: first.currentPeriodEnd,
@@ -1583,6 +1601,10 @@ export default function PosPage() {
   }, [menuItems, activeCategory, search]);
 
   const addToCart = (item: any) => {
+    if (detectedMembership && cart.length >= 1) {
+      toast.info("Membresía: solo 1 artículo por visita. Elimina el actual para cambiarlo.");
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((i) => i.menuItemId === item.id);
       if (existing) {
@@ -1601,6 +1623,10 @@ export default function PosPage() {
   };
 
   const updateQuantity = (id: string, delta: number) => {
+    if (detectedMembership && delta > 0) {
+      toast.info("Membresía: solo 1 artículo por visita.");
+      return;
+    }
     setCart((prev) => prev.map((i) => {
       if (i.id === id) {
         const newQ = i.quantity + delta;
@@ -3988,6 +4014,9 @@ export default function PosPage() {
                   transferableLabel: "Intransferible",
                   heroImageUrl: detectedMembership.coverImageUrl,
                   memberName: detectedMembership.memberName,
+                  niche: detectedMembership.cardNiche,
+                  detail: detectedMembership.cardDetail,
+                  tagline: detectedMembership.cardTagline,
                   accentColor: detectedMembership.badgeColor,
                 }}
               />

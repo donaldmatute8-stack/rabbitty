@@ -36,6 +36,17 @@ const BENEFIT_LABEL: Record<BenefitType, string> = {
 };
 const RESET_LABEL: Record<Reset, string> = { DAILY: "Diario", WEEKLY: "Semanal", MONTHLY: "Mensual", FIXED: "Toda la vigencia" };
 
+const NICHE_PRESETS: Record<string, { label: string; detail: string; tagline: string }> = {
+  cafe: { label: "Café", detail: "Solo en {business}", tagline: "UNA FAMILIA, MÁS BENEFICIOS" },
+  restaurant: { label: "Restaurante", detail: "Solo en {business}", tagline: "MESA DE FAMILIA" },
+  gym: { label: "Gym / Fitness", detail: "Solo en {business}", tagline: "ENTRENA EN FAMILIA" },
+  bakery: { label: "Panadería", detail: "Solo en {business}", tagline: "HECHO EN CASA" },
+  bar: { label: "Bar", detail: "Solo en {business}", tagline: "LA NOCHE ES NUESTRA" },
+  beauty: { label: "Belleza / Spa", detail: "Solo en {business}", tagline: "TU MOMENTO" },
+  retail: { label: "Retail / Tienda", detail: "Solo en {business}", tagline: "MIEMBROS PRIMERO" },
+  other: { label: "Otro", detail: "Solo en {business}", tagline: "UNA FAMILIA, MÁS BENEFICIOS" },
+};
+
 const inputCls = "w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-pink-500/60";
 
 export default function MembershipsPage() {
@@ -48,6 +59,7 @@ export default function MembershipsPage() {
   const [editPlan, setEditPlan] = useState<null | {
     planId: string; name: string; description: string | null; price: number; interval: Interval; rules: RuleDraft[];
     coverImageUrl?: string | null; badgeColor?: string | null; maxMembersLimit?: number | null;
+    cardNiche?: string | null; cardDetail?: string | null; cardTagline?: string | null;
   }>(null);
 
   // GAP 7/8: revocación de pagadas + renovación de caja
@@ -184,6 +196,9 @@ export default function MembershipsPage() {
                           coverImageUrl: plan.coverImageUrl ?? null,
                           badgeColor: plan.badgeColor ?? "#FF2D95",
                           maxMembersLimit: latest.maxMembersLimit ?? null,
+                          cardNiche: plan.cardNiche ?? "other",
+                          cardDetail: plan.cardDetail ?? null,
+                          cardTagline: plan.cardTagline ?? null,
                           rules: ((latest.benefitRules as RuleDraft[]) ?? []).map((r) => ({
                             type: r.type,
                             quotaPerCycle: String(r.quotaPerCycle ?? 1),
@@ -375,6 +390,7 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
     planId: string; name: string; description: string | null;
     price: number; interval: Interval; rules: RuleDraft[];
     coverImageUrl?: string | null; badgeColor?: string | null; maxMembersLimit?: number | null;
+    cardNiche?: string | null; cardDetail?: string | null; cardTagline?: string | null;
   } | null;
   onClose: () => void;
   onDone: () => void;
@@ -388,6 +404,9 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
   const [coverImageUrl, setCoverImageUrl] = useState(editPlan?.coverImageUrl ?? "");
   const [badgeColor, setBadgeColor] = useState(editPlan?.badgeColor ?? "#FF2D95");
   const [maxMembers, setMaxMembers] = useState(editPlan?.maxMembersLimit ? String(editPlan.maxMembersLimit) : "");
+  const [cardNiche, setCardNiche] = useState(editPlan?.cardNiche ?? "other");
+  const [cardDetail, setCardDetail] = useState(editPlan?.cardDetail ?? "");
+  const [cardTagline, setCardTagline] = useState(editPlan?.cardTagline ?? "");
   const [uploading, setUploading] = useState(false);
 
   const create = trpc.memberships.createPlan.useMutation({
@@ -427,6 +446,14 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
 
   // GAP 6: catálogo para el picker de platillo incluido
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({});
+
+  const applyNiche = (niche: string) => {
+    setCardNiche(niche);
+    const preset = NICHE_PRESETS[niche];
+    if (!preset) return;
+    if (!cardDetail.trim()) setCardDetail(preset.detail.replace("{business}", businessName));
+    if (!cardTagline.trim()) setCardTagline(preset.tagline);
+  };
 
   const submitRules = () => rules.map((r) => ({
     type: r.type,
@@ -508,6 +535,32 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
           )}
         </div>
 
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+          <p className="text-xs text-white/50">Diseño de la tarjeta</p>
+          <div className="grid grid-cols-2 gap-2">
+            <select className={inputCls} value={cardNiche} onChange={(e) => applyNiche(e.target.value)}>
+              {Object.entries(NICHE_PRESETS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            <input
+              className={inputCls}
+              placeholder="Texto extra (ej. Abierto de 8 a 22)"
+              value={cardDetail}
+              onChange={(e) => setCardDetail(e.target.value)}
+            />
+          </div>
+          <input
+            className={inputCls}
+            placeholder="Frase inferior (ej. UNA FAMILIA, MÁS BENEFICIOS)"
+            value={cardTagline}
+            onChange={(e) => setCardTagline(e.target.value)}
+          />
+          <p className="text-[10px] text-white/35">
+            El icono cambia por nicho. El texto extra y la frase inferior son libres para el tenant.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <p className="text-xs text-white/50">Beneficios</p>
           {rules.map((r, i) => (
@@ -586,8 +639,10 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
               validityLabel: "Vigencia Indefinida",
               membersLabel: maxMembers ? `Hasta ${maxMembers} miembros` : "Miembros ilimitados",
               transferableLabel: "Intransferible",
-              tagline: "Una familia, más beneficios",
-              heroImageUrl: coverImageUrl || "/memberships/626/bunnyFamily.png",
+              tagline: cardTagline || "Una familia, más beneficios",
+              niche: cardNiche,
+              detail: cardDetail || undefined,
+              heroImageUrl: coverImageUrl || "/rabbitty-logo.png",
               accentColor: badgeColor,
             }}
           />
@@ -601,7 +656,7 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
           className="w-full"
           disabled={(isEdit ? update.isPending : create.isPending) || name.trim().length < 2}
           onClick={() => isEdit
-            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [], coverImageUrl: coverImageUrl.trim() || null, badgeColor, maxMembersLimit: maxMembers ? Number(maxMembers) : undefined })
+            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [], coverImageUrl: coverImageUrl.trim() || null, badgeColor, maxMembersLimit: maxMembers ? Number(maxMembers) : undefined, cardNiche, cardDetail: cardDetail.trim() || null, cardTagline: cardTagline.trim() || null })
             : create.mutate({
                 businessId,
                 name: name.trim(),
@@ -614,6 +669,9 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
                 coverImageUrl: coverImageUrl.trim() || undefined,
                 badgeColor,
                 maxMembersLimit: maxMembers ? Number(maxMembers) : undefined,
+                cardNiche,
+                cardDetail: cardDetail.trim() || undefined,
+                cardTagline: cardTagline.trim() || undefined,
               })}
         >
           {isEdit ? "Guardar como nueva versión" : "Crear plan"}

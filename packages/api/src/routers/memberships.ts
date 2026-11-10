@@ -605,6 +605,9 @@ export const membershipsRouter = router({
         { message: "coverImageUrl debe ser una URL http(s) o una ruta que empiece por /" },
       ).optional(),
       badgeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+      cardNiche: z.string().max(40).optional(),
+      cardDetail: z.string().max(120).optional(),
+      cardTagline: z.string().max(80).optional(),
       priceFiat: z.number().min(0),
       currency: z.string().length(3).default("MXN"),
       billingInterval: intervalSchema,
@@ -624,6 +627,9 @@ export const membershipsRouter = router({
           description: input.description,
           coverImageUrl: input.coverImageUrl,
           badgeColor: input.badgeColor,
+          cardNiche: input.cardNiche || "other",
+          cardDetail: input.cardDetail || null,
+          cardTagline: input.cardTagline || null,
         }).returning();
         const [version] = await tx.insert(membershipPlanVersions).values({
           planId: plan.id,
@@ -648,6 +654,9 @@ export const membershipsRouter = router({
       isActive: z.boolean().optional(),
       coverImageUrl: z.string().max(500).nullable().optional(),
       badgeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+      cardNiche: z.string().max(40).optional(),
+      cardDetail: z.string().max(120).nullable().optional(),
+      cardTagline: z.string().max(80).nullable().optional(),
       priceFiat: z.number().min(0),
       billingInterval: intervalSchema,
       benefitRules: z.array(benefitRuleSchema).min(1),
@@ -685,6 +694,13 @@ export const membershipsRouter = router({
           ? plan.coverImageUrl
           : (input.coverImageUrl?.trim() || null),
         badgeColor: input.badgeColor ?? plan.badgeColor,
+        cardNiche: input.cardNiche ?? plan.cardNiche,
+        cardDetail: input.cardDetail === undefined
+          ? plan.cardDetail
+          : (input.cardDetail?.trim() || null),
+        cardTagline: input.cardTagline === undefined
+          ? plan.cardTagline
+          : (input.cardTagline?.trim() || null),
         updatedAt: new Date(),
       }).where(eq(membershipPlans.id, plan.id));
 
@@ -894,6 +910,9 @@ export const membershipsRouter = router({
           planName: s.plan?.name ?? "Cortesía 🎁",
           badgeColor: s.plan?.badgeColor ?? null,
           coverImageUrl: s.plan?.coverImageUrl ?? null,
+          cardNiche: s.plan?.cardNiche ?? "other",
+          cardDetail: s.plan?.cardDetail ?? null,
+          cardTagline: s.plan?.cardTagline ?? null,
           maxMembersLimit: s.version?.maxMembersLimit ?? null,
           noExpiration: s.sub.noExpiration,
           currentPeriodEnd: s.sub.currentPeriodEnd,
@@ -1018,6 +1037,9 @@ export const membershipsRouter = router({
               planName: membershipPlans.name,
               badgeColor: membershipPlans.badgeColor,
               coverImageUrl: membershipPlans.coverImageUrl,
+              cardNiche: membershipPlans.cardNiche,
+              cardDetail: membershipPlans.cardDetail,
+              cardTagline: membershipPlans.cardTagline,
               priceFiat: membershipPlanVersions.priceFiat,
               billingInterval: membershipPlanVersions.billingInterval,
               maxMembersLimit: membershipPlanVersions.maxMembersLimit,
@@ -1058,6 +1080,9 @@ export const membershipsRouter = router({
         planName: planRow?.planName ?? "Cortesía",
         badgeColor: planRow?.badgeColor ?? null,
         coverImageUrl: planRow?.coverImageUrl ?? null,
+        cardNiche: planRow?.cardNiche ?? "other",
+        cardDetail: planRow?.cardDetail ?? null,
+        cardTagline: planRow?.cardTagline ?? null,
         priceFiat: planRow?.priceFiat ?? null,
         billingInterval: planRow?.billingInterval ?? null,
         maxMembersLimit: planRow?.maxMembersLimit ?? null,

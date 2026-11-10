@@ -32,6 +32,9 @@ interface Membership {
   planDescription: string | null;
   badgeColor: string | null;
   coverImageUrl: string | null;
+  cardNiche: string | null;
+  cardDetail: string | null;
+  cardTagline: string | null;
   businessName: string;
   businessLogoUrl: string | null;
   maxMembersLimit: number | null;
@@ -121,7 +124,9 @@ function cardData(m: Membership, memberName: string | null) {
     validityLabel: validity,
     membersLabel: m.maxMembersLimit ? `Hasta ${m.maxMembersLimit} miembros` : 'Miembros ilimitados',
     transferableLabel: 'Intransferible',
-    tagline: 'Una familia, más beneficios',
+    tagline: m.cardTagline || 'Una familia, más beneficios',
+    niche: m.cardNiche,
+    detail: m.cardDetail,
     heroImageUrl: m.coverImageUrl,
     memberName,
     memberSince: since ? since.toUpperCase() : null,
@@ -276,7 +281,7 @@ export default function MembershipsPage() {
             exit={{ opacity: 0 }}
           >
             <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setActive(null)} />
-            <div className="relative min-h-full flex flex-col items-center justify-start p-4 pt-10 pb-8">
+            <div className="relative min-h-full flex flex-col items-center justify-center p-4 py-8">
               <button
                 onClick={() => setActive(null)}
                 className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center"
@@ -290,7 +295,7 @@ export default function MembershipsPage() {
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.94, y: 16, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 160, damping: 20 }}
-                className="w-[min(88vw,380px)]"
+                className="w-[min(92vw,420px)]"
               >
                 <MembershipCard
                   data={activeCard}
@@ -308,40 +313,22 @@ export default function MembershipsPage() {
                 />
               </motion.div>
 
-              <p className="text-[12px] text-white/60 mt-3">
-                {flipped ? 'Toca la tarjeta para volver' : 'Toca la tarjeta para ver tu QR'}
+              <button
+                onClick={() => setFlipped((v) => !v)}
+                className="text-[12px] text-white/60 mt-3 underline-offset-4 hover:underline"
+              >
+                {flipped ? 'Toca para volver al frente' : 'Toca la tarjeta para ver tu QR'}
                 {flipped && pass.token ? ` · se renueva en ${pass.seconds}s` : ''}
-              </p>
+              </button>
 
-              {/* Beneficios del ciclo */}
-              <div className="w-[min(88vw,380px)] mt-4 rounded-2xl border border-white/10 bg-white/[.035] p-3 space-y-2.5">
-                <p className="text-[10px] font-black uppercase tracking-wider text-white/50">Beneficios de este ciclo</p>
-                {active.entitlements.map((e) => {
-                  const left = Math.max(0, e.quotaPerCycle - e.used);
-                  const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
-                  return (
-                    <div key={e.id}>
-                      <div className="flex items-center justify-between text-[12px] text-white/85 mb-1">
-                        <span className="font-semibold">
-                          {BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}
-                        </span>
-                        <span className="text-white/45">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden bg-white/10">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${active.badgeColor || '#E91E63'}, #FF2E93)` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Historial */}
-              <div className="w-[min(88vw,380px)] mt-3">
+              {/* Historial integrado: se despliega hacia abajo */}
+              <div className="w-[min(92vw,420px)] mt-3">
                 <button
                   onClick={() => setHistoryOpen((v) => !v)}
-                  className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 text-[12px] font-bold text-white/80"
+                  className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-[12px] font-bold text-white/80"
                 >
-                  {historyOpen ? 'Ocultar historial de uso' : 'Ver historial de uso'}
+                  <span>Historial de uso</span>
+                  <span className="text-white/40">{historyOpen ? '▲' : '▼'}</span>
                 </button>
                 {historyOpen && (
                   <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[220px] overflow-y-auto">
@@ -366,6 +353,28 @@ export default function MembershipsPage() {
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Beneficios del ciclo */}
+              <div className="w-[min(92vw,420px)] mt-4 rounded-2xl border border-white/10 bg-white/[.035] p-3 space-y-2.5">
+                <p className="text-[10px] font-black uppercase tracking-wider text-white/50">Beneficios de este ciclo</p>
+                {active.entitlements.map((e) => {
+                  const left = Math.max(0, e.quotaPerCycle - e.used);
+                  const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
+                  return (
+                    <div key={e.id}>
+                      <div className="flex items-center justify-between text-[12px] text-white/85 mb-1">
+                        <span className="font-semibold">
+                          {BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}
+                        </span>
+                        <span className="text-white/45">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden bg-white/10">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${active.badgeColor || '#E91E63'}, #FF2E93)` }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </motion.div>

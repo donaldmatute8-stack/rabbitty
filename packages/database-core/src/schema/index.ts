@@ -1045,6 +1045,12 @@ export const membershipPlans = pgTable("membership_plans", {
   description: text("description"),
   coverImageUrl: text("coverImageUrl"),
   badgeColor: text("badgeColor").default("#E91E63").notNull(),
+  /** Nicho para el icono de la tarjeta: cafe, restaurant, gym, bakery… */
+  cardNiche: text("cardNiche").default("other").notNull(),
+  /** Texto extra de la barra del negocio (a elección del tenant). */
+  cardDetail: text("cardDetail"),
+  /** Frase inferior de la tarjeta (a elección del tenant). */
+  cardTagline: text("cardTagline"),
   isActive: boolean("isActive").default(true).notNull(),
   currentVersionId: fkIdOpt("currentVersionId"), // FK set after insert to avoid circular
   ...timestamps,

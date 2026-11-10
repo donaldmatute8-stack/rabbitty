@@ -14,6 +14,8 @@ export type MembershipCardData = {
   tagline?: string | null;
   heroImageUrl?: string | null;
   logoUrl?: string | null;
+  niche?: string | null;
+  detail?: string | null;
   memberName?: string | null;
   memberSince?: string | null;
   accentColor?: string | null;
@@ -33,7 +35,7 @@ type Props = {
 };
 
 const DEFAULT_ACCENT = "#FF2D95";
-const DEFAULT_HERO = "/memberships/626/bunnyFamily.png";
+const DEFAULT_HERO = "/rabbitty-logo.png";
 
 /** #RRGGBB → rgba(r,g,b,a). Si no es hex, devuelve el color tal cual. */
 function rgba(hex: string, alpha: number): string {
@@ -72,6 +74,10 @@ export function MembershipCard({
   const { title, number } = splitName(data.planName || "Membresía");
   const business = splitBusiness(data.businessName || "");
   const branch = (data.branchLabel || data.businessName || "").replace(/^Solo en\s+/i, "");
+  const detailRaw = (data.detail || "").trim();
+  const detailIsLocation = /^solo en\s+/i.test(detailRaw);
+  const detailLabel = detailRaw ? (detailIsLocation ? "Solo en" : "Detalle") : "Solo en";
+  const detailValue = detailRaw ? detailRaw.replace(/^solo en\s+/i, "") : branch;
   const interactive = !preview && typeof onFlip === "function";
 
   return (
@@ -104,11 +110,11 @@ export function MembershipCard({
             <div className="relative z-10 flex h-full w-full flex-col items-center">
               {/* Logo */}
               <div className="flex flex-col items-center" style={{ marginTop: "4.2cqw" }}>
-                {data.logoUrl ? (
-                  <img src={data.logoUrl} alt="" style={{ height: "9cqw", objectFit: "contain" }} />
-                ) : (
-                  <RabbittyMark accent={accent} />
-                )}
+                <img
+                  src={data.logoUrl || "/rabbitty-logo.png"}
+                  alt="Rabbitty"
+                  style={{ height: "10.5cqw", objectFit: "contain" }}
+                />
                 <span
                   style={{
                     fontSize: "5.2cqw",
@@ -126,7 +132,7 @@ export function MembershipCard({
               {/* Héroe */}
               <div
                 className="relative flex items-center justify-center"
-                style={{ width: "88cqw", height: "48cqw", marginTop: "1.2cqw" }}
+                style={{ width: "96cqw", height: "54cqw", marginTop: "0.6cqw" }}
               >
                 <motion.div
                   aria-hidden
@@ -161,7 +167,7 @@ export function MembershipCard({
               <div className="flex flex-col items-center" style={{ marginTop: "1cqw", lineHeight: 0.92 }}>
                 <span
                   style={{
-                    fontSize: "10.2cqw",
+                    fontSize: "10.8cqw",
                     fontWeight: 900,
                     fontStyle: "italic",
                     letterSpacing: "-0.035em",
@@ -177,7 +183,7 @@ export function MembershipCard({
                     <span style={{ width: "10cqw", height: "0.75cqw", background: accent, boxShadow: `0 0 2cqw ${rgba(accent, 0.8)}` }} />
                     <span
                       style={{
-                        fontSize: "17cqw",
+                        fontSize: "19.5cqw",
                         fontWeight: 900,
                         fontStyle: "italic",
                         letterSpacing: "-0.02em",
@@ -210,7 +216,7 @@ export function MembershipCard({
                 className="flex items-center justify-center"
                 style={{
                   marginTop: "2.6cqw",
-                  width: "84cqw",
+                  width: "90cqw",
                   height: "11.6cqw",
                   borderRadius: "3cqw",
                   border: `0.35cqw solid ${rgba("#FFFFFF", 0.14)}`,
@@ -218,7 +224,7 @@ export function MembershipCard({
                   boxShadow: "inset 0 0.3cqw 1.4cqw rgba(255,255,255,.05), 0 0.6cqw 1.6cqw rgba(0,0,0,.35)",
                 }}
               >
-                <CupIcon accent={accent} />
+                <NicheIcon niche={data.niche} accent={accent} />
                 <span style={{ width: "0.3cqw", height: "6.6cqw", background: rgba("#FFFFFF", 0.22), margin: "0 3cqw" }} />
                 <div className="flex flex-col items-center" style={{ lineHeight: 1 }}>
                   <span style={{ fontSize: "6.4cqw", fontWeight: 900, color: "#F6F1F7", letterSpacing: "-0.02em" }}>
@@ -240,9 +246,13 @@ export function MembershipCard({
                   )}
                 </div>
                 <span style={{ width: "0.3cqw", height: "6.6cqw", background: rgba("#FFFFFF", 0.22), margin: "0 3cqw" }} />
-                <div className="flex flex-col" style={{ lineHeight: 1.15 }}>
-                  <span style={{ fontSize: "2.9cqw", color: "#B9AFBD", fontWeight: 500 }}>Solo en</span>
-                  <span style={{ fontSize: "3.4cqw", color: "#EDE4EF", fontWeight: 700 }}>{branch}</span>
+                <div className="flex flex-col" style={{ lineHeight: 1.15, maxWidth: "28cqw" }}>
+                  <span style={{ fontSize: "2.7cqw", color: "#B9AFBD", fontWeight: 500 }}>
+                    {detailLabel}
+                  </span>
+                  <span style={{ fontSize: "3.3cqw", color: "#EDE4EF", fontWeight: 700, textAlign: "left" }}>
+                    {detailValue}
+                  </span>
                 </div>
               </div>
 
@@ -273,7 +283,11 @@ export function MembershipCard({
             <CardShell accent={accent} animate={false} />
             <div className="relative z-10 flex h-full w-full flex-col items-center" style={{ padding: "7cqw 6cqw" }}>
               <div className="flex items-center gap-2" style={{ alignSelf: "flex-start" }}>
-                <RabbittyMark accent={accent} size="6.5cqw" />
+                <img
+                  src={data.logoUrl || "/rabbitty-logo.png"}
+                  alt="Rabbitty"
+                  style={{ height: "7cqw", objectFit: "contain" }}
+                />
                 <span style={{ fontSize: "3.2cqw", letterSpacing: "0.28em", color: "#CFC6D2", fontWeight: 700 }}>PASE DE MIEMBRO</span>
               </div>
 
@@ -407,15 +421,81 @@ function TrustItem({ icon, label, accent }: { icon: ReactNode; label: string; ac
   );
 }
 
-function RabbittyMark({ accent, size = "9cqw" }: { accent: string; size?: string }) {
+function NicheIcon({ niche, accent }: { niche?: string | null; accent: string }) {
+  const key = (niche || "other").toLowerCase();
+  if (/(bakery|panader|cake|pastel)/.test(key)) return <CakeIcon accent={accent} />;
+  if (/(cafe|coffee)/.test(key)) return <CupIcon accent={accent} />;
+  if (/(gym|fit|deport)/.test(key)) return <DumbbellIcon accent={accent} />;
+  if (/(restaurant|food|comida|sushi|pizza)/.test(key)) return <ForkIcon accent={accent} />;
+  if (/(bar|drink|coctel|cocktail)/.test(key)) return <CocktailIcon accent={accent} />;
+  if (/(beauty|belleza|salon|spa|barber)/.test(key)) return <ScissorsIcon accent={accent} />;
+  if (/(retail|shop|tienda|store)/.test(key)) return <BagIcon accent={accent} />;
+  return <StarIcon accent={accent} />;
+}
+
+function DumbbellIcon({ accent }: { accent: string }) {
   return (
-    <svg viewBox="0 0 64 64" width={size} height={size} fill="none" aria-hidden>
-      <path d="M20 30 C16 20 18 8 24 6 C30 8 30 18 29 27" stroke="#F4EEF5" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M44 30 C48 20 46 8 40 6 C34 8 34 18 35 27" stroke="#F4EEF5" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M32 22 C20 22 16 32 18 42 C20 52 26 58 32 58 C38 58 44 52 46 42 C48 32 44 22 32 22 Z" stroke="#F4EEF5" strokeWidth="2.4" />
-      <path d="M24 36 C27 33 30 33 32 36" stroke={accent} strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M40 36 C37 33 34 33 32 36" stroke={accent} strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M28 46 C30 48 34 48 36 46" stroke={accent} strokeWidth="2.2" strokeLinecap="round" />
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M14 18 V30 M10 21 V27 M34 18 V30 M38 21 V27" stroke={accent} strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M14 24 H34" stroke="#D97A3F" strokeWidth="2.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ForkIcon({ accent }: { accent: string }) {
+  return (
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M16 8 V20 C16 23 18 25 21 25 V40" stroke={accent} strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M12 8 V18 M20 8 V18" stroke={accent} strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M32 8 C38 12 38 22 32 26 V40" stroke="#D97A3F" strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CakeIcon({ accent }: { accent: string }) {
+  return (
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M10 24 H38 V38 H10 Z" stroke={accent} strokeWidth="2.4" strokeLinejoin="round" />
+      <path d="M10 30 C14 26 18 34 24 30 C30 26 34 34 38 30" stroke="#D97A3F" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M24 20 V14" stroke={accent} strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M24 11 C26 9 28 9 29 11 C28 13 26 13 24 11 Z" stroke={accent} strokeWidth="2" />
+    </svg>
+  );
+}
+
+function CocktailIcon({ accent }: { accent: string }) {
+  return (
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M12 10 H36 L24 26 Z" stroke={accent} strokeWidth="2.6" strokeLinejoin="round" />
+      <path d="M24 26 V38 M18 40 H30" stroke={accent} strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M30 12 L38 6" stroke="#D97A3F" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ScissorsIcon({ accent }: { accent: string }) {
+  return (
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <circle cx="14" cy="34" r="5" stroke={accent} strokeWidth="2.4" />
+      <circle cx="34" cy="34" r="5" stroke={accent} strokeWidth="2.4" />
+      <path d="M18 30 L34 10 M30 30 L14 10" stroke="#D97A3F" strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BagIcon({ accent }: { accent: string }) {
+  return (
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M12 18 H36 L34 40 H14 Z" stroke={accent} strokeWidth="2.4" strokeLinejoin="round" />
+      <path d="M18 18 C18 12 22 8 24 8 C26 8 30 12 30 18" stroke="#D97A3F" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function StarIcon({ accent }: { accent: string }) {
+  return (
+    <svg width="9cqw" height="9cqw" viewBox="0 0 48 48" fill="none" aria-hidden>
+      <path d="M24 8 L29 19 L41 20 L32 28 L35 40 L24 34 L13 40 L16 28 L7 20 L19 19 Z" stroke={accent} strokeWidth="2.4" strokeLinejoin="round" />
     </svg>
   );
 }
