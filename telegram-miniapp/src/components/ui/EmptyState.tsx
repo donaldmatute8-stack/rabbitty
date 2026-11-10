@@ -16,11 +16,11 @@ export default function EmptyState({ icon, title, description, action }: EmptySt
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-20 px-8 text-center"
     >
-      <div className="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-(--border-subtle) bg-white/[.06] text-(--text-primary)">
         {icon}
       </div>
-      <h3 className="text-lg font-medium text-[#111111] mb-2">{title}</h3>
-      <p className="text-sm text-[#8A8A8A] mb-6 max-w-[240px]">{description}</p>
+      <h3 className="mb-2 text-lg font-extrabold text-(--text-primary)">{title}</h3>
+      <p className="mb-6 max-w-[240px] text-sm text-(--text-muted)">{description}</p>
       {action}
     </motion.div>
   );

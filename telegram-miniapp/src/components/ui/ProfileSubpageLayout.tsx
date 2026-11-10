@@ -31,7 +31,7 @@ export default function ProfileSubpageLayout({ title, children, showBack = true,
   };
 
   return (
-    <div className="page-wrap" style={{ background: 'var(--bg-primary)', fontFamily: 'var(--font-family-base)', paddingBottom: 100, minHeight: '100dvh' }}>
+    <div className="page-wrap" style={{ background: 'var(--bg-primary)', fontFamily: 'var(--font-family-base)', paddingBottom: 'calc(130px + env(safe-area-inset-bottom))', minHeight: '100dvh' }}>
       <main style={{ width: '100%', maxWidth: 600, margin: '0 auto', paddingLeft: 16, paddingRight: 16 }}>
 
         {/* Header estilo burbuja (sin fondo sólido): back a la izquierda, título en píldora central, acciones a la derecha */}
@@ -104,7 +104,7 @@ export default function ProfileSubpageLayout({ title, children, showBack = true,
           {children}
         </motion.div>
 
-        <div style={{ height: 40 }} />
+        <div style={{ height: 60 }} />
       </main>
 
       {!hideNav && <BottomNav />}
