@@ -294,13 +294,6 @@ export default function MembershipsPage() {
                 </svg>
                 Volver
               </button>
-              <button
-                onClick={() => setActive(null)}
-                className="w-9 h-9 rounded-full border border-white/10 bg-white/[.07] text-white/60 backdrop-blur-md flex items-center justify-center"
-                aria-label="Cerrar"
-              >
-                ✕
-              </button>
             </div>
 
             {/* Contenido desplazable; el wrapper con my-auto centra cuando cabe */}
@@ -321,9 +314,8 @@ export default function MembershipsPage() {
                 transition={{ type: 'spring', stiffness: 160, damping: 20 }}
                 className="w-[min(84vw,380px)] touch-none"
               >
-                <div className="mb-2 flex flex-col items-center gap-1">
+                <div className="mb-2 flex flex-col items-center">
                   <span className="h-1 w-10 rounded-full bg-white/25" />
-                  <span className="text-[10px] text-white/35">Desliza hacia abajo para cerrar</span>
                 </div>
                 <MembershipCard
                   data={activeCard}
@@ -352,14 +344,17 @@ export default function MembershipsPage() {
               {/* Historial integrado: se despliega hacia abajo */}
               <div className="w-[min(84vw,380px)] mt-3">
                 <button
+                  type="button"
                   onClick={() => setHistoryOpen((v) => !v)}
-                  className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-[12px] font-bold text-white/80"
+                  aria-expanded={historyOpen}
+                  aria-controls="membership-usage-panel"
+                  className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-[12px] font-bold text-white/80 cursor-pointer hover:bg-white/[.07] active:scale-[0.99] transition-all"
                 >
                   <span>Historial de uso</span>
                   <span className="text-white/40">{historyOpen ? '▲' : '▼'}</span>
                 </button>
                 {historyOpen && (
-                  <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[220px] overflow-y-auto">
+                  <div id="membership-usage-panel" className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[220px] overflow-y-auto">
                     {usageLoading ? (
                       <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500" /></div>
                     ) : usage.length === 0 ? (
