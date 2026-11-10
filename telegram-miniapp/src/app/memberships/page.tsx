@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
@@ -146,6 +146,7 @@ export default function MembershipsPage() {
   const [usage, setUsage] = useState<Usage[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const dragControls = useDragControls();
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Post-checkout Stripe (?checkout=success|cancelled) → toast + recarga
   useEffect(() => {
@@ -188,6 +189,14 @@ export default function MembershipsPage() {
     [active, memberName],
   );
   const pass = usePassToken(active?.id ?? null, Boolean(active));
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const t = setTimeout(() => {
+      panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [historyOpen]);
 
   useEffect(() => {
     if (!active) {
@@ -299,8 +308,8 @@ export default function MembershipsPage() {
 
             {/* Contenido desplazable; el wrapper con my-auto centra cuando cabe */}
             <div className="relative h-full overflow-y-auto overscroll-contain">
-              <div className="min-h-full flex flex-col items-center px-4 pt-24 pb-[max(2rem,env(safe-area-inset-bottom))]">
-                <div className="my-auto flex w-full flex-col items-center">
+              <div className="min-h-full flex flex-col items-center px-4 pt-20 pb-[max(2rem,env(safe-area-inset-bottom))]">
+                <div className="flex w-full flex-col items-center">
               <motion.div
                 drag="y"
                 dragListener={false}
@@ -315,7 +324,7 @@ export default function MembershipsPage() {
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.94, y: 16, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 160, damping: 20 }}
-                className="w-[min(84vw,380px)]"
+                className="w-[min(82vw,370px)]"
               >
                 <div
                   className="mb-2 flex cursor-grab touch-none justify-center px-8 py-1 active:cursor-grabbing"
@@ -348,7 +357,7 @@ export default function MembershipsPage() {
               </button>
 
               {/* Historial + beneficios en un solo panel desplegable */}
-              <div className="w-[min(84vw,380px)] mt-3">
+              <div className="w-[min(82vw,370px)] mt-3">
                 <button
                   type="button"
                   onClick={() => setHistoryOpen((v) => !v)}
@@ -361,6 +370,7 @@ export default function MembershipsPage() {
                 </button>
                 {historyOpen && (
                   <div
+                    ref={panelRef}
                     id="membership-info-panel"
                     className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[42vh] overflow-y-auto overscroll-contain space-y-4"
                   >

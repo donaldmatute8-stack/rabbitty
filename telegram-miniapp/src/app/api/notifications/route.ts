@@ -33,9 +33,23 @@ export async function GET(req: NextRequest) {
       );
     };
 
-    const rows = scope === "business"
+    const scopedRows = scope === "business"
       ? allRows.filter(isCommercialStaffAlert)
       : allRows.filter((n) => !isCommercialStaffAlert(n));
+
+    // Dedupe de ofertas flash en la campana: la misma oferta/negocio no se
+    // repite si la anterior es de las últimas 24 h (aunque el rate-limit se
+    // haya reiniciado o existan filas viejas apiladas).
+    const lastOfferAt = new Map<string, number>();
+    const rows = scopedRows.filter((n) => {
+      if (n.type !== "LOYALTY_OFFER") return true;
+      const key = n.route || n.title || n.message;
+      const ts = n.createdAt ? new Date(n.createdAt).getTime() : 0;
+      const prev = lastOfferAt.get(key);
+      if (prev != null && prev - ts < 24 * 60 * 60 * 1000) return false;
+      lastOfferAt.set(key, ts);
+      return true;
+    });
 
     const unreadCount = rows.filter((r) => !r.isRead).length;
 

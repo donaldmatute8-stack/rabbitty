@@ -28,6 +28,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { useState } from 'react';
 import { FeedbackModal } from '@/components/feedback/FeedbackModal';
 import { useUserAvatar } from '@/lib/avatar';
+import AnimatedBunz from '@/components/ui/AnimatedBunz';
 
 interface ProfileDrawerProps {
   open: boolean;
@@ -173,7 +174,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               {/* Stats Row (Following / Followers style) */}
               <div className="flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-(--text-primary)">{bunzBalance.toLocaleString()}</span>
+                  <AnimatedBunz value={bunzBalance} className="font-extrabold text-(--text-primary)" />
                   <span className="text-(--text-muted)">Bunz</span>
                 </div>
                 <div className="flex items-center gap-1.5">

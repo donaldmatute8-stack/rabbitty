@@ -977,13 +977,19 @@ export default function ScanPage() {
                   router.replace("/");
                 }}
                 onShare={async () => {
-                  const handle = user?.username ? `@${user.username}` : String(qrValue || '');
+                  const raw = user?.username || String(qrValue || '');
+                  const handle = raw.replace(/^@/, '');
+                  const url = `https://app.rabbitty.me/u/${encodeURIComponent(handle)}`;
                   try {
-                    if (typeof navigator !== 'undefined' && navigator.share) {
-                      await navigator.share({ title: 'Mi Rabbitty Code', text: `Mi Rabbitty Code: ${handle}` });
-                    } else {
-                      await navigator.clipboard.writeText(handle);
-                      showToast('Código copiado', 'success');
+                    const shared = await PlatformBridge.share({
+                      title: 'Mi Rabbitty Code',
+                      text: `Mi Rabbitty Code: @${handle}`,
+                      url,
+                      dialogTitle: 'Compartir mi Rabbitty Code',
+                    });
+                    if (!shared) {
+                      await navigator.clipboard.writeText(url);
+                      showToast('Enlace de tu código copiado', 'success');
                     }
                   } catch {
                     /* cancelado */

@@ -7,6 +7,7 @@ import { QrCode, ChevronRight, X, ShieldCheck } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import { useTheme } from '@/contexts/ThemeContext';
+import AnimatedBunz from '@/components/ui/AnimatedBunz';
 
 import Image from 'next/image';
 
@@ -141,9 +142,10 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                 </div>
                 <div className="flex items-baseline gap-1 mt-0.5">
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo:</span>
-                  <span className={`text-sm font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    {bunzBalance.toLocaleString()}
-                  </span>
+                  <AnimatedBunz
+                    value={bunzBalance}
+                    className={`text-sm font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}
+                  />
                   <span className="text-[10px] font-black text-[#E91E63]">BUNZ</span>
                 </div>
               </div>
@@ -165,9 +167,10 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
             <div className="my-2 relative z-10">
               <span className={`text-[11px] font-bold uppercase tracking-wider block mb-0.5 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo acumulado</span>
               <div className="flex items-baseline gap-2">
-                <span className={`text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  {bunzBalance.toLocaleString()}
-                </span>
+                <AnimatedBunz
+                  value={bunzBalance}
+                  className={`text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}
+                />
                 <span className="text-lg font-black text-[#E91E63] tracking-wide">BUNZ</span>
               </div>
             </div>

@@ -205,15 +205,32 @@ export async function POST(req: NextRequest) {
             const pushTitle = `⚡ ¡${activeBoost.rewardPercentage}% Bunz en ${b.name}!`;
             const pushBody = `Pasa en tu caminata de hoy: ${activeBoost.headline || `obtenemos recompensa especial de +${activeBoost.rewardPercentage}% Bunz`}.`;
 
-            await db
-              .insert(notifications)
-              .values({
-                userId: caller.id,
-                title: pushTitle,
-                message: pushBody,
-                type: "LOYALTY_OFFER",
-              })
-              .catch(() => {});
+            // Dedupe en la base además del rate-limit: si ya hay una oferta
+            // del mismo negocio en las últimas 24 h, no se apila en la campana.
+            const offerRoute = `/affiliate/${b.id}`;
+            const [existingOffer] = await db
+              .select({ id: notifications.id })
+              .from(notifications)
+              .where(and(
+                eq(notifications.userId, caller.id),
+                eq(notifications.type, "LOYALTY_OFFER"),
+                eq(notifications.route, offerRoute),
+                gte(notifications.createdAt, new Date(Date.now() - FLASH_OFFER_COOLDOWN_SECONDS * 1000)),
+              ))
+              .limit(1);
+
+            if (!existingOffer) {
+              await db
+                .insert(notifications)
+                .values({
+                  userId: caller.id,
+                  title: pushTitle,
+                  message: pushBody,
+                  type: "LOYALTY_OFFER",
+                  route: offerRoute,
+                })
+                .catch(() => {});
+            }
 
             if (isApnsConfigured()) {
               // P1: entra al outbox (APNs real via worker; sin duplicar fila in-app)

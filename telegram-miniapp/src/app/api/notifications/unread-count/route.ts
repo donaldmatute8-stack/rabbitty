@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
         id: true,
         title: true,
         message: true,
+        type: true,
+        route: true,
+        createdAt: true,
       },
       limit: 100,
     });
@@ -36,9 +39,21 @@ export async function GET(req: NextRequest) {
       );
     });
 
+    // Mismo dedupe que el panel: una oferta flash por negocio/24 h.
+    const lastOfferAt = new Map<string, number>();
+    const deduped = personalUnread.filter((n) => {
+      if (n.type !== "LOYALTY_OFFER") return true;
+      const key = n.route || n.title || n.message;
+      const ts = n.createdAt ? new Date(n.createdAt).getTime() : 0;
+      const prev = lastOfferAt.get(key);
+      if (prev != null && prev - ts < 24 * 60 * 60 * 1000) return false;
+      lastOfferAt.set(key, ts);
+      return true;
+    });
+
     return NextResponse.json({
       success: true,
-      unreadCount: personalUnread.length,
+      unreadCount: deduped.length,
     });
   } catch (error) {
     console.error("[NOTIFICATIONS_UNREAD_COUNT]", error);
