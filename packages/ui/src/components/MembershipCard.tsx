@@ -291,6 +291,7 @@ export function MembershipCard({
               )}
 
               <motion.div
+                onClick={(e) => e.stopPropagation()}
                 animate={animate ? { scale: flipped ? 1 : 0.9, opacity: flipped ? 1 : 0.55 } : undefined}
                 transition={{ type: "spring", stiffness: 160, damping: 16, delay: flipped ? 0.12 : 0 }}
                 style={{
