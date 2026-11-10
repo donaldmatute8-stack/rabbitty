@@ -22,7 +22,7 @@ import { buildShadowReport, recordShadowReport } from "./payments/shadow";
 import { recordRedemptionBooks } from "./bunzBooks";
 import { checkOperation } from "./bunzControls";
 import { consumeCapacity } from "./mcce";
-import { usr, biz } from "./ledgerSubjects";
+import { usr, biz, isSandboxLedgerTx } from "./ledgerSubjects";
 
 /**
  * @deprecated RP-0.7 — motor legacy en migración a paymentCore.
@@ -487,11 +487,13 @@ export class PaymentIntentService {
       // OT-1 / OT-3: el motor legacy (miniapp) también deja intento y asientos.
       // Antes escribía `bunzPaid` sin pasar por el libro: la captura no lo veía.
       if (requiredBunzInt > 0) {
+        const redemptionSandbox = await isSandboxLedgerTx(tx, ledgerBusinessId, payerUser.id);
         await recordRedemptionBooks(tx, {
           orderId: intent.orderId ?? intent.id,
           branchId: intent.merchantId,
           bunz: requiredBunzInt,
           userHash: payerUser.id,
+          sandbox: redemptionSandbox,
           tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
         });
       }

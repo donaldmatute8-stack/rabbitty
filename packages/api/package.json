@@ -15,7 +15,8 @@
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:ui": "vitest --ui --config vitest.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pretest": "bash ../../scripts/test-db-sync.sh"
   },
   "dependencies": {
     "@rabbitty/bunz": "workspace:*",

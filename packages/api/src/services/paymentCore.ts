@@ -659,6 +659,7 @@ export async function confirmPaymentIntentSettled(
           branchId: orderRow.branchId,
           bunz: intent.bunzAmount,
           userHash: orderRow.customerId ?? null,
+          sandbox: stockSandbox,
           tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
         });
 
@@ -942,9 +943,11 @@ export async function reconcileOrderCashback(
       .where(eq(orders.id, order.id));
 
     // OT-3: emisión al cobrar (idempotente, no fatal).
+    const emissionSandbox = await isSandboxLedgerTx(db, businessId, payerId);
     await recordEmissionBooks(db, {
       orderId: order.id,
       bunz: res.bunz ?? 0,
+      sandbox: emissionSandbox,
       tables: { ledger: bunzLedgerEntries },
     });
 

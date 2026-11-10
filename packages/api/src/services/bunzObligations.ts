@@ -19,6 +19,7 @@
 import { and, eq, inArray, lte } from "drizzle-orm";
 import { recordSettlementBooks } from "./bunzBooks";
 import { checkOperation, isPilotMode } from "./bunzControls";
+import { isSandboxLedgerTx } from "./ledgerSubjects";
 
 export const OBLIGATION_FLAG = "RABBITTY_BUNZ_OBLIGATIONS";
 export const SETTLEMENT_FLAG = "RABBITTY_BUNZ_SETTLE";
@@ -379,6 +380,7 @@ export async function settleObligation(
           bunz: bunzApplied,
           at,
           seq,
+          sandbox: await isSandboxLedgerTx(sp, row.affiliateId, null),
           tables: { ledger: tables.ledger },
         });
       }

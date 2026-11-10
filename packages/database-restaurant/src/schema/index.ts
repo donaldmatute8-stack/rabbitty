@@ -979,6 +979,8 @@ export const bunzLedgerEntries = pgTable(
     account: text("account").notNull(),
     direction: text("direction").notNull(), // debit | credit
     amount: real("amount").notNull(),
+    /** Demo/App Review: se excluye del check por cuenta del gate. */
+    sandbox: boolean("sandbox").default(false).notNull(),
     refType: text("refType").notNull(), // reward | redemption | obligation | reversal | funding
     refId: text("refId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),

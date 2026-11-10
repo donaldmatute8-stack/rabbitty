@@ -42,7 +42,7 @@ export function hashUser(value: string | null | undefined): string {
  * Asientos de una redención: el usuario gasta Bunz y se consume capacidad.
  * Grupo `rd-<orderId>`, balanceado por construcción.
  */
-export function buildRedemptionLedger({ orderId, bunz, at = new Date() }: { orderId: string; bunz: number; at?: Date }) {
+export function buildRedemptionLedger({ orderId, bunz, at = new Date(), sandbox = false }: { orderId: string; bunz: number; at?: Date; sandbox?: boolean }) {
   const amount = Number(bunz) || 0;
   if (amount <= 0) return [];
   return [
@@ -53,6 +53,7 @@ export function buildRedemptionLedger({ orderId, bunz, at = new Date() }: { orde
       account: "user_wallet",
       direction: "debit",
       amount,
+      sandbox,
       refType: "redemption",
       refId: orderId,
     },
@@ -63,6 +64,7 @@ export function buildRedemptionLedger({ orderId, bunz, at = new Date() }: { orde
       account: "redemption_capacity",
       direction: "credit",
       amount,
+      sandbox,
       refType: "redemption",
       refId: orderId,
     },
@@ -70,7 +72,7 @@ export function buildRedemptionLedger({ orderId, bunz, at = new Date() }: { orde
 }
 
 /** Asientos de una emisión de recompensa (no cableado aún: depende de cuándo se considera emitida). */
-export function buildEmissionLedger({ orderId, bunz, at = new Date() }: { orderId: string; bunz: number; at?: Date }) {
+export function buildEmissionLedger({ orderId, bunz, at = new Date(), sandbox = false }: { orderId: string; bunz: number; at?: Date; sandbox?: boolean }) {
   const amount = Number(bunz) || 0;
   if (amount <= 0) return [];
   return [
@@ -81,6 +83,7 @@ export function buildEmissionLedger({ orderId, bunz, at = new Date() }: { orderI
       account: "emission_budget",
       direction: "debit",
       amount,
+      sandbox,
       refType: "reward",
       refId: orderId,
     },
@@ -91,6 +94,7 @@ export function buildEmissionLedger({ orderId, bunz, at = new Date() }: { orderI
       account: "user_wallet",
       direction: "credit",
       amount,
+      sandbox,
       refType: "reward",
       refId: orderId,
     },
@@ -151,12 +155,13 @@ type Insertable = {
  */
 export async function recordRedemptionBooks(
   tx: Insertable,
-  { orderId, branchId, bunz, userHash, at = new Date(), tables }: {
+  { orderId, branchId, bunz, userHash, at = new Date(), sandbox = false, tables }: {
     orderId: string;
     branchId?: string | null;
     bunz: number;
     userHash?: string | null;
     at?: Date;
+    sandbox?: boolean;
     tables: {
       attempts: unknown;
       ledger: unknown;
@@ -166,7 +171,7 @@ export async function recordRedemptionBooks(
   if (!isBooksEnabled()) return { ok: true, errors: [] };
 
   const attempt = buildRedemptionAttempt({ orderId, branchId, bunz, userHash, at });
-  const entries = buildRedemptionLedger({ orderId, bunz, at });
+  const entries = buildRedemptionLedger({ orderId, bunz, at, sandbox });
   if (!attempt && !entries.length) return { ok: true, errors: [] };
 
   try {
@@ -193,11 +198,13 @@ export function buildSettlementLedger({
   bunz,
   at = new Date(),
   seq = 1,
+  sandbox = false,
 }: {
   obligationId: string;
   bunz: number;
   at?: Date;
   seq?: number;
+  sandbox?: boolean;
 }) {
   const amount = Number(bunz) || 0;
   if (amount <= 0) return [];
@@ -209,6 +216,7 @@ export function buildSettlementLedger({
       account: "commission_reserved",
       direction: "debit",
       amount,
+      sandbox,
       refType: "obligation",
       refId: obligationId,
     },
@@ -219,6 +227,7 @@ export function buildSettlementLedger({
       account: "treasury_bunz",
       direction: "credit",
       amount,
+      sandbox,
       refType: "obligation",
       refId: obligationId,
     },
@@ -228,10 +237,10 @@ export function buildSettlementLedger({
 /** Escribe los asientos de emisión (recompensa emitida al cobrar). No lanza. */
 export async function recordEmissionBooks(
   tx: Insertable,
-  { orderId, bunz, at = new Date(), tables }: { orderId: string; bunz: number; at?: Date; tables: { ledger: unknown } }
+  { orderId, bunz, at = new Date(), sandbox = false, tables }: { orderId: string; bunz: number; at?: Date; sandbox?: boolean; tables: { ledger: unknown } }
 ): Promise<{ ok: boolean; errors: string[] }> {
   if (!isBooksEnabled()) return { ok: true, errors: [] };
-  const entries = buildEmissionLedger({ orderId, bunz, at });
+  const entries = buildEmissionLedger({ orderId, bunz, at, sandbox });
   if (!entries.length) return { ok: true, errors: [] };
   try {
     await tx.transaction(async (sp) => {
@@ -253,17 +262,19 @@ export async function recordSettlementBooks(
     bunz,
     at = new Date(),
     seq = 1,
+    sandbox = false,
     tables,
   }: {
     obligationId: string;
     bunz: number;
     at?: Date;
     seq?: number;
+    sandbox?: boolean;
     tables: { ledger: unknown };
   }
 ): Promise<{ ok: boolean; errors: string[] }> {
   if (!isBooksEnabled()) return { ok: true, errors: [] };
-  const entries = buildSettlementLedger({ obligationId, bunz, at, seq });
+  const entries = buildSettlementLedger({ obligationId, bunz, at, seq, sandbox });
   if (!entries.length) return { ok: true, errors: [] };
   try {
     await tx.transaction(async (sp) => {
@@ -289,6 +300,7 @@ export function buildReversalLedger({ original, at = new Date() }: { original: a
     account: e.account,
     direction: e.direction === "debit" ? "credit" : "debit",
     amount: Number(e.amount) || 0,
+    sandbox: Boolean(e.sandbox),
     refType: "reversal",
     refId: e.refId ?? null,
   }));

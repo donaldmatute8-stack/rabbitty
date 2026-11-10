@@ -28,6 +28,7 @@ function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolea
 import { miniappClient } from "../services/miniapp-client";
 import { assertOpenShiftForCash } from "../services/cashShift";
 import { REDEMPTION_REASONS, recordEmissionBooks, recordRedemptionBooks } from "../services/bunzBooks";
+import { isSandboxLedgerTx } from "../services/ledgerSubjects";
 import { accrueCommission } from "../services/bunzObligations";
 import { checkOperation } from "../services/bunzControls";
 import { recognizeActivity } from "../services/mcce";
@@ -1227,11 +1228,18 @@ export const posRouter = router({
 
           // OT-1 / OT-3: intento + asientos. Idempotente y no fatal: si las tablas
           // no existen, el pago sigue (se registra el aviso). Flag apagado = no-op.
+          const redemptionBizId = await resolveBusinessIdFromBranch(tx, orderRow.branchId);
+          const redemptionSandbox = await isSandboxLedgerTx(
+            tx,
+            redemptionBizId,
+            orderRow.customerId ?? orderRow.customerPhone ?? null,
+          );
           await recordRedemptionBooks(tx, {
             orderId: input.orderId,
             branchId: orderRow.branchId,
             bunz: finalAmount,
             userHash: orderRow.customerId ?? orderRow.customerPhone ?? null,
+            sandbox: redemptionSandbox,
             tables: { attempts: bunzRedemptionAttempts, ledger: bunzLedgerEntries },
           });
         }
@@ -1489,6 +1497,7 @@ export const posRouter = router({
               await recordEmissionBooks(ctx.restaurantDb, {
                 orderId: order.id,
                 bunz: awardedBunz,
+                sandbox: await isSandboxLedgerTx(ctx.restaurantDb, linkBizId, input.customerId),
                 tables: { ledger: bunzLedgerEntries },
               });
               await ctx.restaurantDb.transaction(async (tx) =>
@@ -2744,6 +2753,7 @@ export const posRouter = router({
               await recordEmissionBooks(ctx.restaurantDb, {
                 orderId: order.id,
                 bunz: totalAwardedBunz,
+                sandbox: await isSandboxLedgerTx(ctx.restaurantDb, restaurant.businessId, targetRecipient),
                 tables: { ledger: bunzLedgerEntries },
               });
               await ctx.restaurantDb.transaction(async (tx) =>
