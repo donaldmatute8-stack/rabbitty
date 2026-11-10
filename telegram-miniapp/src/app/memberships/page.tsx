@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
@@ -145,6 +145,7 @@ export default function MembershipsPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [usage, setUsage] = useState<Usage[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
+  const dragControls = useDragControls();
 
   // Post-checkout Stripe (?checkout=success|cancelled) → toast + recarga
   useEffect(() => {
@@ -297,11 +298,13 @@ export default function MembershipsPage() {
             </div>
 
             {/* Contenido desplazable; el wrapper con my-auto centra cuando cabe */}
-            <div className="relative h-full overflow-y-auto">
-              <div className="min-h-full flex flex-col items-center px-4 pt-24 pb-8">
+            <div className="relative h-full overflow-y-auto overscroll-contain">
+              <div className="min-h-full flex flex-col items-center px-4 pt-24 pb-[max(2rem,env(safe-area-inset-bottom))]">
                 <div className="my-auto flex w-full flex-col items-center">
               <motion.div
                 drag="y"
+                dragListener={false}
+                dragControls={dragControls}
                 dragConstraints={{ top: 0, bottom: 0 }}
                 dragElastic={{ top: 0, bottom: 0.55 }}
                 onDragEnd={(_, info) => {
@@ -312,9 +315,12 @@ export default function MembershipsPage() {
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.94, y: 16, opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 160, damping: 20 }}
-                className="w-[min(84vw,380px)] touch-none"
+                className="w-[min(84vw,380px)]"
               >
-                <div className="mb-2 flex flex-col items-center">
+                <div
+                  className="mb-2 flex cursor-grab touch-none justify-center px-8 py-1 active:cursor-grabbing"
+                  onPointerDown={(e) => dragControls.start(e)}
+                >
                   <span className="h-1 w-10 rounded-full bg-white/25" />
                 </div>
                 <MembershipCard
@@ -341,67 +347,74 @@ export default function MembershipsPage() {
                 {flipped && pass.token ? ` · se renueva en ${pass.seconds}s` : ''}
               </button>
 
-              {/* Historial integrado: se despliega hacia abajo */}
+              {/* Historial + beneficios en un solo panel desplegable */}
               <div className="w-[min(84vw,380px)] mt-3">
                 <button
                   type="button"
                   onClick={() => setHistoryOpen((v) => !v)}
                   aria-expanded={historyOpen}
-                  aria-controls="membership-usage-panel"
+                  aria-controls="membership-info-panel"
                   className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-white/[.04] px-3 py-2.5 text-[12px] font-bold text-white/80 cursor-pointer hover:bg-white/[.07] active:scale-[0.99] transition-all"
                 >
-                  <span>Historial de uso</span>
+                  <span>Historial y beneficios</span>
                   <span className="text-white/40">{historyOpen ? '▲' : '▼'}</span>
                 </button>
                 {historyOpen && (
-                  <div id="membership-usage-panel" className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[220px] overflow-y-auto">
-                    {usageLoading ? (
-                      <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500" /></div>
-                    ) : usage.length === 0 ? (
-                      <p className="text-[12px] text-white/45 text-center py-3">Todavía no hay usos registrados.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {usage.map((u) => (
-                          <li key={u.id} className="flex items-center justify-between gap-2 text-[11px]">
-                            <span className="text-white/80">
-                              {BENEFIT_LABEL[u.benefitType] ?? u.benefitType}
-                              {u.orderId ? <span className="text-white/35"> · #{u.orderId.slice(0, 6)}</span> : null}
-                            </span>
-                            <span className="text-white/35 shrink-0">
-                              {new Date(u.redeemedAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                  <div
+                    id="membership-info-panel"
+                    className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[42vh] overflow-y-auto overscroll-contain space-y-4"
+                  >
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-white/50 mb-2">Beneficios de este ciclo</p>
+                      <div className="space-y-2.5">
+                        {active.entitlements.map((e) => {
+                          const left = Math.max(0, e.quotaPerCycle - e.used);
+                          const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
+                          return (
+                            <div key={e.id}>
+                              <div className="flex items-center justify-between text-[12px] text-white/85 mb-1">
+                                <span className="font-semibold">
+                                  {BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}
+                                </span>
+                                <span className="text-white/45">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full overflow-hidden bg-white/10">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${active.badgeColor || '#E91E63'}, #FF2E93)` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-white/50 mb-2">Últimos usos</p>
+                      {usageLoading ? (
+                        <div className="flex justify-center py-3"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500" /></div>
+                      ) : usage.length === 0 ? (
+                        <p className="text-[12px] text-white/45 text-center py-2">Todavía no hay usos registrados.</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {usage.map((u) => (
+                            <li key={u.id} className="flex items-center justify-between gap-2 text-[11px]">
+                              <span className="text-white/80">
+                                {BENEFIT_LABEL[u.benefitType] ?? u.benefitType}
+                                {u.orderId ? <span className="text-white/35"> · #{u.orderId.slice(0, 6)}</span> : null}
+                              </span>
+                              <span className="text-white/35 shrink-0">
+                                {new Date(u.redeemedAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-
-              {/* Beneficios del ciclo */}
-              <div className="w-[min(84vw,380px)] mt-4 rounded-2xl border border-white/10 bg-white/[.035] p-3 space-y-2.5">
-                <p className="text-[10px] font-black uppercase tracking-wider text-white/50">Beneficios de este ciclo</p>
-                {active.entitlements.map((e) => {
-                  const left = Math.max(0, e.quotaPerCycle - e.used);
-                  const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
-                  return (
-                    <div key={e.id}>
-                      <div className="flex items-center justify-between text-[12px] text-white/85 mb-1">
-                        <span className="font-semibold">
-                          {BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}
-                        </span>
-                        <span className="text-white/45">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden bg-white/10">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${active.badgeColor || '#E91E63'}, #FF2E93)` }} />
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
                 </div>
               </div>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>

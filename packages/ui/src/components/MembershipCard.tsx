@@ -86,10 +86,11 @@ export function MembershipCard({
         aria-hidden
         style={{
           position: "absolute",
-          inset: "-4%",
-          background: `radial-gradient(circle at 6% 6%, ${rgba(accent, 0.55)} 0%, transparent 30%), radial-gradient(circle at 94% 94%, ${rgba(accent, 0.55)} 0%, transparent 30%)`,
-          filter: "blur(2.4cqw)",
-          opacity: 0.8,
+          inset: "-7%",
+          borderRadius: "12cqw",
+          background: `radial-gradient(42% 38% at 0% 0%, ${rgba(accent, 0.5)} 0%, transparent 72%), radial-gradient(42% 38% at 100% 100%, ${rgba(accent, 0.5)} 0%, transparent 72%)`,
+          filter: "blur(5.5cqw)",
+          opacity: 0.55,
           pointerEvents: "none",
           zIndex: 0,
         }}
@@ -392,7 +393,7 @@ function CardShell({ accent, animate }: { accent: string; animate: boolean }) {
           inset: 0,
           borderRadius: "5.5cqw",
           border: `0.65cqw solid ${accent}`,
-          boxShadow: `0 0 1.1cqw ${rgba(accent, 0.55)}, inset 0 0 2.2cqw ${rgba(accent, 0.22)}, inset 0 0 0 0.55cqw rgba(255,255,255,.06)`,
+          boxShadow: `0 0 0.6cqw ${rgba(accent, 0.3)}, inset 0 0 1.8cqw ${rgba(accent, 0.16)}, inset 0 0 0 0.55cqw rgba(255,255,255,.05)`,
         }}
       />
       {/* Glow concentrado en esquina superior izquierda e inferior derecha */}
@@ -402,7 +403,7 @@ function CardShell({ accent, animate }: { accent: string; animate: boolean }) {
           position: "absolute",
           inset: 0,
           borderRadius: "5.5cqw",
-          background: `radial-gradient(circle at 0% 0%, ${rgba(accent, 0.42)} 0%, transparent 30%), radial-gradient(circle at 100% 100%, ${rgba(accent, 0.42)} 0%, transparent 30%)`,
+          background: `radial-gradient(38% 34% at 0% 0%, ${rgba(accent, 0.26)} 0%, transparent 68%), radial-gradient(38% 34% at 100% 100%, ${rgba(accent, 0.26)} 0%, transparent 68%)`,
           pointerEvents: "none",
           mixBlendMode: "screen",
         }}

@@ -18,7 +18,9 @@ import {
   ShieldCheck, 
   HelpCircle,
   Settings,
-  MessageSquarePlus
+  MessageSquarePlus,
+  ChevronDown,
+  BadgeCheck
 } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -32,11 +34,15 @@ interface ProfileDrawerProps {
   onClose: () => void;
 }
 
+const WALLET_ITEMS = [
+  { icon: Wallet, label: 'Saldo y movimientos', href: '/profile/wallet' },
+  { icon: Ticket, label: 'Mis Cupones', href: '/profile/inventory' },
+  { icon: BadgeCheck, label: 'Mis Membresías', href: '/memberships' },
+];
+
 const GENERAL_ITEMS = [
-  { icon: Wallet, label: 'Mi Billetera', href: '/profile/wallet' },
   { icon: History, label: 'Historial', href: '/history' },
   { icon: Trophy, label: 'Logros y Misiones', href: '/profile/gamification' },
-  { icon: Ticket, label: 'Mis Cupones', href: '/profile/inventory' },
   { icon: UserPlus, label: 'Invitar amigos', href: '/referral' },
 ];
 
@@ -52,6 +58,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   const { user, logout } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(true);
   const [feedbackType, setFeedbackType] = useState<'BUG' | 'FEEDBACK'>('BUG');
   const avatarUrl = useUserAvatar(user, 'E91E63');
 
@@ -192,6 +199,59 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                   boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
                 }}
               >
+                {/* Mi Billetera: agrupa saldo, cupones y membresías */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    setWalletOpen((v) => !v);
+                  }}
+                  className="flex items-center gap-3.5 px-3 py-2.5 rounded-xl no-underline transition-all active:scale-[0.98] group hover:bg-(--bg-pressed)"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  <Wallet
+                    size={21}
+                    strokeWidth={2.2}
+                    className="text-(--text-primary) group-hover:text-[#E91E63] shrink-0 transition-colors"
+                  />
+                  <span className="text-[15px] font-extrabold tracking-tight flex-1 text-left">
+                    Mi Billetera
+                  </span>
+                  <ChevronDown
+                    size={17}
+                    className="text-(--text-muted) transition-transform duration-200"
+                    style={{ transform: walletOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {walletOpen && (
+                  <div className="flex flex-col gap-0.5 pl-5 ml-3 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {WALLET_ITEMS.map((item) => {
+                      const IconComponent = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => {
+                            PlatformBridge.hapticFeedback('light');
+                            onClose();
+                          }}
+                          className="flex items-center gap-3 px-3 py-2 rounded-xl no-underline transition-all active:scale-[0.98] group hover:bg-(--bg-pressed)"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          <IconComponent
+                            size={18}
+                            strokeWidth={2.1}
+                            className="text-(--text-muted) group-hover:text-[#E91E63] shrink-0 transition-colors"
+                          />
+                          <span className="text-[14px] font-bold tracking-tight flex-1">
+                            {item.label}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {GENERAL_ITEMS.map((item) => {
                   const IconComponent = item.icon;
                   return (
