@@ -26,10 +26,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const creds = getWalletCredentials();
     if (!creds) {
+      // Nombres de variables que faltan (nunca sus valores): permite soporte
+      // sin adivinar por qué Wallet responde 501.
+      const required = [
+        "APPLE_WALLET_PASS_TYPE_ID",
+        "APPLE_WALLET_TEAM_ID",
+        "APPLE_WALLET_CERT_PEM",
+        "APPLE_WALLET_KEY_PEM",
+        "APPLE_WALLET_WWDR_PEM",
+      ];
+      const missing = required.filter((k) => !process.env[k] || !String(process.env[k]).trim());
       return NextResponse.json(
         {
           error: "APPLE_WALLET_NOT_CONFIGURED",
-          message: "Apple Wallet aún no está configurado en este entorno.",
+          message: missing.length
+            ? `Falta configurar: ${missing.join(", ")}`
+            : "Las credenciales de Wallet están incompletas o mal formadas.",
+          missing,
         },
         { status: 501 },
       );
@@ -93,6 +106,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   } catch (error) {
     console.error("[MEMBERSHIP_WALLET]", error);
-    return NextResponse.json({ error: "No se pudo generar el pase de Wallet" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "APPLE_WALLET_BUILD_FAILED",
+        message:
+          error instanceof Error
+            ? `No se pudo firmar el pase: ${error.message}`
+            : "No se pudo generar el pase de Wallet",
+      },
+      { status: 500 },
+    );
   }
 }

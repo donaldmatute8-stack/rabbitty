@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wallet } from 'lucide-react';
+import { AppleGlyph } from '@/components/icons/AppleGlyph';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -515,6 +515,26 @@ export default function MembershipsPage() {
                 {flipped && pass.token ? ` · se renueva en ${pass.seconds}s` : ''}
               </button>
 
+              {active.status === 'ACTIVE' && (
+                <div className="mt-3 w-[min(82vw,370px)]">
+                  <button
+                    type="button"
+                    onClick={addToWallet}
+                    disabled={managing}
+                    className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-black px-4 py-3 text-white ring-1 ring-white/20 transition-all active:scale-[0.99] disabled:opacity-60"
+                  >
+                    <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[.16] to-transparent opacity-70" />
+                    <AppleGlyph className="relative h-[15px] w-[15px]" />
+                    <span className="relative text-[13px] font-semibold tracking-tight">
+                      Añadir a Apple Wallet
+                    </span>
+                    {managing && (
+                      <span className="relative h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    )}
+                  </button>
+                </div>
+              )}
+
               {/* Historial + beneficios en un solo panel desplegable */}
               <div className="w-[min(82vw,370px)] mt-3">
                 <button
@@ -583,33 +603,23 @@ export default function MembershipsPage() {
               </div>
 
               {active.status === 'ACTIVE' && (
-                <button
-                  type="button"
-                  onClick={addToWallet}
-                  disabled={managing}
-                  className="mt-4 flex w-[min(82vw,370px)] items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white py-2.5 text-[12px] font-black text-black disabled:opacity-50"
-                >
-                  <Wallet size={14} /> Agregar a Apple Wallet
-                </button>
-              )}
-
-              {active.status === 'ACTIVE' && (
-                <div className="mt-2 flex w-[min(82vw,370px)] gap-2">
+                <div className="mt-3 flex w-[min(82vw,370px)] items-center justify-center gap-4 text-[11px]">
                   {active.paymentProvider === 'STRIPE' && (
                     <button
                       type="button"
                       onClick={openBillingPortal}
                       disabled={managing}
-                      className="flex-1 rounded-xl border border-white/10 bg-white/[.06] py-2.5 text-[11px] font-bold text-white/75 disabled:opacity-50"
+                      className="font-semibold text-white/55 underline-offset-4 hover:text-white/80 hover:underline disabled:opacity-50"
                     >
                       Gestionar pago
                     </button>
                   )}
+                  <span className="h-3 w-px bg-white/15" />
                   <button
                     type="button"
                     onClick={cancelMembership}
                     disabled={managing}
-                    className="flex-1 rounded-xl border border-rose-500/25 bg-rose-500/10 py-2.5 text-[11px] font-bold text-rose-300 disabled:opacity-50"
+                    className="font-semibold text-rose-300/80 underline-offset-4 hover:text-rose-200 hover:underline disabled:opacity-50"
                   >
                     {active.paymentProvider === 'STRIPE' ? 'Cancelar renovación' : 'Cancelar membresía'}
                   </button>

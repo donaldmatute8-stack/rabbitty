@@ -343,6 +343,16 @@ export const posRouter = router({
         conditions.push(ilike(coreUsers.firstName, cleanQ));
         conditions.push(ilike(coreUsers.lastName, cleanQ));
       }
+      // Teléfono: se compara por dígitos y por los últimos 10. El cajero teclea
+      // "322 274 1987" y la BD guarda "+5213222741987": el match exacto fallaba.
+      const phoneDigits = cleanQ.replace(/\D/g, "");
+      if (phoneDigits.length >= 8) {
+        const tail = phoneDigits.slice(-10);
+        conditions.push(
+          sql`right(regexp_replace(COALESCE(${coreUsers.phoneNumber}, ''), '\\D', '', 'g'), 10) = ${tail}`,
+        );
+      }
+
       // RabbittyCode numérico (13 barras decodificadas o tecleado): match exacto por scanCode
       const numeric = /^\d{1,9}$/.test(cleanQ);
       if (numeric) {
@@ -372,7 +382,7 @@ export const posRouter = router({
             WHEN lower(${coreUsers.username}) = ${cleanQ.toLowerCase()} THEN 0
             WHEN "scanCode"::text = ${/^\d{1,9}$/.test(cleanQ) ? cleanQ : "\N"} THEN 1
             WHEN ${coreUsers.telegramId} = ${cleanQ} THEN 2
-            WHEN regexp_replace(COALESCE(${coreUsers.phoneNumber}, ''), '\D', '', 'g') = ${cleanQ.replace(/\D/g, "")} AND ${cleanQ.replace(/\D/g, "")} != '' THEN 3
+            WHEN regexp_replace(COALESCE(${coreUsers.phoneNumber}, ''), '\\D', '', 'g') = ${cleanQ.replace(/\D/g, "")} AND ${cleanQ.replace(/\D/g, "")} != '' THEN 3
             WHEN id = ${isUuid ? cleanQ : ""} THEN 4
             ELSE 5
           END) ASC, id ASC`)

@@ -681,24 +681,24 @@ export default function PosPage() {
               // Escaneo DESPUÉS del cobro: se vincula al ticket ya pagado y se
               // actualiza el ticket virtual con el bloque de membresía.
               if (receiptModal && lastPaidOrderId) {
-                if (rabbitter) {
-                  try {
-                    const linked = await linkPostCheckout.mutateAsync({
-                      orderId: lastPaidOrderId,
-                      customerId: rabbitter.id,
-                      customerPhone: rabbitter.phoneNumber || rabbitter.telegramId || "sin-telefono",
-                      customerName: pass.memberName,
-                      awardBunz: true,
-                    });
-                    setPaidTicketData((prev: any) => prev ? {
-                      ...prev,
-                      customerName: pass.memberName,
-                      awardedBunz: linked.awardedBunz || prev.awardedBunz,
-                      membership: membershipTicketData(pass, false),
-                    } : prev);
-                  } catch (e) {
-                    console.error("[POS] link post-checkout membership:", e);
-                  }
+                // El pase YA identifica al socio: se vincula aunque `lookupRabbitter`
+                // no lo encuentre (p. ej. sin teléfono capturado).
+                try {
+                  const linked = await linkPostCheckout.mutateAsync({
+                    orderId: lastPaidOrderId,
+                    customerId: rabbitter?.id ?? pass.userId,
+                    customerPhone: rabbitter?.phoneNumber || rabbitter?.telegramId || "sin-telefono",
+                    customerName: pass.memberName,
+                    awardBunz: true,
+                  });
+                  setPaidTicketData((prev: any) => prev ? {
+                    ...prev,
+                    customerName: pass.memberName,
+                    awardedBunz: linked.awardedBunz || prev.awardedBunz,
+                    membership: membershipTicketData(pass, false),
+                  } : prev);
+                } catch (e) {
+                  console.error("[POS] link post-checkout membership:", e);
                 }
                 setRabbitterModalOpen(false);
                 setLastPaidOrderId(null);
@@ -710,7 +710,16 @@ export default function PosPage() {
                 setSelectedRabbitter(rabbitter);
                 toast.success(`🎟️ ${pass.memberName} vinculado · membresía detectada`);
               } else {
-                toast.info(`Membresía de ${pass.memberName} válida`);
+                // Sin ficha completa igual queda identificado por el pase.
+                setSelectedRabbitter({
+                  id: pass.userId,
+                  name: pass.memberName,
+                  phoneNumber: null,
+                  telegramId: null,
+                  bunzBalance: 0,
+                  hops: 0,
+                } as any);
+                toast.success(`🎟️ ${pass.memberName} vinculado por su pase`);
               }
             } catch (err: any) {
               toast.error(err?.message || "Membresía inválida o no vigente");
