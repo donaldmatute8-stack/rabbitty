@@ -43,7 +43,7 @@ export function PremiumHero({
               {eyebrow && (
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#FF5FA8]/80">{eyebrow}</p>
               )}
-              <h1 className="truncate text-[20px] font-black leading-tight text-white">{title}</h1>
+              <h1 className="text-balance break-words text-[19px] font-black leading-tight text-white">{title}</h1>
               {subtitle && <p className="mt-0.5 text-[11px] text-white/50">{subtitle}</p>}
             </div>
           </div>

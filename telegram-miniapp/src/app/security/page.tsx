@@ -607,7 +607,7 @@ export default function SecurityPage() {
   return (
     <ProfileSubpageLayout
       title={
-        currentSection === 'root' ? 'Configuración' :
+        currentSection === 'root' ? 'Seguridad' :
         currentSection === 'account' ? 'Tu cuenta' :
         currentSection === 'security_access' ? 'Seguridad' :
         currentSection === 'privacy' ? 'Privacidad' : 'Auditoría'
