@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import {
   membershipSubscriptions,
   membershipEntitlements,
+  membershipPlanVersions,
   entitlementUsages,
 } from "@rabbitty/database-core/schema";
 import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
@@ -104,6 +105,23 @@ export async function applyMembershipBenefitsToOrder(params: {
     }
     if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "La membresía está expirada." });
+    }
+
+    // Sucursales permitidas por el plan ([] = todas). Las cortesías no tienen
+    // planVersion y aplican en cualquier sucursal del negocio.
+    if (sub.planVersionId) {
+      const [ver] = await params.coreDb
+        .select({ branchesAllowed: membershipPlanVersions.branchesAllowed })
+        .from(membershipPlanVersions)
+        .where(eq(membershipPlanVersions.id, sub.planVersionId))
+        .limit(1);
+      const allowed = Array.isArray(ver?.branchesAllowed) ? (ver.branchesAllowed as string[]) : [];
+      if (allowed.length > 0 && !allowed.includes(params.branchId)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Este beneficio de membresía no aplica en esta sucursal.",
+        });
+      }
     }
 
     // Reset perezoso del ciclo: sin esto, tras la primera semana la cuota
