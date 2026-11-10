@@ -9,6 +9,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
 import { MembershipCard } from '@rabbitty/ui';
+import MembershipMarketplace from '@/features/memberships/Marketplace';
 
 interface Entitlement {
   id: string;
@@ -145,49 +146,95 @@ export default function MembershipsPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [usage, setUsage] = useState<Usage[]>([]);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [tab, setTab] = useState<'mine' | 'discover'>('mine');
+  const [celebrate, setCelebrate] = useState<{ planName?: string } | null>(null);
+  const [activating, setActivating] = useState(false);
   const dragControls = useDragControls();
+
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'discover' || t === 'mine') setTab(t);
+  }, []);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Post-checkout Stripe (?checkout=success|cancelled) → toast + recarga
-  useEffect(() => {
-    const q = typeof window !== 'undefined' ? window.location.search : '';
-    if (q.includes('checkout=success')) {
-      showToast('🎉 ¡Pago confirmado! Tu membresía ya está activa', 'success');
-      if (typeof window !== 'undefined') {
-        window.history.replaceState({}, '', '/memberships');
-        const t = setTimeout(() => window.location.reload(), 1200);
-        return () => clearTimeout(t);
-      }
+  const refreshMemberships = useCallback(async () => {
+    const headers = await PlatformBridge.getAuthHeaders();
+    const res = await fetch('/api/memberships', { headers, cache: 'no-store' });
+    const data = await res.json();
+    if (data.success) {
+      setMemberships(data.memberships ?? []);
+      setMemberName(data.memberName ?? null);
     }
-    if (q.includes('checkout=cancelled')) {
-      showToast('Pago cancelado', 'error');
-      if (typeof window !== 'undefined') window.history.replaceState({}, '', '/memberships');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Post-checkout: celebrar la membresía en vez de recargar a ciegas.
   useEffect(() => {
-    let alive = true;
-    if (!user?.id) return;
-    PlatformBridge.getAuthHeaders()
-      .then((headers) => fetch('/api/memberships', { headers }))
-      .then((res) => res.json())
-      .then((data) => {
-        if (!alive) return;
+    const params = new URLSearchParams(window.location.search);
+    const joined = params.get('joined') === '1';
+    const success = params.get('checkout') === 'success';
+    const cancelled = params.get('checkout') === 'cancelled';
+    const planName = params.get('plan') || undefined;
+
+    if (cancelled) {
+      showToast('Pago cancelado', 'error');
+      window.history.replaceState({}, '', '/memberships');
+      return;
+    }
+    if (!joined && !success) return;
+
+    window.history.replaceState({}, '', '/memberships');
+    if (joined) {
+      setCelebrate({ planName });
+      void refreshMemberships();
+      return;
+    }
+
+    setActivating(true);
+    let attempts = 0;
+    const tick = async () => {
+      attempts += 1;
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch('/api/memberships', { headers, cache: 'no-store' });
+        const data = await res.json();
         if (data.success) {
           setMemberships(data.memberships ?? []);
           setMemberName(data.memberName ?? null);
+          const activeSubs = (data.memberships ?? []).filter((m: any) => m.status === 'ACTIVE');
+          if (activeSubs.length > 0) {
+            setCelebrate({ planName: activeSubs[0].planName });
+            setActivating(false);
+            return;
+          }
         }
-      })
+      } catch { /* reintentar */ }
+      if (attempts < 8) setTimeout(tick, 2000);
+      else setActivating(false);
+    };
+    void tick();
+  }, [refreshMemberships, showToast]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setLoading(true);
+    refreshMemberships()
       .catch((err) => console.error('[Memberships] fetch error:', err))
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [user?.id]);
+      .finally(() => setLoading(false));
+  }, [user?.id, refreshMemberships]);
 
   const activeCard = useMemo(
     () => (active ? cardData(active, memberName) : null),
     [active, memberName],
   );
+  const celebrated = useMemo(() => {
+    if (!celebrate) return null;
+    const activeOnes = memberships.filter((m) => m.status === 'ACTIVE');
+    return (
+      (celebrate.planName ? activeOnes.find((m) => m.planName === celebrate.planName) : null) ??
+      activeOnes[0] ??
+      null
+    );
+  }, [celebrate, memberships]);
   const pass = usePassToken(active?.id ?? null, Boolean(active));
 
   useEffect(() => {
@@ -221,7 +268,30 @@ export default function MembershipsPage() {
 
   return (
     <ProfileSubpageLayout title="Mis Membresías">
-      {loading ? (
+      <div className="mb-4 flex rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-1">
+        <button
+          type="button"
+          onClick={() => { setTab('mine'); PlatformBridge.hapticFeedback('light'); }}
+          className={`flex-1 rounded-xl py-2.5 text-[12px] font-extrabold transition-all ${
+            tab === 'mine' ? 'bg-[#E91E63] text-white shadow-[0_4px_14px_rgba(233,30,99,.35)]' : 'text-(--text-muted)'
+          }`}
+        >
+          Mis pases
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTab('discover'); PlatformBridge.hapticFeedback('light'); }}
+          className={`flex-1 rounded-xl py-2.5 text-[12px] font-extrabold transition-all ${
+            tab === 'discover' ? 'bg-[#E91E63] text-white shadow-[0_4px_14px_rgba(233,30,99,.35)]' : 'text-(--text-muted)'
+          }`}
+        >
+          Descubrir
+        </button>
+      </div>
+
+      {tab === 'discover' ? (
+        <MembershipMarketplace />
+      ) : loading ? (
         <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500" /></div>
       ) : memberships.length === 0 ? (
         <EmptyState icon={<div className="text-[32px]">🎟️</div>} title="Sin membresías" description="Cuando te suscribas a un plan de un negocio, tu pase aparecerá aquí." />
@@ -425,6 +495,83 @@ export default function MembershipsPage() {
               </div>
                 </div>
               </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {activating && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl border border-[#E91E63]/25 bg-[#120B1D] p-7 text-center shadow-[0_0_50px_rgba(233,30,99,.25)]">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-[#E91E63]/25 border-t-[#E91E63]" />
+            <p className="mt-4 text-[15px] font-black text-white">Activando tu pase…</p>
+            <p className="mt-1 text-[12px] text-white/45">Esto puede tardar unos segundos mientras Stripe confirma el pago.</p>
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {celebrate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[140] overflow-y-auto bg-[#070308]"
+          >
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute -left-20 top-10 h-56 w-56 rounded-full bg-[#E91E63]/25 blur-3xl" />
+              <div className="absolute -right-20 bottom-10 h-56 w-56 rounded-full bg-[#7C3AED]/20 blur-3xl" />
+              {Array.from({ length: 18 }).map((_, i) => (
+                <motion.span
+                  key={i}
+                  initial={{ y: -30, opacity: 1 }}
+                  animate={{ y: 360, opacity: 0 }}
+                  transition={{ duration: 1.7, delay: i * 0.04, ease: 'easeIn' }}
+                  style={{
+                    position: 'absolute',
+                    left: `${(i * 53) % 100}%`,
+                    top: '16%',
+                    width: 6,
+                    height: 10,
+                    borderRadius: 2,
+                    background: ['#E91E63', '#FFD700', '#A855F7', '#22D3EE'][i % 4],
+                  }}
+                />
+              ))}
+            </div>
+
+            <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-5 py-10">
+              <p className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FF5FA8]">BIENVENIDO A</p>
+              <h2 className="mt-1 text-center text-[26px] font-black leading-tight text-white">
+                {celebrate.planName || 'Tu membresía'}
+              </h2>
+              <div className="mt-5 w-[min(84vw,360px)]">
+                <MembershipCard
+                  preview
+                  data={
+                    celebrated
+                      ? cardData(celebrated, memberName)
+                      : {
+                          planName: celebrate.planName || 'Tu membresía',
+                          businessName: 'Rabbitty',
+                          branchLabel: 'Miembro',
+                          validityLabel: 'Activa',
+                          membersLabel: 'Miembro',
+                          transferableLabel: 'Intransferible',
+                          tagline: 'Bienvenido a Rabbitty',
+                          accentColor: '#FF2D95',
+                        }
+                  }
+                />
+              </div>
+              <p className="mt-5 text-center text-[13px] text-white/55">Tu pase ya está activo. Muéstralo en caja cuando lo necesites.</p>
+              <button
+                type="button"
+                onClick={() => { setCelebrate(null); setTab('mine'); }}
+                className="mt-5 w-[min(84vw,360px)] rounded-2xl bg-gradient-to-r from-[#E91E63] to-[#FF2E93] py-3.5 text-[14px] font-black text-white shadow-[0_12px_30px_-12px_rgba(233,30,99,.7)] active:scale-[0.98]"
+              >
+                Ver mi pase
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

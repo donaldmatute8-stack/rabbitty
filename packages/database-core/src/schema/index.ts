@@ -1051,6 +1051,13 @@ export const membershipPlans = pgTable("membership_plans", {
   cardDetail: text("cardDetail"),
   /** Frase inferior de la tarjeta (a elección del tenant). */
   cardTagline: text("cardTagline"),
+  // ── Marketplace ───────────────────────────────────────────────────────────
+  isMarketplaceVisible: boolean("isMarketplaceVisible").default(false).notNull(),
+  category: text("category"),
+  tags: jsonb("tags").default([]).notNull(),
+  featuredUntil: timestamp("featuredUntil"),
+  foundingSlots: integer("foundingSlots"),
+  publishedAt: timestamp("publishedAt"),
   isActive: boolean("isActive").default(true).notNull(),
   currentVersionId: fkIdOpt("currentVersionId"), // FK set after insert to avoid circular
   ...timestamps,
@@ -1075,6 +1082,8 @@ export const membershipPlanVersions = pgTable("membership_plan_versions", {
   branchesAllowed: jsonb("branchesAllowed").default([]).notNull(),
   maxMembersLimit: integer("maxMembersLimit"),           // null = ilimitado
   isPublished: boolean("isPublished").default(false).notNull(),
+  /** Días de prueba gratis en Stripe (0/null = sin trial). */
+  trialDays: integer("trialDays"),
   stripeProductId: text("stripeProductId"),             // Fase 15.1 Stripe Connect
   stripePriceId: text("stripePriceId"),
   ...timestamps,
@@ -1104,6 +1113,9 @@ export const membershipSubscriptions = pgTable("membership_subscriptions", {
   membershipOrigin: text("membershipOrigin"),            // PURCHASED | COURTESY | INVITATION | PROMOTIONAL (null=legacy→PURCHASED)
   issuedByUserId: text("issuedByUserId"),                // quién otorgó (cortesía/promo)
   giftNote: text("giftNote"),                            // mensaje personalizado del regalo
+  /** MARKETPLACE | POS | GIFT | PROMO | AFFILIATE_PAGE */
+  acquisitionSource: text("acquisitionSource"),
+  checkoutSessionId: text("checkoutSessionId"),
   revokedAt: timestamp("revokedAt"),
   revokedByUserId: text("revokedByUserId"),
   revocationReason: text("revocationReason"),

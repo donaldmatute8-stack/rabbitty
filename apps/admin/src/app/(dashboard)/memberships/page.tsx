@@ -73,6 +73,8 @@ export default function MembershipsPage() {
     planId: string; name: string; description: string | null; price: number; interval: Interval; rules: RuleDraft[];
     coverImageUrl?: string | null; badgeColor?: string | null; maxMembersLimit?: number | null;
     cardNiche?: string | null; cardDetail?: string | null; cardTagline?: string | null;
+    isMarketplaceVisible?: boolean; category?: string | null; tags?: string[];
+    foundingSlots?: number | null; trialDays?: number | null; featured?: boolean;
   }>(null);
 
   // GAP 7/8: revocación de pagadas + renovación de caja
@@ -97,6 +99,7 @@ export default function MembershipsPage() {
   const enabled = !!businessId;
   const businessName = (businesses ?? []).find((b) => b.id === businessId)?.name ?? "Tu negocio";
   const { data: plans } = trpc.memberships.listPlansAdmin.useQuery({ businessId }, { enabled });
+  const { data: analytics } = trpc.memberships.businessAnalytics.useQuery({ businessId }, { enabled });
   const { data: members } = trpc.memberships.listMembers.useQuery({ businessId }, { enabled: enabled && tab === "members" });
 
   const publish = trpc.memberships.publishPlanVersion.useMutation({
@@ -167,6 +170,27 @@ export default function MembershipsPage() {
         </div>
       )}
 
+      {enabled && analytics && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Miembros activos</p>
+            <p className="mt-1 text-2xl font-black text-white">{analytics.activeMembers}</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/60">MRR</p>
+            <p className="mt-1 text-2xl font-black text-emerald-300">${Math.round(analytics.mrr).toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Emitidas</p>
+            <p className="mt-1 text-2xl font-black text-white">{analytics.issued}</p>
+          </div>
+          <div className="rounded-2xl border border-[#E91E63]/20 bg-[#E91E63]/10 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#FF7DBB]/70">Canjes</p>
+            <p className="mt-1 text-2xl font-black text-[#FF5FA8]">{analytics.redemptions}</p>
+          </div>
+        </div>
+      )}
+
       {enabled && tab === "plans" && (
         <div className="grid gap-4 md:grid-cols-2">
           {plans?.length === 0 && <p className="text-sm text-white/50">Aún no hay planes. Crea el primero.</p>}
@@ -180,9 +204,16 @@ export default function MembershipsPage() {
                     <h3 className="font-semibold text-white">{plan.name}</h3>
                     <p className="text-xs text-white/50">{plan.description}</p>
                   </div>
-                  <span className={cn("text-[10px] px-2 py-1 rounded-full border", published ? "border-emerald-500/40 text-emerald-300" : "border-amber-500/40 text-amber-300")}>
-                    {published ? "Publicado" : "Borrador"}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={cn("text-[10px] px-2 py-1 rounded-full border", published ? "border-emerald-500/40 text-emerald-300" : "border-amber-500/40 text-amber-300")}>
+                      {published ? "Publicado" : "Borrador"}
+                    </span>
+                    {plan.isMarketplaceVisible && (
+                      <span className="text-[9px] font-black px-2 py-0.5 rounded-full border border-[#E91E63]/40 text-[#FF7DBB]">
+                        MARKETPLACE
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {latest && (
                   <p className="text-2xl font-bold text-white">
@@ -212,6 +243,12 @@ export default function MembershipsPage() {
                           cardNiche: plan.cardNiche ?? "other",
                           cardDetail: plan.cardDetail ?? null,
                           cardTagline: plan.cardTagline ?? null,
+                          isMarketplaceVisible: plan.isMarketplaceVisible ?? false,
+                          category: plan.category ?? null,
+                          tags: Array.isArray(plan.tags) ? (plan.tags as string[]) : [],
+                          foundingSlots: plan.foundingSlots ?? null,
+                          trialDays: latest.trialDays ?? null,
+                          featured: !!plan.featuredUntil && new Date(plan.featuredUntil) > new Date(),
                           rules: ((latest.benefitRules as RuleDraft[]) ?? []).map((r) => ({
                             type: r.type,
                             quotaPerCycle: String(r.quotaPerCycle ?? 1),
@@ -404,6 +441,8 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
     price: number; interval: Interval; rules: RuleDraft[];
     coverImageUrl?: string | null; badgeColor?: string | null; maxMembersLimit?: number | null;
     cardNiche?: string | null; cardDetail?: string | null; cardTagline?: string | null;
+    isMarketplaceVisible?: boolean; category?: string | null; tags?: string[];
+    foundingSlots?: number | null; trialDays?: number | null; featured?: boolean;
   } | null;
   onClose: () => void;
   onDone: () => void;
@@ -420,6 +459,12 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
   const [cardNiche, setCardNiche] = useState(editPlan?.cardNiche ?? "other");
   const [cardDetail, setCardDetail] = useState(editPlan?.cardDetail ?? "");
   const [cardTagline, setCardTagline] = useState(editPlan?.cardTagline ?? "");
+  const [marketplaceVisible, setMarketplaceVisible] = useState(editPlan?.isMarketplaceVisible ?? false);
+  const [category, setCategory] = useState(editPlan?.category ?? "");
+  const [tags, setTags] = useState((editPlan?.tags ?? []).join(", "));
+  const [foundingSlots, setFoundingSlots] = useState(editPlan?.foundingSlots ? String(editPlan.foundingSlots) : "");
+  const [trialDays, setTrialDays] = useState(editPlan?.trialDays ? String(editPlan.trialDays) : "");
+  const [featured, setFeatured] = useState(editPlan?.featured ?? false);
   const [uploading, setUploading] = useState(false);
 
   const create = trpc.memberships.createPlan.useMutation({
@@ -598,6 +643,38 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
           </p>
         </div>
 
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-white/50">Marketplace</p>
+              <p className="text-[10px] text-white/35">Visible en Descubrir y en tu página de afiliado.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMarketplaceVisible((v) => !v)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${marketplaceVisible ? 'bg-[#E91E63]' : 'bg-white/15'}`}
+              aria-pressed={marketplaceVisible}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${marketplaceVisible ? 'left-[22px]' : 'left-0.5'}`} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <select className={inputCls} value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">Categoría…</option>
+              {Object.entries(NICHE_PRESETS).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            <input className={inputCls} placeholder="Tags (coma)" value={tags} onChange={(e) => setTags(e.target.value)} />
+            <input className={inputCls} placeholder="Lugares fundador" value={foundingSlots} onChange={(e) => setFoundingSlots(e.target.value.replace(/\D/g, '').slice(0, 5))} />
+            <input className={inputCls} placeholder="Días de prueba" value={trialDays} onChange={(e) => setTrialDays(e.target.value.replace(/\D/g, '').slice(0, 2))} />
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-white/60">
+            <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
+            Destacar 7 días en el marketplace
+          </label>
+        </div>
+
         <div className="space-y-2">
           <p className="text-xs text-white/50">Beneficios</p>
           {rules.map((r, i) => (
@@ -693,7 +770,7 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
           className="w-full"
           disabled={(isEdit ? update.isPending : create.isPending) || name.trim().length < 2}
           onClick={() => isEdit
-            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [], coverImageUrl: coverImageUrl.trim() || null, badgeColor, maxMembersLimit: maxMembers ? Number(maxMembers) : undefined, cardNiche, cardDetail: cardDetail.trim() || null, cardTagline: cardTagline.trim() || null })
+            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [], coverImageUrl: coverImageUrl.trim() || null, badgeColor, maxMembersLimit: maxMembers ? Number(maxMembers) : undefined, cardNiche, cardDetail: cardDetail.trim() || null, cardTagline: cardTagline.trim() || null, isMarketplaceVisible: marketplaceVisible, category: category.trim() || null, tags: tags.split(",").map((t) => t.trim()).filter(Boolean), foundingSlots: foundingSlots ? Number(foundingSlots) : null, trialDays: trialDays ? Number(trialDays) : undefined, featured })
             : create.mutate({
                 businessId,
                 name: name.trim(),
@@ -709,6 +786,12 @@ function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
                 cardNiche,
                 cardDetail: cardDetail.trim() || undefined,
                 cardTagline: cardTagline.trim() || undefined,
+                isMarketplaceVisible: marketplaceVisible,
+                category: category.trim() || undefined,
+                tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+                foundingSlots: foundingSlots ? Number(foundingSlots) : undefined,
+                trialDays: trialDays ? Number(trialDays) : undefined,
+                featured,
               })}
         >
           {isEdit ? "Guardar como nueva versión" : "Crear plan"}

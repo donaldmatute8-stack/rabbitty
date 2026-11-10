@@ -222,6 +222,8 @@ export async function POST(req: Request) {
               paymentProvider: "STRIPE",
               membershipOrigin: "PURCHASED",
               paymentProviderSubId: String(session.subscription),
+              acquisitionSource: meta.acquisitionSource ?? "MARKETPLACE",
+              checkoutSessionId: session.id,
               qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
             }).returning();
             // Entitlements: sin estas filas el pase no tiene beneficios que
@@ -268,6 +270,71 @@ export async function POST(req: Request) {
                 .limit(1);
               if (bizRow?.ownerId) await notifyMembershipUser(coreDb, bizRow.ownerId, "💸 Vendiste una membresía", `Nuevo miembro activo en ${bizRow.name} — la cuota llega por Stripe.`, "/memberships");
             } catch (ownErr) { console.error("[Stripe Webhook] notify owner falló:", ownErr); }
+          }
+        }
+
+        // ── Membresías one-time: pago único, vigencia de 12 meses ──
+        if (meta.kind === "MEMBERSHIP_ONE_TIME" && session.mode === "payment") {
+          const coreDb = getCoreDb();
+          const [dup] = await coreDb
+            .select({ id: membershipSubscriptions.id })
+            .from(membershipSubscriptions)
+            .where(eq(membershipSubscriptions.checkoutSessionId, session.id))
+            .limit(1);
+          if (!dup) {
+            const now = new Date();
+            const periodEnd = new Date(now);
+            periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+            const [newSub] = await coreDb.insert(membershipSubscriptions).values({
+              userId: meta.userId,
+              businessId: meta.businessId,
+              planVersionId: meta.planVersionId,
+              status: "ACTIVE",
+              currentPeriodStart: now,
+              currentPeriodEnd: periodEnd,
+              paymentProvider: "STRIPE",
+              membershipOrigin: "PURCHASED",
+              paymentProviderSubId: session.payment_intent ? String(session.payment_intent) : null,
+              acquisitionSource: meta.acquisitionSource ?? "MARKETPLACE",
+              checkoutSessionId: session.id,
+              qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
+            }).returning();
+
+            try {
+              const [versionRow] = await coreDb.select({ version: membershipPlanVersions })
+                .from(membershipPlanVersions)
+                .where(eq(membershipPlanVersions.id, meta.planVersionId))
+                .limit(1);
+              const rules = (versionRow?.version?.benefitRules ?? []) as Array<{
+                type: string; targetRefId?: string | null; quotaPerCycle?: number | null;
+                cycleResetType?: string | null; discountPct?: number | null; creditBalance?: number | null;
+              }>;
+              const addCycle = (from: Date, reset: string | null | undefined): Date => {
+                const d = new Date(from);
+                if (reset === "MONTHLY") d.setUTCMonth(d.getUTCMonth() + 1);
+                else if (reset === "WEEKLY") d.setUTCDate(d.getUTCDate() + 7);
+                else if (reset === "DAILY") d.setUTCDate(d.getUTCDate() + 1);
+                else return periodEnd;
+                return d > periodEnd ? periodEnd : d;
+              };
+              const rows = rules.map((r) => ({
+                subscriptionId: newSub.id,
+                benefitType: r.type,
+                targetRefId: r.targetRefId ?? null,
+                quotaPerCycle: r.quotaPerCycle ?? 1,
+                cycleResetType: r.cycleResetType ?? "FIXED",
+                currentUsageInCycle: 0,
+                cycleStartDate: now,
+                cycleEndDate: addCycle(now, r.cycleResetType),
+                discountPct: r.discountPct ?? null,
+                creditBalance: r.creditBalance ?? null,
+              }));
+              if (rows.length > 0) await coreDb.insert(membershipEntitlements).values(rows);
+            } catch (entErr) {
+              console.error("[Stripe Webhook] one-time entitlements falló:", entErr);
+            }
+
+            await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa por 12 meses.", "/memberships");
           }
         }
         break;

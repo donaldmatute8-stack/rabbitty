@@ -608,6 +608,12 @@ export const membershipsRouter = router({
       cardNiche: z.string().max(40).optional(),
       cardDetail: z.string().max(120).optional(),
       cardTagline: z.string().max(80).optional(),
+      isMarketplaceVisible: z.boolean().optional(),
+      category: z.string().max(40).optional(),
+      tags: z.array(z.string().max(30)).max(12).optional(),
+      foundingSlots: z.number().int().min(1).max(100000).optional(),
+      trialDays: z.number().int().min(0).max(90).optional(),
+      featured: z.boolean().optional(),
       priceFiat: z.number().min(0),
       currency: z.string().length(3).default("MXN"),
       billingInterval: intervalSchema,
@@ -630,6 +636,12 @@ export const membershipsRouter = router({
           cardNiche: input.cardNiche || "other",
           cardDetail: input.cardDetail || null,
           cardTagline: input.cardTagline || null,
+          isMarketplaceVisible: input.isMarketplaceVisible ?? false,
+          category: input.category || null,
+          tags: input.tags ?? [],
+          foundingSlots: input.foundingSlots ?? null,
+          publishedAt: input.isMarketplaceVisible ? new Date() : null,
+          featuredUntil: input.featured ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null,
         }).returning();
         const [version] = await tx.insert(membershipPlanVersions).values({
           planId: plan.id,
@@ -640,6 +652,7 @@ export const membershipsRouter = router({
           benefitRules: input.benefitRules,
           branchesAllowed: input.branchesAllowed,
           maxMembersLimit: input.maxMembersLimit,
+          trialDays: input.trialDays ?? null,
         }).returning();
         return { plan, version };
       });
@@ -657,6 +670,12 @@ export const membershipsRouter = router({
       cardNiche: z.string().max(40).optional(),
       cardDetail: z.string().max(120).nullable().optional(),
       cardTagline: z.string().max(80).nullable().optional(),
+      isMarketplaceVisible: z.boolean().optional(),
+      category: z.string().max(40).nullable().optional(),
+      tags: z.array(z.string().max(30)).max(12).optional(),
+      foundingSlots: z.number().int().min(1).max(100000).nullable().optional(),
+      trialDays: z.number().int().min(0).max(90).optional(),
+      featured: z.boolean().optional(),
       priceFiat: z.number().min(0),
       billingInterval: intervalSchema,
       benefitRules: z.array(benefitRuleSchema).min(1),
@@ -684,6 +703,7 @@ export const membershipsRouter = router({
         benefitRules: input.benefitRules,
         branchesAllowed: input.branchesAllowed,
         maxMembersLimit: input.maxMembersLimit,
+        trialDays: input.trialDays ?? null,
       }).returning();
 
       await ctx.coreDb.update(membershipPlans).set({
@@ -701,6 +721,16 @@ export const membershipsRouter = router({
         cardTagline: input.cardTagline === undefined
           ? plan.cardTagline
           : (input.cardTagline?.trim() || null),
+        isMarketplaceVisible: input.isMarketplaceVisible ?? plan.isMarketplaceVisible,
+        category: input.category === undefined ? plan.category : (input.category?.trim() || null),
+        tags: input.tags ?? plan.tags,
+        foundingSlots: input.foundingSlots === undefined ? plan.foundingSlots : input.foundingSlots,
+        publishedAt: input.isMarketplaceVisible && !plan.publishedAt ? new Date() : plan.publishedAt,
+        featuredUntil: input.featured === undefined
+          ? plan.featuredUntil
+          : input.featured
+            ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            : null,
         updatedAt: new Date(),
       }).where(eq(membershipPlans.id, plan.id));
 
@@ -1255,6 +1285,71 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           benefitType: updated.benefitType,
         };
       });
+    }),
+
+  /** Admin: resumen de negocio para el marketplace (miembros, MRR, canjes). */
+  businessAnalytics: posProcedure
+    .input(z.object({ businessId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+
+      const rows = await ctx.coreDb
+        .select({
+          sub: membershipSubscriptions,
+          version: membershipPlanVersions,
+          plan: membershipPlans,
+        })
+        .from(membershipSubscriptions)
+        .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+        .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+        .where(eq(membershipSubscriptions.businessId, input.businessId));
+
+      const active = rows.filter((r) => r.sub.status === "ACTIVE");
+      const mrr = active.reduce((sum, r) => {
+        const price = Number(r.version?.priceFiat ?? 0);
+        if (price <= 0) return sum;
+        const interval = r.version?.billingInterval;
+        const months = interval === "MONTHLY" ? 1
+          : interval === "QUARTERLY" ? 3
+          : interval === "SEMIANNUAL" ? 6
+          : 12;
+        return sum + price / months;
+      }, 0);
+
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const cancelledLast30 = rows.filter(
+        (r) =>
+          ["CANCELLED", "EXPIRED", "REVOKED"].includes(r.sub.status) &&
+          r.sub.updatedAt &&
+          new Date(r.sub.updatedAt) >= cutoff,
+      ).length;
+
+      const [redemptionRow] = await ctx.coreDb
+        .select({ count: sql<number>`COALESCE(SUM(${entitlementUsages.quantityUsed}), 0)::int` })
+        .from(entitlementUsages)
+        .innerJoin(membershipSubscriptions, eq(membershipSubscriptions.id, entitlementUsages.subscriptionId))
+        .where(eq(membershipSubscriptions.businessId, input.businessId));
+
+      const topBenefits = await ctx.coreDb
+        .select({
+          type: membershipEntitlements.benefitType,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(membershipEntitlements)
+        .innerJoin(membershipSubscriptions, eq(membershipSubscriptions.id, membershipEntitlements.subscriptionId))
+        .where(eq(membershipSubscriptions.businessId, input.businessId))
+        .groupBy(membershipEntitlements.benefitType)
+        .orderBy(desc(sql`count(*)`))
+        .limit(5);
+
+      return {
+        activeMembers: active.length,
+        issued: rows.length,
+        mrr: Math.round(mrr * 100) / 100,
+        cancelledLast30,
+        redemptions: Number(redemptionRow?.count ?? 0),
+        topBenefits: topBenefits.map((b) => ({ type: b.type, count: Number(b.count) })),
+      };
     }),
 
   /** Admin: lista de miembros del negocio con estado. */

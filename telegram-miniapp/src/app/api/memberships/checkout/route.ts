@@ -23,6 +23,8 @@ const INTERVAL_TO_STRIPE: Record<string, { interval: 'month' | 'year'; interval_
 };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.rabbitty.me';
+/** Comisión de plataforma sobre membresías pagadas. */
+const PLATFORM_FEE_PERCENT = 8;
 
 /**
  * Suscripción self-service con Stripe Connect:
@@ -93,7 +95,10 @@ export async function POST(req: NextRequest) {
     const stripe = new Stripe(secretKey, { apiVersion: '2024-06-20' as any });
     const acct = account.stripeAccountId;
 
-    // Product + Price recurrentes EN LA CUENTA DEL AFILIADO (idempotente por columnas reservadas)
+    const isOneTime = row.version.billingInterval === 'ONE_TIME';
+    const source = String(body?.source || 'MARKETPLACE');
+
+    // Product + Price EN LA CUENTA DEL AFILIADO (idempotente por columnas reservadas)
     let priceId = row.version.stripePriceId || null;
     if (!priceId) {
       const product = await stripe.products.create(
@@ -104,50 +109,61 @@ export async function POST(req: NextRequest) {
         },
         { stripeAccount: acct },
       );
-      const interval = row.version.billingInterval === 'ONE_TIME' ? null : INTERVAL_TO_STRIPE[row.version.billingInterval];
-      if (!interval) {
-        return NextResponse.json({ error: 'Este plan no admite suscripción recurrente' }, { status: 400 });
+      const priceData: Record<string, unknown> = {
+        product: product.id,
+        currency: (row.version.currency || 'MXN').toLowerCase(),
+        unit_amount: Math.round(Number(row.version.priceFiat) * 100),
+        metadata: { businessId: biz.id, planId: row.plan.id, planVersionId: row.version.id },
+      };
+      if (!isOneTime) {
+        const interval = INTERVAL_TO_STRIPE[row.version.billingInterval];
+        if (!interval) {
+          return NextResponse.json({ error: 'Este plan no admite suscripción recurrente' }, { status: 400 });
+        }
+        priceData.recurring = { interval: interval.interval, interval_count: interval.interval_count };
       }
-      const price = await stripe.prices.create(
-        {
-          product: product.id,
-          currency: (row.version.currency || 'MXN').toLowerCase(),
-          unit_amount: Math.round(Number(row.version.priceFiat) * 100),
-          recurring: { interval: interval.interval, interval_count: interval.interval_count },
-          metadata: { businessId: biz.id, planId: row.plan.id, planVersionId: row.version.id },
-        },
-        { stripeAccount: acct },
-      );
+      const price = await stripe.prices.create(priceData as any, { stripeAccount: acct });
       priceId = price.id;
       await db.update(membershipPlanVersions)
         .set({ stripeProductId: product.id, stripePriceId: price.id, updatedAt: new Date() })
         .where(eq(membershipPlanVersions.id, row.version.id));
     }
 
-    const session = await stripe.checkout.sessions.create(
-      {
-        mode: 'subscription',
-        line_items: [{ price: priceId, quantity: 1 }],
-        client_reference_id: caller.id,
-        metadata: {
-          kind: 'MEMBERSHIP_SUBSCRIPTION',
-          userId: caller.id,
-          businessId: biz.id,
-          planVersionId: row.version.id,
-          stripeAccount: acct,
-        },
-        subscription_data: {
-          metadata: {
-            userId: caller.id,
-            businessId: biz.id,
-            planVersionId: row.version.id,
-          },
-        },
-        success_url: `${APP_URL}/memberships?checkout=success`,
-        cancel_url: `${APP_URL}/memberships?checkout=cancelled`,
-      },
-      { stripeAccount: acct },
-    );
+    const metadata: Record<string, string> = {
+      kind: isOneTime ? 'MEMBERSHIP_ONE_TIME' : 'MEMBERSHIP_SUBSCRIPTION',
+      userId: caller.id,
+      businessId: biz.id,
+      planVersionId: row.version.id,
+      stripeAccount: acct,
+      acquisitionSource: source,
+    };
+
+    const sessionParams: any = {
+      mode: isOneTime ? 'payment' : 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      client_reference_id: caller.id,
+      metadata,
+      success_url: `${APP_URL}/memberships?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}/memberships?checkout=cancelled`,
+    };
+
+    if (isOneTime) {
+      sessionParams.payment_intent_data = {
+        application_fee_amount: Math.round(
+          Number(row.version.priceFiat) * 100 * (PLATFORM_FEE_PERCENT / 100),
+        ),
+        metadata,
+      };
+    } else {
+      sessionParams.subscription_data = {
+        application_fee_percent: PLATFORM_FEE_PERCENT,
+        metadata,
+      };
+      const trialDays = Number(row.version.trialDays || 0);
+      if (trialDays > 0) sessionParams.subscription_data.trial_period_days = trialDays;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams, { stripeAccount: acct });
 
     return NextResponse.json({ success: true, url: session.url });
   } catch (error) {
