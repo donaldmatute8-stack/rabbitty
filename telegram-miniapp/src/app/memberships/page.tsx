@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
+import { Wallet } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -284,6 +285,33 @@ export default function MembershipsPage() {
     }
   };
 
+  const addToWallet = async () => {
+    if (!active) return;
+    setManaging(true);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch(`/api/memberships/${active.id}/wallet`, { headers });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Wallet no está disponible todavía');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `rabbitty-${active.id.slice(0, 8)}.pkpass`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      showToast('Pase listo. Ábrelo para agregarlo a Wallet.', 'success');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'No se pudo abrir Wallet', 'error');
+    } finally {
+      setManaging(false);
+    }
+  };
+
   const cancelMembership = async () => {
     if (!active) return;
     const isPaid = active.paymentProvider === 'STRIPE';
@@ -541,7 +569,18 @@ export default function MembershipsPage() {
               </div>
 
               {active.status === 'ACTIVE' && (
-                <div className="mt-4 flex w-[min(82vw,370px)] gap-2">
+                <button
+                  type="button"
+                  onClick={addToWallet}
+                  disabled={managing}
+                  className="mt-4 flex w-[min(82vw,370px)] items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white py-2.5 text-[12px] font-black text-black disabled:opacity-50"
+                >
+                  <Wallet size={14} /> Agregar a Apple Wallet
+                </button>
+              )}
+
+              {active.status === 'ACTIVE' && (
+                <div className="mt-2 flex w-[min(82vw,370px)] gap-2">
                   {active.paymentProvider === 'STRIPE' && (
                     <button
                       type="button"
