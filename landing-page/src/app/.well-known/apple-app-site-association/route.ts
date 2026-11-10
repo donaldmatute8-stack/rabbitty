@@ -14,6 +14,7 @@ export async function GET() {
             { "/": "/pay/*", "comment": "Pagos POS" },
             { "/": "/affiliate/*", "comment": "Fichas de afiliados" },
             { "/": "/kiosk-confirm*", "comment": "Identidad del cliente para el kiosko" },
+            { "/": "/memberships*", "comment": "Pase de Apple Wallet y detalle de membresía" },
           ],
         },
       ],

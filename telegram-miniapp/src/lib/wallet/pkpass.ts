@@ -111,6 +111,13 @@ export function buildPassJson(input: WalletPassInput, creds: WalletCredentials) 
         ...(input.memberIdShort
           ? [{ key: "id", label: "ID DE MIEMBRO", value: input.memberIdShort }]
           : []),
+        {
+          // Universal link: iOS lo abre en Rabbitty si la app está instalada
+          // (ver /memberships* en apple-app-site-association).
+          key: "open",
+          label: "ABRIR EN LA APP",
+          value: `https://app.rabbitty.me/memberships?pass=${encodeURIComponent(input.serialNumber)}`,
+        },
         { key: "help", label: "SOPORTE", value: "https://app.rabbitty.me/support" },
       ],
     },

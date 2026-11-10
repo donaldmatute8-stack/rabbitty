@@ -158,6 +158,20 @@ export default function MembershipsPage() {
     const t = new URLSearchParams(window.location.search).get('tab');
     if (t === 'discover' || t === 'mine') setTab(t);
   }, []);
+
+  // Deep link desde el pase de Apple Wallet: /memberships?pass=<subscriptionId>
+  const openedFromPass = useRef(false);
+  useEffect(() => {
+    if (openedFromPass.current || memberships.length === 0) return;
+    const passId = new URLSearchParams(window.location.search).get('pass');
+    if (!passId) return;
+    const found = memberships.find((m) => m.id === passId);
+    if (!found) return;
+    openedFromPass.current = true;
+    setTab('mine');
+    setActive(found);
+    window.history.replaceState({}, '', '/memberships');
+  }, [memberships]);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const refreshMemberships = useCallback(async () => {
