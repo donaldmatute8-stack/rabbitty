@@ -599,7 +599,11 @@ export const membershipsRouter = router({
       businessId: z.string().uuid(),
       name: z.string().min(2).max(80),
       description: z.string().max(500).optional(),
-      coverImageUrl: z.string().url().optional(),
+      // Acepta URL absoluta o ruta del repo (/memberships/626/…webp).
+      coverImageUrl: z.string().max(500).refine(
+        (v) => v.startsWith("/") || /^https?:\/\//.test(v),
+        { message: "coverImageUrl debe ser una URL http(s) o una ruta que empiece por /" },
+      ).optional(),
       badgeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
       priceFiat: z.number().min(0),
       currency: z.string().length(3).default("MXN"),
@@ -761,7 +765,17 @@ export const membershipsRouter = router({
       }
 
       const now = new Date();
-      const periodEnd = addInterval(now, row.version.billingInterval as z.infer<typeof intervalSchema>);
+      // Un plan gratuito no debe caducar: si el precio es 0, la suscripción es
+      // indefinida (revocable) y sus ciclos semanales siguen reiniciándose.
+      const isFreePlan = Number(row.version.priceFiat) === 0;
+      const periodEnd = isFreePlan
+        ? null
+        : addInterval(now, row.version.billingInterval as z.infer<typeof intervalSchema>);
+      const entitlementHardEnd = periodEnd ?? (() => {
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() + 99);
+        return d;
+      })();
       const rules = row.version.benefitRules as z.infer<typeof benefitRuleSchema>[];
 
       return await ctx.coreDb.transaction(async (tx: any) => {
@@ -804,11 +818,12 @@ export const membershipsRouter = router({
           status: "ACTIVE",
           currentPeriodStart: now,
           currentPeriodEnd: periodEnd,
+          noExpiration: isFreePlan,
           paymentProvider: input.paymentProvider,
           membershipOrigin: "PURCHASED",
           qrPassSecret: randomBytes(32).toString("hex"),
         }).returning();
-        await tx.insert(membershipEntitlements).values(buildEntitlementRows(sub.id, rules, now, periodEnd));
+        await tx.insert(membershipEntitlements).values(buildEntitlementRows(sub.id, rules, now, entitlementHardEnd));
 
         // Notificar al cliente (venta en caja / promo) — vía el canal S2S de la miniapp
         if (targetUserId !== ctx.userId) {
@@ -859,21 +874,30 @@ export const membershipsRouter = router({
           eq(membershipSubscriptions.status, "ACTIVE"),
         ));
 
-      return subs.map((s) => ({
-        entitlementId: s.entitlement.id,
-        subscriptionId: s.sub.id,
-        planName: s.plan?.name ?? "Cortesía 🎁",
-        membershipOrigin: s.sub.membershipOrigin,
-        benefitType: s.entitlement.benefitType,
-        targetRefId: s.entitlement.targetRefId,
-        quotaPerCycle: s.entitlement.quotaPerCycle,
-        remaining: s.entitlement.quotaPerCycle != null
-          ? Math.max(0, s.entitlement.quotaPerCycle - s.entitlement.currentUsageInCycle)
-          : null,
-        cycleResetType: s.entitlement.cycleResetType,
-        discountPct: s.entitlement.discountPct != null ? Number(s.entitlement.discountPct) : null,
-        creditBalance: s.entitlement.creditBalance != null ? Number(s.entitlement.creditBalance) : null,
-      }));
+      const now = new Date();
+      return subs.map((s) => {
+        // Un ciclo vencido se muestra con la cuota completa: el reset real
+        // ocurre al aplicar el beneficio (membershipBenefits.ts).
+        const cycleExpired = s.entitlement.cycleResetType !== "FIXED"
+          && s.entitlement.cycleEndDate != null
+          && new Date(s.entitlement.cycleEndDate) <= now;
+        const used = cycleExpired ? 0 : s.entitlement.currentUsageInCycle;
+        return {
+          entitlementId: s.entitlement.id,
+          subscriptionId: s.sub.id,
+          planName: s.plan?.name ?? "Cortesía 🎁",
+          membershipOrigin: s.sub.membershipOrigin,
+          benefitType: s.entitlement.benefitType,
+          targetRefId: s.entitlement.targetRefId,
+          quotaPerCycle: s.entitlement.quotaPerCycle,
+          remaining: s.entitlement.quotaPerCycle != null
+            ? Math.max(0, s.entitlement.quotaPerCycle - used)
+            : null,
+          cycleResetType: s.entitlement.cycleResetType,
+          discountPct: s.entitlement.discountPct != null ? Number(s.entitlement.discountPct) : null,
+          creditBalance: s.entitlement.creditBalance != null ? Number(s.entitlement.creditBalance) : null,
+        };
+      });
     }),
 
   /** Membresías del usuario con estado de derechos del ciclo actual. */

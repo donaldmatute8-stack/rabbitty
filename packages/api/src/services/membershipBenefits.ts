@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   membershipSubscriptions,
@@ -9,6 +9,15 @@ import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any;
+
+/** Siguiente fin de ciclo. FIXED no reinicia. */
+function nextCycleEnd(from: Date, reset: string): Date {
+  const d = new Date(from);
+  if (reset === "DAILY") d.setDate(d.getDate() + 1);
+  else if (reset === "WEEKLY") d.setDate(d.getDate() + 7);
+  else if (reset === "MONTHLY") d.setMonth(d.getMonth() + 1);
+  return d;
+}
 
 /**
  * ── Aplica beneficios de membresía a una orden (cualquier método de pago) ──
@@ -95,6 +104,22 @@ export async function applyMembershipBenefitsToOrder(params: {
     }
     if (sub.currentPeriodEnd && new Date(sub.currentPeriodEnd) < new Date()) {
       throw new TRPCError({ code: "BAD_REQUEST", message: "La membresía está expirada." });
+    }
+
+    // Reset perezoso del ciclo: sin esto, tras la primera semana la cuota
+    // quedaba en 0 para siempre (el panel no la ofrecía y nadie la reiniciaba).
+    const now = new Date();
+    if (ent.cycleResetType !== "FIXED" && ent.cycleEndDate && new Date(ent.cycleEndDate) <= now) {
+      const nextEnd = nextCycleEnd(now, ent.cycleResetType);
+      await params.coreDb
+        .update(membershipEntitlements)
+        .set({ currentUsageInCycle: 0, cycleStartDate: now, cycleEndDate: nextEnd })
+        .where(and(
+          eq(membershipEntitlements.id, ent.id),
+          lt(membershipEntitlements.cycleEndDate, now),
+        ));
+      ent.currentUsageInCycle = 0;
+      ent.cycleEndDate = nextEnd;
     }
 
     const usageKey = `ord_${params.orderId}_ent_${ent.id}`;

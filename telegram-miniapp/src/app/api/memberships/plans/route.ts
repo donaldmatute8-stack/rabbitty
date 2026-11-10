@@ -39,6 +39,8 @@ export async function GET(req: NextRequest) {
       planId: r.plan.id,
       planName: r.plan.name,
       planDescription: r.plan.description,
+      coverImageUrl: r.plan.coverImageUrl,
+      badgeColor: r.plan.badgeColor,
       versionId: r.version.id,
       priceFiat: r.version.priceFiat,
       currency: r.version.currency,

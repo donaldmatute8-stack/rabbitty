@@ -1083,7 +1083,7 @@ export const membershipSubscriptions = pgTable("membership_subscriptions", {
   id: id(),
   userId: fkId("userId").references(() => users.id, { onDelete: "cascade" }),
   businessId: fkId("businessId").references(() => ownedBusinesses.id, { onDelete: "restrict" }),
-  planVersionId: fkId("planVersionId").references(() => membershipPlanVersions.id, { onDelete: "restrict" }),
+  planVersionId: fkIdOpt("planVersionId").references(() => membershipPlanVersions.id, { onDelete: "restrict" }),
   // 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'CANCELLED' | 'EXPIRED' | 'REVOKED'
   status: text("status").notNull(),
   currentPeriodStart: timestamp("currentPeriodStart").notNull(),

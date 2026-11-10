@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
         cancelAtPeriodEnd: membershipSubscriptions.cancelAtPeriodEnd,
         planName: membershipPlans.name,
         badgeColor: membershipPlans.badgeColor,
+        coverImageUrl: membershipPlans.coverImageUrl,
         businessName: ownedBusinesses.name,
         priceFiat: membershipPlanVersions.priceFiat,
         currency: membershipPlanVersions.currency,
@@ -56,9 +57,20 @@ export async function GET(req: NextRequest) {
           .where(inArray(membershipEntitlements.subscriptionId, ids))
       : [];
 
+    const nowMs = Date.now();
     const memberships = rows.map((r) => ({
       ...r,
-      entitlements: ents.filter((e) => e.subscriptionId === r.id),
+      entitlements: ents
+        .filter((e) => e.subscriptionId === r.id)
+        .map((e) => ({
+          ...e,
+          // Ciclo vencido = cuota completa; el reset real ocurre al aplicar.
+          used: e.cycleResetType !== "FIXED"
+            && e.cycleEndDate
+            && new Date(e.cycleEndDate).getTime() <= nowMs
+            ? 0
+            : e.used,
+        })),
     }));
     return NextResponse.json({ success: true, memberships });
   } catch (err) {

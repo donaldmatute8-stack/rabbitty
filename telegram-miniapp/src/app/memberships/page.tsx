@@ -29,6 +29,7 @@ interface Membership {
   cancelAtPeriodEnd: boolean;
   planName: string | null;
   badgeColor: string | null;
+  coverImageUrl: string | null;
   businessName: string;
   priceFiat: number | null;
   currency: string | null;
@@ -166,6 +167,21 @@ export default function MembershipsPage() {
                 className="rounded-2xl overflow-hidden"
                 style={{ border: `1px solid ${active ? accent + '55' : 'rgba(255,255,255,.08)'}`, background: gradient, boxShadow: open ? `0 8px 32px ${accent}22` : 'none' }}
               >
+                {m.coverImageUrl && (
+                  <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16 / 9', background: '#1a1116' }}>
+                    <img
+                      src={m.coverImageUrl}
+                      alt={planTitle}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
+                    />
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ background: `linear-gradient(180deg, transparent 40%, ${accent}20 100%)` }}
+                    />
+                  </div>
+                )}
                 <button onClick={() => toggle(m.id)} className="w-full text-left p-4 cursor-pointer">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
