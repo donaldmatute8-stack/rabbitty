@@ -65,6 +65,35 @@ function toRgb(hex?: string | null): string {
   return `rgb(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255})`;
 }
 
+/**
+ * Wallet rechaza el pase si el `passTypeIdentifier` no coincide con el UID del
+ * certificado, o si el certificado está vencido. Validarlo aquí convierte un
+ * "no se pudo agregar el pase" opaco en un error con nombre y apellido.
+ */
+export function assertCredentials(creds: WalletCredentials): void {
+  const cert = forge.pki.certificateFromPem(creds.certPem);
+
+  const attrs = cert.subject.attributes as Array<{ type?: string; value?: string; shortName?: string }>;
+  const uid =
+    attrs.find((a) => a.type === "0.9.2342.19200300.100.1.1")?.value ??
+    attrs.find((a) => typeof a.value === "string" && a.value.startsWith("pass."))?.value ??
+    null;
+
+  if (uid && uid !== creds.passTypeIdentifier) {
+    throw new Error(
+      `el certificado es de "${uid}" pero APPLE_WALLET_PASS_TYPE_ID dice "${creds.passTypeIdentifier}"`,
+    );
+  }
+
+  const now = new Date();
+  if (cert.validity.notAfter && cert.validity.notAfter < now) {
+    throw new Error(`el certificado de Wallet venció el ${cert.validity.notAfter.toISOString().slice(0, 10)}`);
+  }
+  if (cert.validity.notBefore && cert.validity.notBefore > now) {
+    throw new Error("el certificado de Wallet aún no es válido");
+  }
+}
+
 export function buildPassJson(input: WalletPassInput, creds: WalletCredentials) {
   const since = input.memberSince
     ? new Date(input.memberSince).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
@@ -159,6 +188,8 @@ export function signManifest(manifestJson: string, creds: WalletCredentials): Bu
 }
 
 export async function buildPkpass(input: WalletPassInput, creds: WalletCredentials): Promise<Buffer> {
+  assertCredentials(creds);
+
   const files: Record<string, Buffer> = {
     "pass.json": Buffer.from(JSON.stringify(buildPassJson(input, creds)), "utf8"),
     "icon.png": Buffer.from(ICON_PNG, "base64"),
