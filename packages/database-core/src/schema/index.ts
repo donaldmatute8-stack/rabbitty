@@ -1182,6 +1182,56 @@ export const membershipNftCredentials = pgTable("membership_nft_credentials", {
 });
 
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🎁 Referidos de membresías
+// El tenant elige la recompensa de un catálogo cerrado. La recompensa en Bunz se
+// paga con la bóveda del comercio (`ownedBusinesses.bunzBalance`), nunca se mintea
+// de la nada: es gasto de marketing con presupuesto y topes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const membershipReferralPrograms = pgTable("membership_referral_programs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  businessId: text("businessId").notNull(),
+  isActive: boolean("isActive").default(false).notNull(),
+  /** 'NONE' | 'BUNZ' | 'DISCOUNT_PCT' | 'EXTRA_TRIAL_DAYS' */
+  rewardType: text("rewardType").default("BUNZ").notNull(),
+  bunzAmount: integer("bunzAmount").default(100).notNull(),
+  discountPct: integer("discountPct").default(10).notNull(),
+  extraTrialDays: integer("extraTrialDays").default(14).notNull(),
+  /** 'FIRST_ACTIVATION' | 'FIRST_REDEMPTION' */
+  triggerEvent: text("triggerEvent").default("FIRST_ACTIVATION").notNull(),
+  maxRewardsMonthly: integer("maxRewardsMonthly").default(5).notNull(),
+  maxRewardsTotal: integer("maxRewardsTotal").default(100).notNull(),
+  /** Horas mínimas de antigüedad de la cuenta del referido (anti-abuso). */
+  minReferredAccountAgeHours: integer("minReferredAccountAgeHours").default(0).notNull(),
+  notes: text("notes"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("membership_referral_programs_business_uidx").on(t.businessId),
+]);
+
+export const membershipReferralRewards = pgTable("membership_referral_rewards", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  businessId: text("businessId").notNull(),
+  referrerUserId: text("referrerUserId"),
+  referredUserId: text("referredUserId"),
+  subscriptionId: text("subscriptionId"),
+  planId: text("planId"),
+  rewardType: text("rewardType").notNull(),
+  /** Bunz o días según el tipo. */
+  value: integer("value").default(0).notNull(),
+  /** 'GRANTED' | 'PENDING' | 'SKIPPED' */
+  status: text("status").default("GRANTED").notNull(),
+  reason: text("reason"),
+  ledgerKey: text("ledgerKey"),
+  grantedAt: timestamp("grantedAt"),
+  ...timestamps,
+}, (t) => [
+  // Un solo premio por referido y negocio, de por vida.
+  uniqueIndex("membership_referral_rewards_referred_uidx").on(t.businessId, t.referredUserId),
+  index("membership_referral_rewards_referrer_idx").on(t.referrerUserId, t.createdAt),
+]);
+
 // ── Reconciliation Requests (conciliación de recompensas) ────────────────────
 // El Rabbitter reclama una recompensa no entregada; el afiliado resuelve comercial;
 // God Admin autoriza la entrega. Los montos son SNAPSHOT server-side al reclamar.

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripeClient } from "@rabbitty/api/services/stripeConnect";
+import { grantReferralReward } from "@rabbitty/api/services/membershipReferrals";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import {
   registerProviderWebhookEvent,
@@ -262,6 +263,16 @@ export async function POST(req: Request) {
               console.error("[Stripe Webhook] crear entitlements falló:", entErr);
             }
             console.log(`[Stripe Webhook] Membresía activada: user=${meta.userId} plan=${meta.planVersionId}`);
+            if (meta.referredByUserId && newSub?.id) {
+              await grantReferralReward({
+                db: coreDb,
+                businessId: meta.businessId,
+                referrerUserId: meta.referredByUserId,
+                referredUserId: meta.userId,
+                subscriptionId: newSub.id,
+                planId: meta.planId ?? null,
+              });
+            }
             await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa. Muéstrala en caja con su QR dorado.", "/memberships");
             // Bidireccional: avisa al DUEÑO del negocio la venta
             try {
@@ -336,6 +347,16 @@ export async function POST(req: Request) {
               console.error("[Stripe Webhook] one-time entitlements falló:", entErr);
             }
 
+            if (meta.referredByUserId && newSub?.id) {
+              await grantReferralReward({
+                db: coreDb,
+                businessId: meta.businessId,
+                referrerUserId: meta.referredByUserId,
+                referredUserId: meta.userId,
+                subscriptionId: newSub.id,
+                planId: meta.planId ?? null,
+              });
+            }
             await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa por 12 meses.", "/memberships");
           }
         }

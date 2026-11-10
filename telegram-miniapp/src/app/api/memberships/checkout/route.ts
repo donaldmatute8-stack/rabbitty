@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
       kind: isOneTime ? 'MEMBERSHIP_ONE_TIME' : 'MEMBERSHIP_SUBSCRIPTION',
       userId: caller.id,
       businessId: biz.id,
+      planId: row.plan.id,
       planVersionId: row.version.id,
       stripeAccount: acct,
       acquisitionSource: source,

@@ -10,6 +10,7 @@ import {
   users,
 } from "@/db/schema";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
+import { grantReferralReward } from "@rabbitty/api/services/membershipReferrals";
 
 export const runtime = "nodejs";
 
@@ -171,7 +172,20 @@ export async function POST(req: NextRequest) {
       return { subscriptionId: sub.id, already: false, founding };
     });
 
-    return NextResponse.json({ success: true, ...result });
+    // Recompensa por referido: la paga el negocio desde su bóveda de Bunz.
+    let referral: unknown = null;
+    if (!result.already) {
+      referral = await grantReferralReward({
+        db,
+        businessId: row.plan.businessId,
+        referrerUserId: referredByUserId,
+        referredUserId: caller.id,
+        subscriptionId: result.subscriptionId,
+        planId: row.plan.id,
+      });
+    }
+
+    return NextResponse.json({ success: true, ...result, referral });
   } catch (error) {
     if (error instanceof Error && error.message === "MEMBERSHIP_FULL") {
       return NextResponse.json({ error: "Cupo de miembros agotado" }, { status: 409 });

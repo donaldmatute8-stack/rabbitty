@@ -82,6 +82,7 @@ export default function MembershipPlanPage() {
   const [giftMessage, setGiftMessage] = useState('');
   const [gifting, setGifting] = useState(false);
   const [giftResult, setGiftResult] = useState('');
+  const [referral, setReferral] = useState<{ isActive: boolean; rewardType: string; bunzAmount: number; granted: number; pending: number; bunzEarned: number } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -97,6 +98,17 @@ export default function MembershipPlanPage() {
       })
       .catch(() => { if (alive) setError('No se pudo cargar la membresía'); })
       .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [params?.id]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!params?.id) return;
+    PlatformBridge.getAuthHeaders()
+      .then((headers) => fetch(`/api/memberships/plans/${params.id}/referral`, { headers, cache: 'no-store' }))
+      .then((res) => res.json())
+      .then((data) => { if (alive && data?.success) setReferral(data.referral ?? null); })
+      .catch(() => { /* sin programa de referidos */ });
     return () => { alive = false; };
   }, [params?.id]);
 
@@ -252,6 +264,20 @@ export default function MembershipPlanPage() {
             <Share2 size={12} /> Invitar a un amigo
           </button>
         </div>
+
+        {referral?.isActive && referral.rewardType === 'BUNZ' && referral.bunzAmount > 0 && (
+          <div className="rounded-2xl border border-[#E91E63]/25 bg-gradient-to-br from-[#E91E63]/12 to-transparent px-4 py-3">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#FF5FA8]">INVITA Y GANA</p>
+            <p className="mt-0.5 text-[14px] font-black text-white">
+              {referral.bunzAmount} Bunz por cada amigo que se active
+            </p>
+            <p className="mt-1 text-[11px] text-(--text-muted)">
+              {referral.granted > 0
+                ? `Ya ganaste ${referral.bunzEarned} Bunz con ${referral.granted} ${referral.granted === 1 ? 'amigo' : 'amigos'}.`
+                : `Comparte tu link; los Bunz caen en tu billetera cuando tu amigo se une.`}
+            </p>
+          </div>
+        )}
 
         <PremiumSection title="Qué incluye">
           <PremiumCard>

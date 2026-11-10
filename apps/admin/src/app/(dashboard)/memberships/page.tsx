@@ -192,6 +192,8 @@ export default function MembershipsPage() {
         </div>
       )}
 
+      {enabled && <ReferralProgramCard businessId={businessId} />}
+
       {enabled && tab === "plans" && (
         <div className="grid gap-4 md:grid-cols-2">
           {plans?.length === 0 && <p className="text-sm text-white/50">Aún no hay planes. Crea el primero.</p>}
@@ -1171,6 +1173,167 @@ function GrantPlanModal({
           {grant.isPending ? "Otorgando…" : `Otorgar a ${selected.length} Rabbitter${selected.length === 1 ? "" : "s"}`}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Programa de referidos del tenant.
+ *
+ * El negocio NO inventa la recompensa: elige del catálogo que definimos. Hoy solo
+ * Bunz liquida automáticamente y se paga con la bóveda del comercio; por eso el
+ * panel muestra la bóveda y avisa si el monto elegido no alcanza.
+ */
+function ReferralProgramCard({ businessId }: { businessId: string }) {
+  const utils = trpc.useUtils();
+  const { data, isLoading } = trpc.memberships.referralProgram.useQuery(
+    { businessId },
+    { enabled: Boolean(businessId), retry: false },
+  );
+  const save = trpc.memberships.updateReferralProgram.useMutation({
+    onSuccess: () => {
+      toast.success("Programa de referidos actualizado");
+      void utils.memberships.referralProgram.invalidate({ businessId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [isActive, setIsActive] = useState(false);
+  const [rewardType, setRewardType] = useState<"BUNZ" | "NONE">("BUNZ");
+  const [bunzAmount, setBunzAmount] = useState(100);
+  const [monthly, setMonthly] = useState(5);
+  const [total, setTotal] = useState(100);
+  const [minAge, setMinAge] = useState(0);
+
+  useEffect(() => {
+    if (!data?.program) return;
+    setIsActive(data.program.isActive);
+    setRewardType(data.program.rewardType === "NONE" ? "NONE" : "BUNZ");
+    setBunzAmount(data.program.bunzAmount);
+    setMonthly(data.program.maxRewardsMonthly);
+    setTotal(data.program.maxRewardsTotal);
+    setMinAge(data.program.minReferredAccountAgeHours);
+  }, [data?.program]);
+
+  if (isLoading || !data) return null;
+
+  const vault = data.program.vaultBalance ?? 0;
+  const bunzOptions = Array.from(data.bunzOptions as readonly number[]);
+  const short = rewardType === "BUNZ" && bunzAmount > vault;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-white">Referidos</p>
+          <p className="text-[11px] text-white/45">
+            Recompensa para quien invita a un nuevo Rabbitter. Se paga cuando el referido se activa.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsActive((v) => !v)}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${isActive ? "bg-[#E91E63]" : "bg-white/15"}`}
+          aria-pressed={isActive}
+        >
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${isActive ? "left-[22px]" : "left-0.5"}`} />
+        </button>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Recompensa</p>
+          <select
+            className={inputCls}
+            value={rewardType}
+            onChange={(e) => setRewardType(e.target.value as "BUNZ" | "NONE")}
+          >
+            {data.catalog.map((opt: { type: string; label: string; available: boolean; recommended?: boolean }) => (
+              <option key={opt.type} value={opt.type} disabled={!opt.available}>
+                {opt.label}{opt.recommended ? " · recomendado" : ""}{opt.available ? "" : " (pronto)"}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {rewardType === "BUNZ" && (
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Bunz por referido</p>
+            <div className="flex flex-wrap gap-1.5">
+              {bunzOptions.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setBunzAmount(v)}
+                  className={cn(
+                    "rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors",
+                    bunzAmount === v
+                      ? "border-[#E91E63] bg-[#E91E63]/20 text-white"
+                      : "border-white/10 bg-white/5 text-white/60 hover:text-white",
+                  )}
+                >
+                  {v} BZ
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <label className="space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Tope / mes</span>
+          <input className={inputCls} value={monthly} onChange={(e) => setMonthly(Number(e.target.value.replace(/\D/g, "").slice(0, 4)) || 0)} />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Tope total</span>
+          <input className={inputCls} value={total} onChange={(e) => setTotal(Number(e.target.value.replace(/\D/g, "").slice(0, 6)) || 0)} />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">Antigüedad mín. (h)</span>
+          <input className={inputCls} value={minAge} onChange={(e) => setMinAge(Number(e.target.value.replace(/\D/g, "").slice(0, 3)) || 0)} />
+        </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-white/55">
+          Bóveda: {vault.toLocaleString()} BZ
+        </span>
+        <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+          {data.stats.granted} premiados
+        </span>
+        {data.stats.pending > 0 && (
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-amber-300">
+            {data.stats.pending} sin bóveda
+          </span>
+        )}
+        <span className="text-white/35">· {data.stats.bunz} Bunz entregados</span>
+      </div>
+
+      {short && (
+        <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+          Tu bóveda tiene {vault} BZ y quieres dar {bunzAmount} BZ por referido. Los premios quedarán en
+          <b> pendiente</b> hasta que recargues la bóveda.
+        </p>
+      )}
+
+      <Button
+        className="w-full"
+        disabled={save.isPending}
+        onClick={() =>
+          save.mutate({
+            businessId,
+            isActive,
+            rewardType,
+            bunzAmount,
+            maxRewardsMonthly: monthly,
+            maxRewardsTotal: total,
+            minReferredAccountAgeHours: minAge,
+          })
+        }
+      >
+        {save.isPending ? "Guardando…" : "Guardar programa de referidos"}
+      </Button>
     </div>
   );
 }

@@ -11,10 +11,17 @@ import {
   entitlementUsages,
   ownedBusinesses,
   users,
+  membershipReferralPrograms,
+  membershipReferralRewards,
 } from "@rabbitty/database-core/schema";
 import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { isGodAdminIdentity } from "../services/god2fa";
 import { miniappClient } from "../services/miniapp-client";
+import {
+  REFERRAL_REWARD_CATALOG,
+  REFERRAL_BUNZ_OPTIONS,
+  getReferralProgram,
+} from "../services/membershipReferrals";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1385,6 +1392,114 @@ return await ctx.coreDb.transaction(async (tx: any) => {
       }
 
       return { granted, skipped };
+    }),
+
+  /**
+   * Admin: programa de referidos del negocio + catálogo cerrado de recompensas.
+   * El tenant solo elige de las opciones que definimos.
+   */
+  referralProgram: posProcedure
+    .input(z.object({ businessId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+      const program = await getReferralProgram(ctx.coreDb, input.businessId);
+
+      const [stats] = await ctx.coreDb
+        .select({
+          granted: sql<number>`count(*) FILTER (WHERE status = 'GRANTED')::int`,
+          pending: sql<number>`count(*) FILTER (WHERE status = 'PENDING')::int`,
+          bunz: sql<number>`COALESCE(sum(value) FILTER (WHERE status = 'GRANTED'), 0)::int`,
+        })
+        .from(membershipReferralRewards)
+        .where(eq(membershipReferralRewards.businessId, input.businessId));
+
+      return {
+        program,
+        catalog: REFERRAL_REWARD_CATALOG,
+        bunzOptions: REFERRAL_BUNZ_OPTIONS,
+        stats: {
+          granted: Number(stats?.granted ?? 0),
+          pending: Number(stats?.pending ?? 0),
+          bunz: Number(stats?.bunz ?? 0),
+        },
+      };
+    }),
+
+  /** Admin: guarda el programa de referidos (recompensa, topes y disparador). */
+  updateReferralProgram: posPermission("POS_DISCOUNT")
+    .input(z.object({
+      businessId: z.string().uuid(),
+      isActive: z.boolean(),
+      rewardType: z.enum(["NONE", "BUNZ"]),
+      bunzAmount: z.number().int().min(0).max(100000),
+      maxRewardsMonthly: z.number().int().min(0).max(1000),
+      maxRewardsTotal: z.number().int().min(0).max(100000),
+      minReferredAccountAgeHours: z.number().int().min(0).max(720),
+      notes: z.string().max(300).nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+
+      if (input.rewardType === "BUNZ" && !REFERRAL_BUNZ_OPTIONS.includes(input.bunzAmount as any)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Elige un monto de Bunz del catálogo",
+        });
+      }
+
+      const [existing] = await ctx.coreDb
+        .select({ id: membershipReferralPrograms.id })
+        .from(membershipReferralPrograms)
+        .where(eq(membershipReferralPrograms.businessId, input.businessId))
+        .limit(1);
+
+      const values = {
+        businessId: input.businessId,
+        isActive: input.isActive,
+        rewardType: input.rewardType,
+        bunzAmount: input.bunzAmount,
+        maxRewardsMonthly: input.maxRewardsMonthly,
+        maxRewardsTotal: input.maxRewardsTotal,
+        minReferredAccountAgeHours: input.minReferredAccountAgeHours,
+        notes: input.notes ?? null,
+        updatedAt: new Date(),
+      };
+
+      if (existing) {
+        await ctx.coreDb
+          .update(membershipReferralPrograms)
+          .set(values)
+          .where(eq(membershipReferralPrograms.businessId, input.businessId));
+      } else {
+        await ctx.coreDb.insert(membershipReferralPrograms).values(values);
+      }
+
+      return getReferralProgram(ctx.coreDb, input.businessId);
+    }),
+
+  /** Admin: últimos referidos premiados del negocio. */
+  listReferralRewards: posProcedure
+    .input(z.object({ businessId: z.string().uuid(), limit: z.number().int().min(1).max(100).optional() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+      const rows = await ctx.coreDb
+        .select({
+          id: membershipReferralRewards.id,
+          value: membershipReferralRewards.value,
+          status: membershipReferralRewards.status,
+          reason: membershipReferralRewards.reason,
+          rewardType: membershipReferralRewards.rewardType,
+          createdAt: membershipReferralRewards.createdAt,
+          planId: membershipReferralRewards.planId,
+          referrerName: users.username,
+        })
+        .from(membershipReferralRewards)
+        .leftJoin(users, eq(users.id, membershipReferralRewards.referrerUserId))
+        .where(eq(membershipReferralRewards.businessId, input.businessId))
+        .orderBy(desc(membershipReferralRewards.createdAt))
+        .limit(input.limit ?? 20);
+
+      return rows;
     }),
 
   /** Admin: resumen de negocio para el marketplace (miembros, MRR, canjes). */
