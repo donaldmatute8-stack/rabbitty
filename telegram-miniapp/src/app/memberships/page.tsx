@@ -298,7 +298,7 @@ export default function MembershipsPage() {
 
             {/* Contenido desplazable; el wrapper con my-auto centra cuando cabe */}
             <div className="relative h-full overflow-y-auto">
-              <div className="min-h-full flex flex-col items-center px-4 pt-20 pb-8">
+              <div className="min-h-full flex flex-col items-center px-4 pt-24 pb-8">
                 <div className="my-auto flex w-full flex-col items-center">
               <motion.div
                 drag="y"
