@@ -33,9 +33,9 @@ async function computeClaimable(
 
   // Acreditado en ledger para esta orden (mint POS o claim de ticket)
   const keys = [`pos_rwd_${orderId}`, `claim_ticket_${orderId}`];
-  const creditedRows = await coreDb.select({ amount: ledgerEntries.amount })
+  const creditedRows = await coreDb.select({ amount: ledgerEntries.amountUnits })
     .from(ledgerEntries)
-    .where(and(inArray(ledgerEntries.idempotencyKey, keys), eq(ledgerEntries.type, "EARN")));
+    .where(and(inArray(ledgerEntries.idempotencyKey, keys), eq(ledgerEntries.type, "EARN"), eq(ledgerEntries.sandbox, false)));
   const credited = creditedRows.reduce((s: number, r: { amount: number | null }) => s + Number(r.amount || 0), 0);
 
   // Pendiente en vault (no reclamada)

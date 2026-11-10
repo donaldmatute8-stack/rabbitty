@@ -120,8 +120,8 @@ export const behaviorRulesRouter = router({
             GROUP BY "userId"
             HAVING round(AVG(EXTRACT(EPOCH FROM (COALESCE("endedAt", "lastPingAt") - "startedAt")) / 60)::numeric) >= ${minDwell}
           ), spend AS (
-            SELECT "payeeSubjectId" AS sid, COALESCE(SUM(amount), 0) AS spent
-            FROM "ledger_entries" WHERE "payeeSubjectId" = ${bizId} AND type = 'SPEND'
+            SELECT "payeeSubjectId" AS sid, COALESCE(SUM("amountUnits"), 0) AS spent
+            FROM "ledger_entries" WHERE "payeeSubjectId" = ${'biz_' + bizId} AND type = 'SPEND'
             GROUP BY "payeeSubjectId"
           )
           SELECT d."userId" AS uid, d.avg_min::int AS "avgMin", COALESCE(s.spent, 0) AS spent, d.sessions
@@ -221,8 +221,18 @@ export const behaviorRulesRouter = router({
           await tx.update(users)
             .set({ totalBunzEarned: sql`COALESCE("totalBunzEarned", 0) + ${amt}` })
             .where(eq(users.id, input.userId));
-          await tx.execute(sql`INSERT INTO "ledger_entries" ("id", "payerSubjectId", "payeeSubjectId", amount, currency, type, "referenceId", "idempotencyKey", metadata)
-            VALUES (gen_random_uuid()::text, ${rule.businessId}, ${'usr_' + input.userId}, ${amt}, 'BUNZ', 'EARN', ${rule.id}, ${idemKey},
+
+          // ADR-008: EARN canónico biz_ (paga) → usr_ (recibe). Nunca UUID desnudo.
+          const [giftFlags] = await tx
+            .select({ bizSandbox: ownedBusinesses.sandbox, userSandbox: users.sandbox })
+            .from(ownedBusinesses)
+            .innerJoin(users, eq(users.id, input.userId))
+            .where(eq(ownedBusinesses.id, rule.businessId))
+            .limit(1);
+          const giftSandbox = giftFlags?.bizSandbox === true || giftFlags?.userSandbox === true;
+
+          await tx.execute(sql`INSERT INTO "ledger_entries" ("id", "payerSubjectId", "payeeSubjectId", amount, currency, sandbox, type, "referenceId", "idempotencyKey", metadata)
+            VALUES (gen_random_uuid()::text, ${'biz_' + rule.businessId}, ${'usr_' + input.userId}, ${amt}, 'BUNZ', ${giftSandbox}, 'EARN', ${rule.id}, ${idemKey},
             ${JSON.stringify({ kind: "BEHAVIOR_GIFT", ruleId: rule.id, ruleName: rule.name })}::jsonb)
             ON CONFLICT ("idempotencyKey") DO NOTHING`);
           await tx.update(behaviorRules).set({ budgetSpent: rule.budgetSpent + amt, updatedAt: new Date() })

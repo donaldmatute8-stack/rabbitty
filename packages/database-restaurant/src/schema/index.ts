@@ -1,4 +1,4 @@
-import { pgTable, text, integer, real, numeric, timestamp, boolean, jsonb, check, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, numeric, timestamp, boolean, jsonb, check, uniqueIndex, index, bigint } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -776,6 +776,12 @@ export const ledgerEntries = pgTable("ledger_entries", {
   payerSubjectId: text("payerSubjectId").notNull(),
   payeeSubjectId: text("payeeSubjectId").notNull(),
   amount: real("amount").notNull(),
+  /** Unidades enteras (1 = 1 Bunz). El DDL la rellena con trigger. */
+  amountUnits: bigint("amountUnits", { mode: "number" }),
+  /** Orden real para el anclaje; NULL en filas sandbox. */
+  seq: bigint("seq", { mode: "number" }),
+  /** Demo/App Review: no entra al epoch ni consume seq. */
+  sandbox: boolean("sandbox").default(false).notNull(),
   currency: text("currency").default("BUNZ").notNull(),
   type: text("type").notNull(), // EARN, SPEND, TRANSFER, MINT, BURN, REFUND, ALLOCATION
   referenceId: text("referenceId"), // e.g. PaymentIntent ID or Order ID

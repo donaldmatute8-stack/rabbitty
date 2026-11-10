@@ -22,6 +22,7 @@ import { buildShadowReport, recordShadowReport } from "./payments/shadow";
 import { recordRedemptionBooks } from "./bunzBooks";
 import { checkOperation } from "./bunzControls";
 import { consumeCapacity } from "./mcce";
+import { usr, biz } from "./ledgerSubjects";
 
 /**
  * @deprecated RP-0.7 — motor legacy en migración a paymentCore.
@@ -281,6 +282,31 @@ export class PaymentIntentService {
         throw new Error("USER_NOT_FOUND");
       }
 
+      // ADR-008 · identidad canónica. El pagador se identifica por users.id,
+      // nunca por telegramId ni por el valor que llegó del cliente.
+      const payerCanonical = usr(payerUser.id);
+
+      // biz_<ownedBusinesses.id> (NO branches.id): branch → restaurant → business.
+      const [spendBranchRow] = await tx
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, intent.merchantId))
+        .limit(1);
+      const [spendRestRow] = spendBranchRow?.restaurantId
+        ? await tx
+            .select({ businessId: restaurants.businessId })
+            .from(restaurants)
+            .where(eq(restaurants.id, spendBranchRow.restaurantId))
+            .limit(1)
+        : [];
+      const ledgerBusinessId = spendRestRow?.businessId ?? null;
+      if (!ledgerBusinessId) {
+        throw new Error(
+          "SPEND_BUSINESS_UNRESOLVED: la sucursal no resuelve a ownedBusinesses.id.",
+        );
+      }
+      const businessCanonical = biz(ledgerBusinessId);
+
       const availableBalance = (payerUser.totalBunzEarned ?? 0) - (payerUser.totalBunzSpent ?? 0);
       if (availableBalance < intent.bunzAmount) {
         throw new Error("LEDGER_INSUFFICIENT_FUNDS");
@@ -308,12 +334,13 @@ export class PaymentIntentService {
       }
 
       // 4. Insert Ledger Entry (within SAME transaction)
+      // SPEND canónico: usr_ (paga) → biz_ (recibe).
       const [insertedLedger] = await tx
         .insert(ledgerEntries)
         .values({
           branchId: intent.merchantId,
-          payerSubjectId,
-          payeeSubjectId: intent.merchantId,
+          payerSubjectId: payerCanonical,
+          payeeSubjectId: businessCanonical,
           amount: intent.bunzAmount,
           currency: "BUNZ",
           type: "SPEND",
@@ -398,13 +425,13 @@ export class PaymentIntentService {
 
           await tx.insert(ledgerEntries).values({
             branchId: intent.merchantId,
-            payerSubjectId: intent.merchantId || "SYSTEM",
-            payeeSubjectId: payerSubjectId,
+            payerSubjectId: businessCanonical,
+            payeeSubjectId: payerCanonical,
             amount: rewardAmount,
             currency: "BUNZ",
             type: "EARN",
             referenceId: intent.id,
-            idempotencyKey: `cbk_${intent.id}_${payerSubjectId}`,
+            idempotencyKey: `cbk_${intent.id}_${payerUser.id}`,
             metadata: { orderId: intent.orderId, amountMxn: intent.amountMxn, reason: "CASHBACK_PAYMENT" },
           });
         }

@@ -25,6 +25,7 @@ import {
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
 import { cancelStripePaymentIntent } from "./stripeConnect";
 import { isBooksEnabled, recordEmissionBooks, recordRedemptionBooks, recordReversalBooks } from "./bunzBooks";
+import { usr, biz, sys, isSandboxLedgerTx } from "./ledgerSubjects";
 import { accrueCommission } from "./bunzObligations";
 import { checkOperation, resolveAffiliateId } from "./bunzControls";
 import { consumeCapacity, recognizeActivity, restoreCapacity } from "./mcce";
@@ -607,14 +608,26 @@ export async function confirmPaymentIntentSettled(
         isReserveValid = false;
         isRecoveryHold = true;
       } else {
-        // Asiento del consumo de stock (idempotente)
+        // Asiento del consumo de stock (idempotente).
+        // Dirección canónica ADR-008: SPEND = usr_ (paga) → biz_ (capacidad).
+        // El stock baja en ownedBusinesses arriba; este asiento registra el débito
+        // del usuario, nunca al revés (biz_ → usr_ inflaba el saldo del pagador).
+        const stockUserId = reserve?.userId ?? intent.payerSubjectId;
+        if (!stockUserId) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "BUNZ_STOCK_USER_UNRESOLVED: no se pudo resolver al usuario del débito.",
+          });
+        }
+        const stockSandbox = await isSandboxLedgerTx(tx, businessId, stockUserId);
         await tx
           .insert(ledgerEntries)
           .values({
             branchId: intent.merchantId,
-            payerSubjectId: `biz_${businessId}`,
-            payeeSubjectId: `usr_${reserve?.userId ?? intent.payerSubjectId ?? "unknown"}`,
+            payerSubjectId: usr(stockUserId),
+            payeeSubjectId: biz(businessId),
             amount: bunzToConsume,
+            sandbox: stockSandbox,
             type: "SPEND",
             referenceId: intent.id,
             idempotencyKey: `bunz_stock_${intent.id}`,
@@ -1372,35 +1385,25 @@ export async function refundBunzPayment(
       });
     }
 
-    // Asientos de reverso (idempotentes)
+    // Un solo asiento de reverso (idempotente).
+    // REFUND canónico ADR-008: biz_ (devuelve) → usr_ (recibe).
+    // La restauración de totalBunzSpent, bunzBalance y capacidad MCCE ya ocurrió
+    // arriba; NO se escribe la segunda pierna usr_ → biz_ (juntas dejaban al
+    // usuario en cero). Si no hay negocio, el pagador es sys_pos_checkout.
+    const refundSandbox = await isSandboxLedgerTx(tx, businessId, userId);
     await tx
       .insert(ledgerEntries)
-      .values([
-        {
-          branchId: null,
-          payerSubjectId: "POS_CHECKOUT",
-          payeeSubjectId: `usr_${userId}`,
-          amount,
-          type: "REFUND",
-          referenceId: payment.id,
-          idempotencyKey: `bunz_refund_user_${payment.id}`,
-          metadata: { concept: "BUNZ_REFUND", reason: params.reason ?? null },
-        },
-        ...(businessId
-          ? [
-              {
-                branchId: null,
-                payerSubjectId: `usr_${userId}`,
-                payeeSubjectId: `biz_${businessId}`,
-                amount,
-                type: "REFUND",
-                referenceId: payment.id,
-                idempotencyKey: `bunz_refund_stock_${payment.id}`,
-                metadata: { concept: "BUNZ_REFUND_STOCK", reason: params.reason ?? null },
-              },
-            ]
-          : []),
-      ])
+      .values({
+        branchId: effectiveBranchId ?? null,
+        payerSubjectId: businessId ? biz(businessId) : sys("pos_checkout"),
+        payeeSubjectId: usr(userId),
+        amount,
+        sandbox: refundSandbox,
+        type: "REFUND",
+        referenceId: payment.id,
+        idempotencyKey: `bunz_refund_user_${payment.id}`,
+        metadata: { concept: "BUNZ_REFUND", reason: params.reason ?? null },
+      })
       .onConflictDoNothing();
 
     // G7: el importe Bunz pagado de la orden baja con el reembolso.

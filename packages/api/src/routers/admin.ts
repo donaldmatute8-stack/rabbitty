@@ -1621,7 +1621,7 @@ export const adminRouter = router({
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
     const welcomeLedgerRows = await ctx.coreDb
-      .select({ payerSubjectId: ledgerEntries.payerSubjectId, amount: ledgerEntries.amount })
+      .select({ payerSubjectId: ledgerEntries.payerSubjectId, amount: ledgerEntries.amountUnits })
       .from(ledgerEntries)
       .where(
         and(
@@ -2047,7 +2047,7 @@ export const adminRouter = router({
     const welcomeRows = await ctx.coreDb
       .select({
         payerSubjectId: ledgerEntries.payerSubjectId,
-        amount: ledgerEntries.amount,
+        amount: ledgerEntries.amountUnits,
       })
       .from(ledgerEntries)
       .where(

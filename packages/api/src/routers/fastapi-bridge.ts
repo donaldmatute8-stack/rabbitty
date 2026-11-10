@@ -5,6 +5,7 @@ import { bus, EventTypes } from "@rabbitty/events";
 import { miniappClient, configureMiniapp, getMiniappConfig } from "../services/miniapp-client";
 import { ownedBusinesses } from "@rabbitty/database-core";
 import { ledgerEntries } from "@rabbitty/database-restaurant/schema";
+import { biz, sys } from "../services/ledgerSubjects";
 import crypto from "crypto";
 import { TRPCError } from "@trpc/server";
 
@@ -205,12 +206,15 @@ export const fastapiBridgeRouter = router({
       const idempotencyKey = input.idempotencyKey ?? `refill_${input.businessId}_${crypto.randomUUID()}`;
 
       // 1) Registro contable del incremento de respaldo (actor + motivo + origen).
+      // MINT canónico: sys_treasury → biz_<ownedBusinesses.id>.
+      // El actor (quién ejecuta el refill) va en metadata, no como sujeto.
       try {
         await ctx.restaurantDb.insert(ledgerEntries).values({
-          payerSubjectId: actorId,
-          payeeSubjectId: input.businessId,
+          payerSubjectId: sys("treasury"),
+          payeeSubjectId: biz(input.businessId),
           amount: input.amount,
           currency: "BUNZ",
+          sandbox: business.sandbox === true,
           type: "MINT",
           referenceId: input.businessId,
           idempotencyKey,

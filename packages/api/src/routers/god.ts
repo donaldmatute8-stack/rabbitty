@@ -321,14 +321,15 @@ export const godRouter = router({
 
     const [ledgerStats] = await ctx.coreDb
       .select({
-        totalEarned: sql<number>`COALESCE(SUM(amount) FILTER (WHERE type = 'EARN'), 0)`,
+        totalEarned: sql<number>`COALESCE(SUM("amountUnits") FILTER (WHERE type = 'EARN'), 0)`,
         countEarned: sql<number>`COUNT(*) FILTER (WHERE type = 'EARN')`,
-        totalSpent: sql<number>`COALESCE(SUM(amount) FILTER (WHERE type = 'SPEND'), 0)`,
+        totalSpent: sql<number>`COALESCE(SUM("amountUnits") FILTER (WHERE type = 'SPEND'), 0)`,
         countSpent: sql<number>`COUNT(*) FILTER (WHERE type = 'SPEND')`,
-        totalTransfers: sql<number>`COALESCE(SUM(amount) FILTER (WHERE type = 'TRANSFER'), 0)`,
+        totalTransfers: sql<number>`COALESCE(SUM("amountUnits") FILTER (WHERE type = 'TRANSFER'), 0)`,
         countTransfers: sql<number>`COUNT(*) FILTER (WHERE type = 'TRANSFER')`,
       })
-      .from(ledgerEntries);
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.sandbox, false));
 
     const businessesBreakdown = await ctx.coreDb
       .select({
@@ -1050,13 +1051,14 @@ export const godRouter = router({
             : null,
       }));
 
-      // Liabilidad de Bunz: minteados vs quemados
+      // Liabilidad de Bunz: minteados vs quemados (solo economía real)
       const [liability] = await ctx.restaurantDb
         .select({
-          minted: sql<number>`COALESCE(SUM(${ledgerEntries.amount}) FILTER (WHERE ${ledgerEntries.type} IN ('EARN','MINT')), 0)`,
-          spentBunz: sql<number>`COALESCE(SUM(${ledgerEntries.amount}) FILTER (WHERE ${ledgerEntries.type} = 'SPEND'), 0)`,
+          minted: sql<number>`COALESCE(SUM("amountUnits") FILTER (WHERE type IN ('EARN','MINT')), 0)`,
+          spentBunz: sql<number>`COALESCE(SUM("amountUnits") FILTER (WHERE type = 'SPEND'), 0)`,
         })
-        .from(ledgerEntries);
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.sandbox, false));
 
       return {
         gmvByMonth: gmvByMonth.map((r) => ({ month: r.month, gmv: Number(r.gmv), orders: Number(r.orderCount) })),
@@ -1088,12 +1090,14 @@ export const godRouter = router({
         .limit(input.limit);
 
       const ledgerCredits = await ctx.coreDb
-        .select({ subjectId: ledgerEntries.payeeSubjectId, total: sql<number>`COALESCE(SUM(amount), 0)` })
+        .select({ subjectId: ledgerEntries.payeeSubjectId, total: sql<number>`COALESCE(SUM("amountUnits"), 0)` })
         .from(ledgerEntries)
+        .where(eq(ledgerEntries.sandbox, false))
         .groupBy(ledgerEntries.payeeSubjectId);
       const ledgerDebits = await ctx.coreDb
-        .select({ subjectId: ledgerEntries.payerSubjectId, total: sql<number>`COALESCE(SUM(amount), 0)` })
+        .select({ subjectId: ledgerEntries.payerSubjectId, total: sql<number>`COALESCE(SUM("amountUnits"), 0)` })
         .from(ledgerEntries)
+        .where(eq(ledgerEntries.sandbox, false))
         .groupBy(ledgerEntries.payerSubjectId);
 
       const creditMap = new Map(ledgerCredits.map((r) => [r.subjectId, Number(r.total)]));
