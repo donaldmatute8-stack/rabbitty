@@ -10,13 +10,41 @@ import {
   type PosPermission,
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
-import { Button, Dialog, Input, toast, cn, useWakeLock } from "@rabbitty/ui";
+import { Button, Dialog, Input, toast, cn, useWakeLock, MembershipCard } from "@rabbitty/ui";
 import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
 import { startNeonDecoder } from "@/lib/neonDecoder";
 import { TicketTemplate, TicketData } from "../../../components/TicketTemplate";
+
+const MEMBERSHIP_BENEFIT_LABEL: Record<string, string> = {
+  MEMBER_CONSUMPTION: "Consumo del socio",
+  DISCOUNT_PCT: "Descuento acompañantes",
+  INCLUDED_PRODUCT: "Producto incluido",
+  CREDIT_BALANCE: "Crédito",
+  EVENT_ACCESS: "Acceso a evento",
+  BULK_PACK: "Bolsa de consumos",
+};
+
+function membershipTicketData(pass: any, applied = false) {
+  return {
+    planName: pass?.planName,
+    memberName: pass?.memberName,
+    businessName: pass?.businessName,
+    validity: pass?.noExpiration
+      ? "Vigencia indefinida"
+      : pass?.currentPeriodEnd
+        ? `Vigente hasta ${new Date(pass.currentPeriodEnd).toLocaleDateString("es-MX")}`
+        : undefined,
+    applied,
+    benefits: (pass?.benefits ?? []).map((b: any) => ({
+      label: MEMBERSHIP_BENEFIT_LABEL[b.benefitType] ?? b.benefitType,
+      remaining: b.remaining,
+      quota: b.quotaPerCycle,
+    })),
+  };
+}
 import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
   printEngine
@@ -277,6 +305,22 @@ export default function PosPage() {
     currentRewardRate: number;
   } | null>(null);
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
+  // Membresía detectada por QR: datos para el aviso grande y el ticket.
+  const [detectedMembership, setDetectedMembership] = useState<any | null>(null);
+  const [membershipModalOpen, setMembershipModalOpen] = useState(false);
+  const memberSeenRef = useRef<Set<string>>(new Set());
+  const memberBenefitsForBanner = trpc.memberships.getMembershipBenefits.useQuery(
+    { businessId: posBizCtx.data?.businessId ?? "", customerId: selectedRabbitter?.id ?? "" },
+    { enabled: Boolean(posBizCtx.data?.businessId && selectedRabbitter?.id && !detectedMembership) },
+  );
+
+  const clearMembershipDetection = () => {
+    setDetectedMembership(null);
+    setMembershipModalOpen(false);
+    setMemberMenuItemIds([]);
+    setSelectedBenefitIds([]);
+    memberSeenRef.current = new Set();
+  };
   const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
   const [cardFlowChoice, setCardFlowChoice] = useState<"stripe" | "external" | null>(null);
   const stripeReady = Boolean(stripeStatus?.data?.chargesEnabled);
@@ -606,9 +650,51 @@ export default function PosPage() {
                 qrToken: cleanedRaw,
               });
               const rabbitter = await utils.pos.lookupRabbitter.fetch({ query: pass.userId });
+
+              // Auto-aplicar los beneficios base del pase; el cajero solo
+              // desmarca a los acompañantes en el panel de cobro.
+              const autoIds = (pass.benefits ?? [])
+                .filter((b: any) => b.benefitType === "MEMBER_CONSUMPTION" || b.benefitType === "DISCOUNT_PCT")
+                .map((b: any) => b.id);
+              if (autoIds.length > 0) setSelectedBenefitIds(autoIds);
+              const cartIds = cart.map((i: any) => i.menuItemId);
+              memberSeenRef.current = new Set(cartIds);
+              if (cartIds.length > 0) setMemberMenuItemIds(cartIds);
+
+              setDetectedMembership(pass);
+              setMembershipModalOpen(true);
+
+              // Escaneo DESPUÉS del cobro: se vincula al ticket ya pagado y se
+              // actualiza el ticket virtual con el bloque de membresía.
+              if (receiptModal && lastPaidOrderId) {
+                if (rabbitter) {
+                  try {
+                    const linked = await linkPostCheckout.mutateAsync({
+                      orderId: lastPaidOrderId,
+                      customerId: rabbitter.id,
+                      customerPhone: rabbitter.phoneNumber || rabbitter.telegramId || "sin-telefono",
+                      customerName: pass.memberName,
+                      awardBunz: true,
+                    });
+                    setPaidTicketData((prev: any) => prev ? {
+                      ...prev,
+                      customerName: pass.memberName,
+                      awardedBunz: linked.awardedBunz || prev.awardedBunz,
+                      membership: membershipTicketData(pass, false),
+                    } : prev);
+                  } catch (e) {
+                    console.error("[POS] link post-checkout membership:", e);
+                  }
+                }
+                setRabbitterModalOpen(false);
+                setLastPaidOrderId(null);
+                toast.success(`🎟️ Membresía de ${pass.memberName} vinculada a la venta`);
+                return;
+              }
+
               if (rabbitter) {
                 setSelectedRabbitter(rabbitter);
-                toast.success(`🎟️ ${pass.memberName} vinculado · elige sus beneficios al cobrar`);
+                toast.success(`🎟️ ${pass.memberName} vinculado · membresía detectada`);
               } else {
                 toast.info(`Membresía de ${pass.memberName} válida`);
               }
@@ -836,6 +922,46 @@ export default function PosPage() {
   }) => {
     setSelectedRabbitter(rabbitter);
   };
+
+  // Membresía detectada: cualquier ítem nuevo del carrito se marca como del
+  // socio por defecto (el cajero desmarca acompañantes en el panel de cobro).
+  useEffect(() => {
+    if (!detectedMembership) return;
+    const ids = cart.map((i: any) => i.menuItemId);
+    const nuevos = ids.filter((id: string) => !memberSeenRef.current.has(id));
+    if (nuevos.length === 0) return;
+    nuevos.forEach((id: string) => memberSeenRef.current.add(id));
+    setMemberMenuItemIds((prev) => Array.from(new Set([...prev, ...nuevos])));
+  }, [cart, detectedMembership]);
+
+  // Detección por QR normal: si el cliente vinculado tiene membresía activa,
+  // se muestra el mismo aviso grande y se auto-marcan sus beneficios.
+  useEffect(() => {
+    if (detectedMembership || !selectedRabbitter) return;
+    const rows = memberBenefitsForBanner.data ?? [];
+    if (!rows.length) return;
+    const first = rows[0] as any;
+    setDetectedMembership({
+      subscriptionId: first.subscriptionId,
+      userId: selectedRabbitter.id,
+      memberName: selectedRabbitter.name,
+      planName: first.planName,
+      badgeColor: first.badgeColor,
+      coverImageUrl: first.coverImageUrl,
+      businessName: ticketContext?.restaurant?.name ?? "",
+      noExpiration: first.noExpiration,
+      currentPeriodEnd: first.currentPeriodEnd,
+      maxMembersLimit: first.maxMembersLimit,
+      benefits: rows.map((r: any) => ({ ...r, id: r.entitlementId })),
+    });
+    const autoIds = rows
+      .filter((r: any) => r.benefitType === "MEMBER_CONSUMPTION" || r.benefitType === "DISCOUNT_PCT")
+      .map((r: any) => r.entitlementId);
+    if (autoIds.length > 0) setSelectedBenefitIds(autoIds);
+    const ids = cart.map((i: any) => i.menuItemId);
+    memberSeenRef.current = new Set(ids);
+    if (ids.length > 0) setMemberMenuItemIds(ids);
+  }, [memberBenefitsForBanner.data, detectedMembership, selectedRabbitter, ticketContext, cart]);
 
   // H-PERSIST: CUALQUIER vía de vinculación (select, QR, búsqueda, planea venir)
   // desemboca aquí: al quedar un Rabbitter seleccionado se abre/reutiliza su
@@ -1556,6 +1682,9 @@ export default function PosPage() {
       bunzCashbackRate: selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20,
       estimatedBunz: Math.max(1, Math.round(total * ((selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20) / 100))),
       customerName: customerName || selectedRabbitter?.name || undefined,
+      membership: detectedMembership
+        ? membershipTicketData(detectedMembership, selectedBenefitIds.length > 0)
+        : undefined,
       awardedBunz: awardedBunz !== undefined && awardedBunz > 0 ? awardedBunz : undefined,
     };
 
@@ -1574,7 +1703,7 @@ export default function PosPage() {
 
     setCart([]);
     setSelectedTableId(null);
-    setSelectedRabbitter(null);
+    setSelectedRabbitter(null); clearMembershipDetection();
     // H-PERSIST: la comanda del cliente quedó cobrada/ejecutada — se suelta el
     // borrador para que la próxima vinculación abra una nueva.
     setDraftOrderId(null);
@@ -2256,6 +2385,24 @@ export default function PosPage() {
         {/* Right: Cart / Ticket Panel */}
         {/* Right: Cart / Ticket Panel (Optimized 2-Column Visual Blocks) */}
         <aside className="w-80 md:w-96 lg:w-115 2xl:w-125 shrink-0 bg-gray-950/90 backdrop-blur-3xl border-l border-white/10 flex flex-col z-20 shadow-[-20px_0_50px_rgba(0,0,0,0.5)]">
+          {detectedMembership && (
+            <button
+              type="button"
+              onClick={() => setMembershipModalOpen(true)}
+              className="w-full text-left px-3 py-2.5 bg-gradient-to-r from-pink-500/25 via-fuchsia-500/15 to-purple-500/10 border-b border-pink-500/30 hover:from-pink-500/35 transition-all cursor-pointer"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-pink-300">🎟️ Membresía detectada</p>
+                  <p className="text-sm font-black text-white truncate">{detectedMembership.memberName}</p>
+                  <p className="text-[10px] text-white/55 truncate">
+                    {detectedMembership.planName} · {detectedMembership.businessName}
+                  </p>
+                </div>
+                <span className="shrink-0 text-[10px] font-black text-pink-300">Ver</span>
+              </div>
+            </button>
+          )}
           {/* Cart Header with Table Selector & Order Type */}
           <div className="flex flex-col border-b border-white/10 p-2.5 lg:p-3 bg-black/40 gap-1.5">
             <div className="flex items-center justify-between">
@@ -2324,7 +2471,7 @@ export default function PosPage() {
                         };
                         setPausedCarts((prev) => [parkedEntry, ...prev]);
                         setCart([]);
-                        setSelectedRabbitter(null);
+                        setSelectedRabbitter(null); clearMembershipDetection();
                         toast.success(`⏸️ Transacción pausada como ${folio}. Pantalla libre para el siguiente cliente.`);
                         return;
                       }
@@ -3801,6 +3948,79 @@ export default function PosPage() {
           </Button>
         </div>
       </Dialog>
+
+      {/* Membresía detectada: aviso grande + tarjeta */}
+      {membershipModalOpen && detectedMembership && (
+        <div
+          className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setMembershipModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl border border-pink-500/30 bg-zinc-950 p-4 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-pink-400">🎟️ Membresía detectada</p>
+                <h3 className="text-lg font-black text-white truncate">{detectedMembership.memberName}</h3>
+                <p className="text-xs text-white/50 truncate">
+                  {detectedMembership.planName} · {detectedMembership.businessName}
+                </p>
+              </div>
+              <button onClick={() => setMembershipModalOpen(false)} className="text-white/50 hover:text-white shrink-0">✕</button>
+            </div>
+
+            <div className="mt-3">
+              <MembershipCard
+                preview
+                data={{
+                  planName: detectedMembership.planName || "Membresía",
+                  businessName: detectedMembership.businessName || "",
+                  branchLabel: `Solo en ${detectedMembership.businessName || "el negocio"}`,
+                  validityLabel: detectedMembership.noExpiration
+                    ? "Vigencia Indefinida"
+                    : detectedMembership.currentPeriodEnd
+                      ? `Vigente hasta ${new Date(detectedMembership.currentPeriodEnd).toLocaleDateString("es-MX")}`
+                      : "Vigencia Indefinida",
+                  membersLabel: detectedMembership.maxMembersLimit
+                    ? `Hasta ${detectedMembership.maxMembersLimit} miembros`
+                    : "Miembros ilimitados",
+                  transferableLabel: "Intransferible",
+                  heroImageUrl: detectedMembership.coverImageUrl,
+                  memberName: detectedMembership.memberName,
+                  accentColor: detectedMembership.badgeColor,
+                }}
+              />
+            </div>
+
+            <div className="mt-3 space-y-1.5">
+              {(detectedMembership.benefits ?? []).map((b: any) => (
+                <div key={b.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px]">
+                  <span className="text-white/80">{MEMBERSHIP_BENEFIT_LABEL[b.benefitType] ?? b.benefitType}</span>
+                  <span className="text-white/45">
+                    {b.remaining != null ? `${b.remaining}/${b.quotaPerCycle}` : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setMembershipModalOpen(false)}
+                className="flex-1 rounded-xl bg-gradient-to-r from-pink-500 to-fuchsia-500 py-2.5 text-sm font-black text-white"
+              >
+                Continuar con la venta
+              </button>
+              <button
+                onClick={() => { setSelectedRabbitter(null); clearMembershipDetection(); clearMembershipDetection(); }}
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-bold text-white/60"
+              >
+                Quitar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Ticket de Venta / Comprobante de Cobro */}
       <Dialog
@@ -5544,7 +5764,7 @@ export default function PosPage() {
                   };
                   setPausedCarts((prev) => [parkedEntry, ...prev]);
                   setCart([]);
-                  setSelectedRabbitter(null);
+                  setSelectedRabbitter(null); clearMembershipDetection();
                   toast.success(`⏸️ Transacción pausada como ${folio}. Pantalla libre para el siguiente cliente.`);
                 }}
                 className="shrink-0 py-1.5 px-3 text-xs font-black bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-md active:scale-95 cursor-pointer"

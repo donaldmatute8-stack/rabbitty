@@ -51,6 +51,15 @@ export interface TicketData {
   bunzCashbackRate?: number; // Kept for legacy compatibility
   estimatedBunz?: number;
   customerName?: string;
+  /** Membresía detectada: se imprime en el ticket del Rabbitter. */
+  membership?: {
+    planName?: string;
+    memberName?: string;
+    businessName?: string;
+    validity?: string;
+    applied?: boolean;
+    benefits?: Array<{ label: string; remaining?: number | null; quota?: number }>;
+  };
   awardedBunz?: number;
   orderId?: string;
   claimToken?: string;
@@ -174,6 +183,37 @@ export function TicketTemplate({
           </div>
         )}
       </div>
+
+      {/* ── MEMBRESÍA DETECTADA ── */}
+      {data.membership && (
+        <div className={`py-3 border-b border-dashed border-gray-700 ${isThermalPaper ? "text-black" : "text-gray-200"}`}>
+          <p className={`text-center text-[10px] font-black uppercase tracking-widest ${isThermalPaper ? "text-black" : "text-pink-400"}`}>
+            🎟️ Membresía detectada
+          </p>
+          <p className="text-center text-[12px] font-black mt-1">{data.membership.memberName || "Rabbitter"}</p>
+          <p className={`text-center text-[10px] ${isThermalPaper ? "text-gray-700" : "text-gray-400"}`}>
+            {data.membership.planName || "Membresía"}
+            {data.membership.validity ? ` · ${data.membership.validity}` : ""}
+          </p>
+          {data.membership.benefits && data.membership.benefits.length > 0 && (
+            <div className="mt-2 space-y-0.5 text-[10px]">
+              {data.membership.benefits.map((b, i) => (
+                <div key={i} className="flex justify-between gap-2">
+                  <span>{b.label}</span>
+                  <span className="tabular-nums">
+                    {b.remaining != null ? `${b.remaining}/${b.quota ?? "—"}` : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.membership.applied && (
+            <p className={`text-center text-[9px] mt-1.5 font-bold ${isThermalPaper ? "text-black" : "text-emerald-300"}`}>
+              Beneficios aplicados a esta venta
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ── ITEMS LIST ── */}
       <div className="py-3 border-b border-dashed border-gray-700">

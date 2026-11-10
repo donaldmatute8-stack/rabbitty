@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "../cn";
 
@@ -71,21 +71,14 @@ export function MembershipCard({
   const animate = !preview && !reduce;
   const { title, number } = splitName(data.planName || "Membresía");
   const business = splitBusiness(data.businessName || "");
+  const branch = (data.branchLabel || data.businessName || "").replace(/^Solo en\s+/i, "");
   const interactive = !preview && typeof onFlip === "function";
-
-  const front: CSSProperties = {
-    backfaceVisibility: "hidden",
-    WebkitBackfaceVisibility: "hidden",
-  };
-  const back: CSSProperties = {
-    ...front,
-    transform: "rotateY(180deg)",
-  };
 
   return (
     <div className={cn("w-full select-none", className)} style={{ containerType: "inline-size" }}>
       <div style={{ perspective: 1400 }}>
         <motion.div
+          key={preview ? "front" : flipped ? "back" : "front"}
           role={interactive ? "button" : undefined}
           tabIndex={interactive ? 0 : undefined}
           onClick={interactive ? onFlip : undefined}
@@ -99,13 +92,14 @@ export function MembershipCard({
                 }
               : undefined
           }
-          animate={preview ? undefined : { rotateY: flipped ? 180 : 0 }}
-          transition={{ type: "spring", stiffness: 130, damping: 18, mass: 0.9 }}
+          initial={preview ? false : { rotateY: flipped ? -85 : 85, opacity: 0 }}
+          animate={{ rotateY: 0, opacity: 1 }}
+          transition={{ duration: 0.24, ease: "easeOut" }}
           style={{ position: "relative", width: "100%", aspectRatio: "2 / 3", transformStyle: "preserve-3d" }}
           className={cn(interactive && "cursor-pointer")}
         >
           {/* ── FRENTE ─────────────────────────────────────────────── */}
-          <div className="relative h-full w-full overflow-hidden" style={{ ...front, borderRadius: "5.5cqw" }}>
+          <div className="relative h-full w-full overflow-hidden" style={{ display: flipped && !preview ? "none" : "block", borderRadius: "5.5cqw" }}>
             <CardShell accent={accent} animate={animate} />
             <div className="relative z-10 flex h-full w-full flex-col items-center">
               {/* Logo */}
@@ -132,7 +126,7 @@ export function MembershipCard({
               {/* Héroe */}
               <div
                 className="relative flex items-center justify-center"
-                style={{ width: "86cqw", height: "44cqw", marginTop: "1.5cqw" }}
+                style={{ width: "88cqw", height: "48cqw", marginTop: "1.2cqw" }}
               >
                 <motion.div
                   aria-hidden
@@ -248,7 +242,7 @@ export function MembershipCard({
                 <span style={{ width: "0.3cqw", height: "6.6cqw", background: rgba("#FFFFFF", 0.22), margin: "0 3cqw" }} />
                 <div className="flex flex-col" style={{ lineHeight: 1.15 }}>
                   <span style={{ fontSize: "2.9cqw", color: "#B9AFBD", fontWeight: 500 }}>Solo en</span>
-                  <span style={{ fontSize: "3.4cqw", color: "#EDE4EF", fontWeight: 700 }}>{data.branchLabel || data.businessName}</span>
+                  <span style={{ fontSize: "3.4cqw", color: "#EDE4EF", fontWeight: 700 }}>{branch}</span>
                 </div>
               </div>
 
@@ -275,7 +269,7 @@ export function MembershipCard({
           </div>
 
           {/* ── REVERSO ────────────────────────────────────────────── */}
-          <div className="absolute inset-0 overflow-hidden" style={{ ...back, borderRadius: "5.5cqw" }}>
+          <div className="absolute inset-0 overflow-hidden" style={{ display: flipped && !preview ? "block" : "none", borderRadius: "5.5cqw" }}>
             <CardShell accent={accent} animate={false} />
             <div className="relative z-10 flex h-full w-full flex-col items-center" style={{ padding: "7cqw 6cqw" }}>
               <div className="flex items-center gap-2" style={{ alignSelf: "flex-start" }}>
@@ -359,7 +353,7 @@ function CardShell({ accent, animate }: { accent: string; animate: boolean }) {
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(120% 95% at 50% 30%, #3B0B25 0%, #1B0713 42%, #0B0309 72%, #060206 100%)",
+            "radial-gradient(120% 95% at 50% 30%, #2A0719 0%, #140510 46%, #08030A 76%, #050205 100%)",
         }}
       />
       {/* Facetas diagonales */}
@@ -409,7 +403,6 @@ function TrustItem({ icon, label, accent }: { icon: ReactNode; label: string; ac
     <div className="flex flex-col items-center" style={{ width: "30%" }}>
       <span style={{ color: "#EDE4EF", display: "flex", alignItems: "center", justifyContent: "center", height: "8cqw" }}>{icon}</span>
       <span style={{ fontSize: "2.7cqw", color: "#CFC6D2", textAlign: "center", lineHeight: 1.2, marginTop: "0.8cqw" }}>{label}</span>
-      <span aria-hidden style={{ width: "2.2cqw", height: "0.35cqw", background: rgba(accent, 0.8), marginTop: "0.9cqw", borderRadius: "9999px" }} />
     </div>
   );
 }

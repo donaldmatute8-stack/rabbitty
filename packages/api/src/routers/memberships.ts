@@ -892,6 +892,11 @@ export const membershipsRouter = router({
           entitlementId: s.entitlement.id,
           subscriptionId: s.sub.id,
           planName: s.plan?.name ?? "Cortesía 🎁",
+          badgeColor: s.plan?.badgeColor ?? null,
+          coverImageUrl: s.plan?.coverImageUrl ?? null,
+          maxMembersLimit: s.version?.maxMembersLimit ?? null,
+          noExpiration: s.sub.noExpiration,
+          currentPeriodEnd: s.sub.currentPeriodEnd,
           membershipOrigin: s.sub.membershipOrigin,
           benefitType: s.entitlement.benefitType,
           targetRefId: s.entitlement.targetRefId,
@@ -1007,6 +1012,27 @@ export const membershipsRouter = router({
         .where(eq(users.id, sub.userId))
         .limit(1);
 
+      const [planRow] = sub.planVersionId
+        ? await ctx.coreDb
+            .select({
+              planName: membershipPlans.name,
+              badgeColor: membershipPlans.badgeColor,
+              coverImageUrl: membershipPlans.coverImageUrl,
+              priceFiat: membershipPlanVersions.priceFiat,
+              billingInterval: membershipPlanVersions.billingInterval,
+              maxMembersLimit: membershipPlanVersions.maxMembersLimit,
+            })
+            .from(membershipPlanVersions)
+            .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+            .where(eq(membershipPlanVersions.id, sub.planVersionId))
+            .limit(1)
+        : [];
+      const [bizRow] = await ctx.coreDb
+        .select({ name: ownedBusinesses.name, logoUrl: ownedBusinesses.logoUrl })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, sub.businessId))
+        .limit(1);
+
       const entitlements = await ctx.coreDb
         .select({
           id: membershipEntitlements.id,
@@ -1029,6 +1055,16 @@ export const membershipsRouter = router({
           [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
           user?.username ||
           "Rabbitter",
+        planName: planRow?.planName ?? "Cortesía",
+        badgeColor: planRow?.badgeColor ?? null,
+        coverImageUrl: planRow?.coverImageUrl ?? null,
+        priceFiat: planRow?.priceFiat ?? null,
+        billingInterval: planRow?.billingInterval ?? null,
+        maxMembersLimit: planRow?.maxMembersLimit ?? null,
+        businessName: bizRow?.name ?? "",
+        businessLogoUrl: bizRow?.logoUrl ?? null,
+        noExpiration: sub.noExpiration,
+        currentPeriodEnd: sub.currentPeriodEnd,
         membershipOrigin: sub.membershipOrigin,
         benefits: entitlements.map((e) => ({
           ...e,
