@@ -81,8 +81,25 @@ export function MembershipCard({
   const interactive = !preview && typeof onFlip === "function";
 
   return (
-    <div className={cn("w-full select-none", className)} style={{ containerType: "inline-size" }}>
-      <div style={{ perspective: 1400 }}>
+    <div className={cn("w-full select-none", className)} style={{ containerType: "inline-size", position: "relative" }}>
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: "-4%",
+          background: `radial-gradient(circle at 6% 6%, ${rgba(accent, 0.55)} 0%, transparent 30%), radial-gradient(circle at 94% 94%, ${rgba(accent, 0.55)} 0%, transparent 30%)`,
+          filter: "blur(2.4cqw)",
+          opacity: 0.8,
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+      <div style={{ perspective: 1400, position: "relative", zIndex: 1 }}>
+        <motion.div
+          animate={animate ? { rotateX: [1.2, -1.2, 1.2], rotateY: [-2.2, 2.2, -2.2], y: [0, -2, 0] } : undefined}
+          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          style={{ transformStyle: "preserve-3d", willChange: "transform" }}
+        >
         <motion.div
           key={preview ? "front" : flipped ? "back" : "front"}
           role={interactive ? "button" : undefined}
@@ -115,24 +132,12 @@ export function MembershipCard({
                   alt="Rabbitty"
                   style={{ height: "10.5cqw", objectFit: "contain" }}
                 />
-                <span
-                  style={{
-                    fontSize: "5.2cqw",
-                    fontWeight: 700,
-                    letterSpacing: "0.01em",
-                    color: "#F4EEF5",
-                    lineHeight: 1,
-                    marginTop: "0.8cqw",
-                  }}
-                >
-                  Rabbitty
-                </span>
               </div>
 
               {/* Héroe */}
               <div
                 className="relative flex items-center justify-center"
-                style={{ width: "96cqw", height: "54cqw", marginTop: "0.6cqw" }}
+                style={{ width: "100cqw", height: "60cqw", marginTop: "0.6cqw" }}
               >
                 <motion.div
                   aria-hidden
@@ -351,6 +356,7 @@ export function MembershipCard({
             </div>
           </div>
         </motion.div>
+        </motion.div>
       </div>
     </div>
   );
@@ -386,7 +392,19 @@ function CardShell({ accent, animate }: { accent: string; animate: boolean }) {
           inset: 0,
           borderRadius: "5.5cqw",
           border: `0.65cqw solid ${accent}`,
-          boxShadow: `0 0 2.4cqw ${rgba(accent, 0.85)}, inset 0 0 2.6cqw ${rgba(accent, 0.35)}, inset 0 0 0 0.55cqw rgba(255,255,255,.06)`,
+          boxShadow: `0 0 1.1cqw ${rgba(accent, 0.55)}, inset 0 0 2.2cqw ${rgba(accent, 0.22)}, inset 0 0 0 0.55cqw rgba(255,255,255,.06)`,
+        }}
+      />
+      {/* Glow concentrado en esquina superior izquierda e inferior derecha */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          borderRadius: "5.5cqw",
+          background: `radial-gradient(circle at 0% 0%, ${rgba(accent, 0.42)} 0%, transparent 30%), radial-gradient(circle at 100% 100%, ${rgba(accent, 0.42)} 0%, transparent 30%)`,
+          pointerEvents: "none",
+          mixBlendMode: "screen",
         }}
       />
       {/* Brillo que recorre la tarjeta */}

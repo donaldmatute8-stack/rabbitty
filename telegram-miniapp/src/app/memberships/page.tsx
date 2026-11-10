@@ -281,7 +281,7 @@ export default function MembershipsPage() {
             exit={{ opacity: 0 }}
           >
             <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setActive(null)} />
-            <div className="relative min-h-full flex flex-col items-center justify-center p-4 py-8">
+            <div className="relative min-h-[100dvh] flex flex-col items-center justify-center px-4 pt-16 pb-10">
               <button
                 onClick={() => setActive(null)}
                 className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center"
