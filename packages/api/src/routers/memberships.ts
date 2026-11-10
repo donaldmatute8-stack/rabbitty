@@ -1287,6 +1287,106 @@ return await ctx.coreDb.transaction(async (tx: any) => {
       });
     }),
 
+  /**
+   * Admin: otorga un plan (público o privado) a Rabbitters elegidos manualmente.
+   * No pasa por Stripe ni por la caja: es una invitación del negocio.
+   */
+  grantPlan: posPermission("POS_DISCOUNT")
+    .input(z.object({
+      planId: z.string().uuid(),
+      userIds: z.array(z.string().uuid()).min(1).max(50),
+      durationMonths: z.union([z.literal(0), z.literal(3), z.literal(6), z.literal(12)]),
+      giftNote: z.string().max(300).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [plan] = await ctx.coreDb
+        .select()
+        .from(membershipPlans)
+        .where(eq(membershipPlans.id, input.planId))
+        .limit(1);
+      if (!plan || !plan.currentVersionId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Plan no encontrado" });
+      }
+      await assertBusinessOwner(ctx, plan.businessId);
+
+      const [version] = await ctx.coreDb
+        .select()
+        .from(membershipPlanVersions)
+        .where(eq(membershipPlanVersions.id, plan.currentVersionId))
+        .limit(1);
+      if (!version || !version.isPublished) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Publica una versión del plan antes de otorgarlo" });
+      }
+
+      const rules = (version.benefitRules ?? []) as z.infer<typeof benefitRuleSchema>[];
+      const now = new Date();
+      const indefinite = input.durationMonths === 0;
+      const periodEnd = indefinite
+        ? null
+        : (() => { const d = new Date(now); d.setMonth(d.getMonth() + input.durationMonths); return d; })();
+      const hardEnd = periodEnd ?? (() => { const d = new Date(now); d.setFullYear(d.getFullYear() + 99); return d; })();
+
+      let granted = 0;
+      let skipped = 0;
+      for (const userId of input.userIds) {
+        const [target] = await ctx.coreDb
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (!target) { skipped += 1; continue; }
+
+        const [dup] = await ctx.coreDb
+          .select({ id: membershipSubscriptions.id })
+          .from(membershipSubscriptions)
+          .innerJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+          .where(and(
+            eq(membershipSubscriptions.userId, userId),
+            eq(membershipPlanVersions.planId, plan.id),
+            eq(membershipSubscriptions.status, "ACTIVE"),
+          ))
+          .limit(1);
+        if (dup) { skipped += 1; continue; }
+
+        const [sub] = await ctx.coreDb
+          .insert(membershipSubscriptions)
+          .values({
+            userId,
+            businessId: plan.businessId,
+            planVersionId: version.id,
+            status: "ACTIVE",
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+            noExpiration: indefinite,
+            paymentProvider: null,
+            membershipOrigin: "INVITATION",
+            issuedByUserId: ctx.userId,
+            giftNote: input.giftNote || null,
+            acquisitionSource: "ADMIN",
+            qrPassSecret: randomBytes(32).toString("hex"),
+          })
+          .returning();
+        if (!sub) { skipped += 1; continue; }
+
+        await ctx.coreDb.insert(membershipEntitlements).values(
+          buildEntitlementRows(sub.id, rules, now, hardEnd),
+        );
+        granted += 1;
+
+        try {
+          await miniappClient.sendNotification({
+            userId,
+            title: `🎟️ ${plan.name}`,
+            message: `El negocio te otorgó la membresía "${plan.name}". Ábrela en Mis Membresías y muéstrala en caja.`,
+            type: "REWARD",
+            route: "/memberships",
+          } as any);
+        } catch { /* best-effort */ }
+      }
+
+      return { granted, skipped };
+    }),
+
   /** Admin: resumen de negocio para el marketplace (miembros, MRR, canjes). */
   businessAnalytics: posProcedure
     .input(z.object({ businessId: z.string().uuid() }))

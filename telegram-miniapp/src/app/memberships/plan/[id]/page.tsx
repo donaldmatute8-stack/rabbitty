@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { BadgeCheck, Check, Crown, Gift, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { BadgeCheck, Check, Crown, Gift, Loader2, Share2, ShieldCheck, Sparkles } from 'lucide-react';
 import { MembershipCard } from '@rabbitty/ui';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { PremiumCard, PremiumSection } from '@/components/premium/PremiumUI';
 import { PlatformBridge } from '@/lib/platform';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 type Plan = {
   id: string;
@@ -69,10 +70,18 @@ function price(plan: Plan) {
 export default function MembershipPlanPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const ref = searchParams.get('ref') || '';
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [giftRecipient, setGiftRecipient] = useState('');
+  const [giftMessage, setGiftMessage] = useState('');
+  const [gifting, setGifting] = useState(false);
+  const [giftResult, setGiftResult] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -100,7 +109,7 @@ export default function MembershipPlanPage() {
       const res = await fetch('/api/memberships/join-free', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planVersionId: plan.versionId }),
+        body: JSON.stringify({ planVersionId: plan.versionId, ref }),
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo activar');
@@ -122,7 +131,7 @@ export default function MembershipPlanPage() {
       const res = await fetch('/api/memberships/checkout', {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planVersionId: plan.versionId, source: 'MARKETPLACE' }),
+        body: JSON.stringify({ planVersionId: plan.versionId, source: 'MARKETPLACE', ref }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || 'No se pudo iniciar el pago');
@@ -130,6 +139,46 @@ export default function MembershipPlanPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo iniciar el pago');
       setBusy(false);
+    }
+  };
+
+  const sharePlan = async () => {
+    if (!plan) return;
+    const url = `https://app.rabbitty.me/memberships/plan/${plan.id}${user?.id ? `?ref=${user.id}` : ''}`;
+    const shared = await PlatformBridge.share({
+      title: plan.name,
+      text: `Te invito a ${plan.name} en ${plan.businessName}`,
+      url,
+    });
+    if (!shared) {
+      await navigator.clipboard.writeText(url).catch(() => {});
+    }
+  };
+
+  const sendGift = async () => {
+    if (!plan || !giftRecipient.trim()) return;
+    setGifting(true);
+    setGiftResult('');
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/memberships/gift', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planVersionId: plan.versionId,
+          recipient: giftRecipient.trim(),
+          message: giftMessage.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo enviar el regalo');
+      setGiftResult(`🎁 Regalo enviado a ${data.recipientName}`);
+      setGiftRecipient('');
+      setGiftMessage('');
+    } catch (e) {
+      setGiftResult(e instanceof Error ? e.message : 'No se pudo enviar el regalo');
+    } finally {
+      setGifting(false);
     }
   };
 
@@ -194,6 +243,16 @@ export default function MembershipPlanPage() {
           </p>
         </div>
 
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={sharePlan}
+            className="flex items-center gap-1.5 rounded-full border border-(--border-subtle) bg-(--bg-elevated) px-3 py-1.5 text-[10px] font-bold text-(--text-muted)"
+          >
+            <Share2 size={12} /> Invitar a un amigo
+          </button>
+        </div>
+
         <PremiumSection title="Qué incluye">
           <PremiumCard>
             <div className="divide-y divide-(--border-subtle)">
@@ -244,14 +303,23 @@ export default function MembershipPlanPage() {
               Ver mi pase
             </button>
           ) : plan.priceFiat <= 0 ? (
-            <button
-              type="button"
-              onClick={joinFree}
-              disabled={busy}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#E91E63] to-[#FF2E93] py-3.5 text-[14px] font-black text-white shadow-[0_12px_30px_-12px_rgba(233,30,99,.7)] disabled:opacity-60"
-            >
-              {busy ? <Loader2 size={16} className="animate-spin" /> : <Gift size={16} />} Unirme gratis
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={joinFree}
+                disabled={busy}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#E91E63] to-[#FF2E93] py-3.5 text-[14px] font-black text-white shadow-[0_12px_30px_-12px_rgba(233,30,99,.7)] disabled:opacity-60"
+              >
+                {busy ? <Loader2 size={16} className="animate-spin" /> : <Gift size={16} />} Unirme gratis
+              </button>
+              <button
+                type="button"
+                onClick={() => { setGiftOpen(true); setGiftResult(''); }}
+                className="rounded-2xl border border-[#E91E63]/30 bg-[#E91E63]/10 px-4 text-[12px] font-black text-[#FF7DBB]"
+              >
+                Regalar
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -268,6 +336,43 @@ export default function MembershipPlanPage() {
           )}
         </div>
       </div>
+
+      {giftOpen && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/80 p-4 backdrop-blur-md sm:items-center" onClick={() => setGiftOpen(false)}>
+          <div className="w-full max-w-sm rounded-3xl border border-[#E91E63]/25 bg-[#120B1D] p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#FF5FA8]">REGALAR</p>
+                <h3 className="mt-0.5 text-lg font-black text-white">{plan.name}</h3>
+              </div>
+              <button onClick={() => setGiftOpen(false)} className="text-white/50" aria-label="Cerrar">✕</button>
+            </div>
+            <p className="mt-2 text-[11px] text-white/50">Le enviaremos el pase directamente a su cuenta. Sin costo para ti.</p>
+            <input
+              className="mt-3 w-full rounded-xl border border-white/10 bg-white/[.05] px-3 py-2.5 text-[12px] text-white outline-none placeholder:text-white/30"
+              placeholder="@handle, teléfono o ID"
+              value={giftRecipient}
+              onChange={(e) => setGiftRecipient(e.target.value)}
+            />
+            <textarea
+              className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-white/[.05] px-3 py-2.5 text-[12px] text-white outline-none placeholder:text-white/30"
+              rows={2}
+              placeholder="Mensaje (opcional)"
+              value={giftMessage}
+              onChange={(e) => setGiftMessage(e.target.value)}
+            />
+            {giftResult && <p className="mt-2 text-[11px] text-[#FF7DBB]">{giftResult}</p>}
+            <button
+              type="button"
+              onClick={sendGift}
+              disabled={gifting || !giftRecipient.trim()}
+              className="mt-3 w-full rounded-xl bg-gradient-to-r from-[#E91E63] to-[#FF2E93] py-3 text-[13px] font-black text-white disabled:opacity-50"
+            >
+              {gifting ? 'Enviando…' : 'Enviar regalo'}
+            </button>
+          </div>
+        </div>
+      )}
     </ProfileSubpageLayout>
   );
 }

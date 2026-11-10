@@ -224,6 +224,7 @@ export async function POST(req: Request) {
               paymentProviderSubId: String(session.subscription),
               acquisitionSource: meta.acquisitionSource ?? "MARKETPLACE",
               checkoutSessionId: session.id,
+              referredByUserId: meta.referredByUserId || null,
               qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
             }).returning();
             // Entitlements: sin estas filas el pase no tiene beneficios que
@@ -297,6 +298,7 @@ export async function POST(req: Request) {
               paymentProviderSubId: session.payment_intent ? String(session.payment_intent) : null,
               acquisitionSource: meta.acquisitionSource ?? "MARKETPLACE",
               checkoutSessionId: session.id,
+              referredByUserId: meta.referredByUserId || null,
               qrPassSecret: (await import("crypto")).randomBytes(32).toString("hex"),
             }).returning();
 

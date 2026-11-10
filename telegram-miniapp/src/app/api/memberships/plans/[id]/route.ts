@@ -51,6 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .where(
         and(
           eq(membershipPlans.isActive, true),
+          eq(membershipPlans.isMarketplaceVisible, true),
           eq(membershipPlanVersions.isPublished, true),
           eq(ownedBusinesses.sandbox, false),
           or(eq(membershipPlans.id, id), eq(membershipPlans.slug, id)),

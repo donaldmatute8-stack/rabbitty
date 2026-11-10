@@ -51,7 +51,13 @@ export async function POST(req: NextRequest) {
       .innerJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
       .where(eq(membershipPlanVersions.id, planVersionId))
       .limit(1);
-    if (!row || !row.version.isPublished || !row.plan.isActive || row.plan.currentVersionId !== row.version.id) {
+    if (
+      !row ||
+      !row.version.isPublished ||
+      !row.plan.isActive ||
+      !row.plan.isMarketplaceVisible ||
+      row.plan.currentVersionId !== row.version.id
+    ) {
       return NextResponse.json({ error: 'Plan no disponible' }, { status: 400 });
     }
 
@@ -97,6 +103,8 @@ export async function POST(req: NextRequest) {
 
     const isOneTime = row.version.billingInterval === 'ONE_TIME';
     const source = String(body?.source || 'MARKETPLACE');
+    const ref = String(body?.ref || '').trim();
+    const referredByUserId = /^[0-9a-f-]{36}$/i.test(ref) && ref !== caller.id ? ref : '';
 
     // Product + Price EN LA CUENTA DEL AFILIADO (idempotente por columnas reservadas)
     let priceId = row.version.stripePriceId || null;
@@ -136,6 +144,7 @@ export async function POST(req: NextRequest) {
       planVersionId: row.version.id,
       stripeAccount: acct,
       acquisitionSource: source,
+      ...(referredByUserId ? { referredByUserId, acquisitionSource: 'REFERRAL' } : {}),
     };
 
     const sessionParams: any = {

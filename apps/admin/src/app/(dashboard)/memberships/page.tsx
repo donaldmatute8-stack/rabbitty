@@ -4,7 +4,7 @@ import RabbitterScannerModal from "@/components/RabbitterScannerModal";
 import { useState, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Button, cn, toast, MembershipCard } from "@rabbitty/ui";
-import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift, Edit3 } from "lucide-react";
+import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift, Edit3, UserPlus, Search } from "lucide-react";
 
 type Interval = "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "ONE_TIME";
 type BenefitType = "INCLUDED_PRODUCT" | "DISCOUNT_PCT" | "CREDIT_BALANCE" | "EVENT_ACCESS" | "BULK_PACK" | "MEMBER_CONSUMPTION";
@@ -91,6 +91,7 @@ export default function MembershipsPage() {
   });
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
   const [usageFor, setUsageFor] = useState<{ id: string; name: string } | null>(null);
+  const [grantPlan, setGrantPlan] = useState<{ id: string; name: string } | null>(null);
   const { data: usageData, isFetching: usageFetching } = trpc.memberships.listMemberUsage.useQuery(
     { subscriptionId: usageFor?.id ?? "" },
     { enabled: !!usageFor },
@@ -228,6 +229,9 @@ export default function MembershipsPage() {
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-xs text-white/50">{activeMembers} miembros activos</span>
                   <div className="flex items-center gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => setGrantPlan({ id: plan.id, name: plan.name })}>
+                      <UserPlus className="w-3 h-3 mr-1" /> Otorgar
+                    </Button>
                     {/* GAP 5: edición → nueva versión */}
                     {plan.currentVersionId && latest && (
                       <Button size="sm" variant="secondary"
@@ -417,6 +421,13 @@ export default function MembershipsPage() {
             )}
           </div>
         </div>
+      )}
+
+      {grantPlan && (
+        <GrantPlanModal
+          plan={grantPlan}
+          onClose={() => setGrantPlan(null)}
+        />
       )}
 
       {(showForm || editPlan) && (
@@ -1035,6 +1046,130 @@ function CourtesyPanel({ businessId }: { businessId: string }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function GrantPlanModal({
+  plan,
+  onClose,
+}: {
+  plan: { id: string; name: string };
+  onClose: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Array<{ id: string; name: string }>>([]);
+  const [duration, setDuration] = useState<0 | 3 | 6 | 12>(0);
+  const [note, setNote] = useState("");
+  const [result, setResult] = useState("");
+
+  const lookup = trpc.pos.lookupRabbitter.useQuery(
+    { query: query.trim() },
+    { enabled: query.trim().length > 2, retry: false },
+  );
+  const grant = trpc.memberships.grantPlan.useMutation({
+    onSuccess: (r) => {
+      setResult(`✅ ${r.granted} otorgada(s) · ${r.skipped} omitida(s)`);
+      setSelected([]);
+      toast.success("Membresía(s) otorgadas");
+      void utils.memberships.listMembers.invalidate();
+      void utils.memberships.businessAnalytics.invalidate();
+    },
+    onError: (e) => setResult(`⚠️ ${e.message}`),
+  });
+
+  const add = () => {
+    const u = lookup.data as { id?: string; name?: string } | null | undefined;
+    if (!u?.id) return;
+    const row = { id: u.id, name: u.name || "Rabbitter" };
+    setSelected((prev) => (prev.some((x) => x.id === row.id) ? prev : [...prev, row]));
+    setQuery("");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-lg max-h-[88vh] space-y-3 overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-white">Otorgar membresía</h2>
+            <p className="text-xs text-white/50">
+              {plan.name} · sin pago, para los Rabbitters que elijas.
+            </p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar"><X className="h-5 w-5 text-white/60" /></button>
+        </div>
+
+        <p className="rounded-xl border border-[#E91E63]/25 bg-[#E91E63]/10 px-3 py-2 text-[11px] text-white/65">
+          Úsalo para membresías privadas o invitados. El plan puede estar despublicado del marketplace.
+        </p>
+
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/35" />
+            <input
+              className={cn(inputCls, "!pl-9")}
+              placeholder="Buscar @handle, teléfono o código…"
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setResult(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+            />
+          </div>
+          <Button type="button" variant="secondary" onClick={add} disabled={!lookup.data}>
+            <UserPlus className="mr-1 h-3.5 w-3.5" /> Agregar
+          </Button>
+        </div>
+
+        {lookup.isFetching && <p className="text-[11px] text-white/40">Buscando…</p>}
+        {lookup.data && !lookup.isFetching && (
+          <button
+            type="button"
+            onClick={add}
+            className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left hover:bg-white/10"
+          >
+            <span className="text-[12px] font-bold text-white">{(lookup.data as { name?: string }).name || "Rabbitter"}</span>
+            <span className="text-[10px] text-[#FF7DBB]">Agregar</span>
+          </button>
+        )}
+
+        {selected.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {selected.map((u) => (
+              <span key={u.id} className="inline-flex items-center gap-1 rounded-full border border-[#E91E63]/30 bg-[#E91E63]/10 px-2.5 py-1 text-[11px] text-white">
+                {u.name}
+                <button type="button" onClick={() => setSelected((prev) => prev.filter((x) => x.id !== u.id))} aria-label={`Quitar ${u.name}`}>
+                  <X className="h-3 w-3 text-white/50" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <select className={inputCls} value={duration} onChange={(e) => setDuration(Number(e.target.value) as 0 | 3 | 6 | 12)}>
+            <option value={0}>Indefinida (revocable)</option>
+            <option value={3}>3 meses</option>
+            <option value={6}>6 meses</option>
+            <option value={12}>12 meses</option>
+          </select>
+          <input className={inputCls} placeholder="Nota (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+
+        {result && <p className="text-[11px] text-white/60">{result}</p>}
+
+        <Button
+          className="w-full"
+          disabled={selected.length === 0 || grant.isPending}
+          onClick={() => grant.mutate({
+            planId: plan.id,
+            userIds: selected.map((u) => u.id),
+            durationMonths: duration,
+            giftNote: note.trim() || undefined,
+          })}
+        >
+          {grant.isPending ? "Otorgando…" : `Otorgar a ${selected.length} Rabbitter${selected.length === 1 ? "" : "s"}`}
+        </Button>
       </div>
     </div>
   );

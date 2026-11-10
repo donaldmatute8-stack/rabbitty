@@ -1116,6 +1116,7 @@ export const membershipSubscriptions = pgTable("membership_subscriptions", {
   /** MARKETPLACE | POS | GIFT | PROMO | AFFILIATE_PAGE */
   acquisitionSource: text("acquisitionSource"),
   checkoutSessionId: text("checkoutSessionId"),
+  referredByUserId: text("referredByUserId"),
   revokedAt: timestamp("revokedAt"),
   revokedByUserId: text("revokedByUserId"),
   revocationReason: text("revocationReason"),

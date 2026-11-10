@@ -7,6 +7,7 @@ import {
   membershipPlanVersions,
   membershipSubscriptions,
   membershipEntitlements,
+  users,
 } from "@/db/schema";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
@@ -39,6 +40,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const planId = String(body?.planId || "");
     const planVersionId = String(body?.planVersionId || "");
+    const ref = String(body?.ref || "").trim();
+    let referredByUserId: string | null = null;
+    if (ref && ref !== caller.id && /^[0-9a-f-]{36}$/i.test(ref)) {
+      const [refUser] = await db.select({ id: users.id }).from(users).where(eq(users.id, ref)).limit(1);
+      if (refUser) referredByUserId = refUser.id;
+    }
     if (!planId && !planVersionId) {
       return NextResponse.json({ error: "planId o planVersionId requerido" }, { status: 400 });
     }
@@ -54,6 +61,7 @@ export async function POST(req: NextRequest) {
             : eq(membershipPlans.id, planId),
           eq(membershipPlanVersions.isPublished, true),
           eq(membershipPlans.isActive, true),
+          eq(membershipPlans.isMarketplaceVisible, true),
           sql`${membershipPlans.currentVersionId} = ${membershipPlanVersions.id}`,
         ),
       )
@@ -136,7 +144,8 @@ export async function POST(req: NextRequest) {
           noExpiration: true,
           paymentProvider: "PROMO",
           membershipOrigin: "PURCHASED",
-          acquisitionSource: "MARKETPLACE",
+          acquisitionSource: referredByUserId ? "REFERRAL" : "MARKETPLACE",
+          referredByUserId,
           qrPassSecret: crypto.randomBytes(32).toString("hex"),
         })
         .returning({ id: membershipSubscriptions.id });

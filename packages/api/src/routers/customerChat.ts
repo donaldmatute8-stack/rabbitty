@@ -104,7 +104,9 @@ export const customerChatRouter = router({
     // Guard del caso mixto: excluir donde el propio dueño es participante.
     const ownerId = typeof ctx.userId === 'string' && ctx.userId ? ctx.userId : null;
     const selfParticipantGuard = ownerId
-      ? sql`NOT (${conversations.participant1} = ${ownerId} OR ${conversations.participant2} = ${ownerId})`
+      // IS DISTINCT FROM: con participant2 NULL, `NOT (...)` daba NULL y se
+      // perdían conversaciones legítimas. DISTINCT conserva las filas válidas.
+      ? sql`${conversations.participant1} IS DISTINCT FROM ${ownerId} AND ${conversations.participant2} IS DISTINCT FROM ${ownerId}`
       : undefined;
 
     const convs = await ctx.coreDb

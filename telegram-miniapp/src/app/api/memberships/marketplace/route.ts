@@ -51,11 +51,9 @@ export async function GET(req: NextRequest) {
       eq(ownedBusinesses.sandbox, false),
       sql`${membershipPlans.currentVersionId} = ${membershipPlanVersions.id}`,
     ];
-    if (businessId) {
-      conditions.push(eq(membershipPlans.businessId, businessId));
-    } else {
-      conditions.push(eq(membershipPlans.isMarketplaceVisible, true));
-    }
+    if (businessId) conditions.push(eq(membershipPlans.businessId, businessId));
+    // Incluso en la página del afiliado, los planes privados no se listan.
+    conditions.push(eq(membershipPlans.isMarketplaceVisible, true));
     if (category) conditions.push(eq(membershipPlans.category, category));
     if (freeOnly) conditions.push(sql`${membershipPlanVersions.priceFiat} = 0`);
     if (featuredOnly) conditions.push(sql`${membershipPlans.featuredUntil} > now()`);
