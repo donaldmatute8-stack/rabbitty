@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
@@ -8,6 +8,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
+import { MembershipCard } from '@rabbitty/ui';
 
 interface Entitlement {
   id: string;
@@ -28,13 +29,26 @@ interface Membership {
   giftNote: string | null;
   cancelAtPeriodEnd: boolean;
   planName: string | null;
+  planDescription: string | null;
   badgeColor: string | null;
   coverImageUrl: string | null;
   businessName: string;
+  businessLogoUrl: string | null;
+  maxMembersLimit: number | null;
+  createdAt: string | null;
   priceFiat: number | null;
   currency: string | null;
   billingInterval: string | null;
   entitlements: Entitlement[];
+}
+
+interface Usage {
+  id: string;
+  benefitType: string;
+  quantityUsed: number;
+  redeemedAt: string;
+  orderId: string | null;
+  branchId: string | null;
 }
 
 const BENEFIT_LABEL: Record<string, string> = {
@@ -50,12 +64,14 @@ const STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Activa', PAST_DUE: 'Pago pendiente', GRACE_PERIOD: 'Periodo de gracia', CANCELLED: 'Cancelada', EXPIRED: 'Vencida',
 };
 
-function PassQr({ membershipId }: { membershipId: string }) {
+/** Token QR dinámico (rota cada 30 s) para el reverso de la tarjeta. */
+function usePassToken(membershipId: string | null, enabled: boolean) {
   const [token, setToken] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!membershipId) return;
     try {
       const headers = await PlatformBridge.getAuthHeaders();
       const res = await fetch(`/api/memberships/${membershipId}/pass`, { headers, cache: 'no-store' });
@@ -69,14 +85,14 @@ function PassQr({ membershipId }: { membershipId: string }) {
     }
   }, [membershipId]);
 
-  // Primer token y refresco justo cuando expira la ventana de 30s.
   useEffect(() => {
-    const first = setTimeout(load, 0);
-    return () => clearTimeout(first);
-  }, [load]);
+    if (!enabled) return;
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
+  }, [enabled, load]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!enabled || !token) return;
     const tick = setInterval(() => {
       setSeconds((s) => {
         if (s <= 1) { load(); return 0; }
@@ -84,27 +100,46 @@ function PassQr({ membershipId }: { membershipId: string }) {
       });
     }, 1000);
     return () => clearInterval(tick);
-  }, [token, load]);
+  }, [enabled, token, load]);
 
-  if (error) return <p className="text-[13px] text-[#E91E63] text-center py-4">{error}</p>;
-  if (!token) return <div className="flex justify-center p-6"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500" /></div>;
+  return { token, seconds, error };
+}
 
-  return (
-    <div className="flex flex-col items-center gap-2 py-3">
-      <div className="bg-white p-3 rounded-2xl">
-        <QRCodeSVG value={token} size={196} level="M" />
-      </div>
-      <p className="text-[12px] text-(--text-muted)">Muéstralo en caja · se renueva en {seconds}s</p>
-    </div>
-  );
+function cardData(m: Membership, memberName: string | null) {
+  const since = m.createdAt
+    ? new Date(m.createdAt).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })
+    : null;
+  const validity = m.noExpiration
+    ? 'Vigencia Indefinida'
+    : m.currentPeriodEnd
+      ? `Vigente hasta ${new Date(m.currentPeriodEnd).toLocaleDateString('es-MX')}`
+      : 'Vigencia Indefinida';
+  return {
+    planName: m.planName || 'Membresía',
+    businessName: m.businessName,
+    branchLabel: `Solo en ${m.businessName}`,
+    validityLabel: validity,
+    membersLabel: m.maxMembersLimit ? `Hasta ${m.maxMembersLimit} miembros` : 'Miembros ilimitados',
+    transferableLabel: 'Intransferible',
+    tagline: 'Una familia, más beneficios',
+    heroImageUrl: m.coverImageUrl,
+    memberName,
+    memberSince: since ? since.toUpperCase() : null,
+    accentColor: m.badgeColor,
+  };
 }
 
 export default function MembershipsPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [memberName, setMemberName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [active, setActive] = useState<Membership | null>(null);
+  const [flipped, setFlipped] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [usage, setUsage] = useState<Usage[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   // Post-checkout Stripe (?checkout=success|cancelled) → toast + recarga
   useEffect(() => {
@@ -118,28 +153,56 @@ export default function MembershipsPage() {
       }
     }
     if (q.includes('checkout=cancelled')) {
-      showToast('Pago cancelado. Puedes intentarlo de nuevo.', 'info');
+      showToast('Pago cancelado', 'error');
       if (typeof window !== 'undefined') window.history.replaceState({}, '', '/memberships');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    let active = true;
+    let alive = true;
     if (!user?.id) return;
     PlatformBridge.getAuthHeaders()
       .then((headers) => fetch('/api/memberships', { headers }))
       .then((res) => res.json())
-      .then((data) => { if (active && data.success) setMemberships(data.memberships); })
+      .then((data) => {
+        if (!alive) return;
+        if (data.success) {
+          setMemberships(data.memberships ?? []);
+          setMemberName(data.memberName ?? null);
+        }
+      })
       .catch((err) => console.error('[Memberships] fetch error:', err))
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [user?.id]);
 
-  const toggle = (id: string) => {
-    PlatformBridge.hapticFeedback('light');
-    setOpenId((cur) => (cur === id ? null : id));
-  };
+  const activeCard = useMemo(
+    () => (active ? cardData(active, memberName) : null),
+    [active, memberName],
+  );
+  const pass = usePassToken(active?.id ?? null, Boolean(active));
+
+  useEffect(() => {
+    if (!active) {
+      setFlipped(false);
+      setHistoryOpen(false);
+      setUsage([]);
+    }
+  }, [active]);
+
+  useEffect(() => {
+    if (!historyOpen || !active) return;
+    let alive = true;
+    setUsageLoading(true);
+    PlatformBridge.getAuthHeaders()
+      .then((headers) => fetch(`/api/memberships/${active.id}/usage`, { headers, cache: 'no-store' }))
+      .then((res) => res.json())
+      .then((data) => { if (alive && data.success) setUsage(data.usages ?? []); })
+      .catch((err) => console.error('[Memberships] usage error:', err))
+      .finally(() => { if (alive) setUsageLoading(false); });
+    return () => { alive = false; };
+  }, [historyOpen, active]);
 
   return (
     <ProfileSubpageLayout title="Mis Membresías">
@@ -150,107 +213,164 @@ export default function MembershipsPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {memberships.map((m, i) => {
-            const active = m.status === 'ACTIVE';
-            const open = openId === m.id;
-            const isCourtesy = m.membershipOrigin === 'COURTESY';
+            const activeStatus = m.status === 'ACTIVE';
+            const isCourtesy = m.membershipOrigin === 'COURTESY' || m.membershipOrigin === 'INVITATION';
             const accent = m.badgeColor || (isCourtesy ? '#A855F7' : '#E91E63');
-            const gradient = isCourtesy
-              ? `linear-gradient(135deg, rgba(168,85,247,.14) 0%, rgba(233,30,99,.10) 100%)`
-              : `linear-gradient(135deg, rgba(233,30,99,.10) 0%, rgba(168,85,247,.06) 100%)`;
-            const planTitle = isCourtesy ? 'Cortesía' : (m.planName || 'Membresía');
-            const daysLeft = m.currentPeriodEnd ? Math.max(0, Math.ceil((new Date(m.currentPeriodEnd).getTime() - Date.now()) / 86400000)) : null;
             return (
-              <motion.div
+              <motion.button
                 key={m.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="rounded-2xl overflow-hidden"
-                style={{ border: `1px solid ${active ? accent + '55' : 'rgba(255,255,255,.08)'}`, background: gradient, boxShadow: open ? `0 8px 32px ${accent}22` : 'none' }}
+                onClick={() => setActive(m)}
+                className="w-full text-left rounded-2xl overflow-hidden cursor-pointer"
+                style={{
+                  border: `1px solid ${activeStatus ? accent + '55' : 'rgba(255,255,255,.08)'}`,
+                  background: 'linear-gradient(135deg, rgba(255,255,255,.045), rgba(255,255,255,.015))',
+                }}
               >
-                {m.coverImageUrl && (
-                  <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16 / 9', background: '#1a1116' }}>
-                    <img
-                      src={m.coverImageUrl}
-                      alt={planTitle}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
-                    />
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ background: `linear-gradient(180deg, transparent 40%, ${accent}20 100%)` }}
-                    />
+                <div className="flex gap-3 p-3">
+                  <div className="w-[122px] shrink-0">
+                    <MembershipCard data={cardData(m, memberName)} preview />
                   </div>
-                )}
-                <button onClick={() => toggle(m.id)} className="w-full text-left p-4 cursor-pointer">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-[16px] font-extrabold text-(--text-primary)">{planTitle}</p>
-                        {isCourtesy && (
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: 'rgba(168,85,247,.2)', color: '#C084FC' }}>
-                            🎁 CORTESÍA
-                          </span>
-                        )}
-                        {m.membershipOrigin === 'PURCHASED' && (
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: 'rgba(233,30,99,.15)', color: '#F472B6' }}>
-                            ★ MI PLAN
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[12px] text-(--text-muted) mt-0.5">{m.businessName}</p>
+                  <div className="min-w-0 flex-1 py-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[15px] font-extrabold text-(--text-primary) truncate">{m.planName || 'Membresía'}</p>
+                      <span
+                        className="text-[10px] font-black px-2 py-0.5 rounded-full shrink-0"
+                        style={{
+                          background: activeStatus ? 'rgba(76,175,80,.15)' : 'rgba(239,68,68,.15)',
+                          color: activeStatus ? '#4CAF50' : '#F87171',
+                        }}
+                      >
+                        {m.status === 'REVOKED' ? 'Revocada' : STATUS_LABEL[m.status] ?? m.status}
+                      </span>
                     </div>
-                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0" style={{ background: active ? 'rgba(76,175,80,.15)' : m.status === 'REVOKED' ? 'rgba(239,68,68,.15)' : 'rgba(233,30,99,.15)', color: active ? '#4CAF50' : m.status === 'REVOKED' ? '#F87171' : '#E91E63' }}>
-                      {m.status === 'REVOKED' ? 'Revocada' : STATUS_LABEL[m.status] ?? m.status}
-                    </span>
-                  </div>
-                  {m.giftNote && (
-                    <p className="text-[12px] italic mt-2 px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,.05)', borderLeft: `2px solid ${accent}` }}>
-                      "{m.giftNote}"
+                    <p className="text-[12px] text-(--text-muted) mt-0.5 truncate">{m.businessName}</p>
+                    <p className="text-[12px] text-(--text-muted) mt-1">
+                      {m.noExpiration ? '♾️ Vigencia indefinida' : m.currentPeriodEnd ? `Vigente hasta ${new Date(m.currentPeriodEnd).toLocaleDateString('es-MX')}` : ''}
                     </p>
-                  )}
-                  <p className="text-[12px] text-(--text-muted) mt-2">
-                    {m.status === 'REVOKED'
-                      ? 'Esta membresía fue revocada'
-                      : m.noExpiration
-                        ? '♾️ Vigencia indefinida'
-                        : m.currentPeriodEnd
-                          ? `${m.cancelAtPeriodEnd ? 'Termina' : 'Vigente hasta'} el ${new Date(m.currentPeriodEnd).toLocaleDateString()}${daysLeft !== null && active ? ` · ${daysLeft} día${daysLeft !== 1 ? 's' : ''}` : ''}`
-                          : ''}
-                  </p>
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {open && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-4 pb-4">
-                      <ul className="flex flex-col gap-2.5 mb-2">
-                        {m.entitlements.map((e) => {
-                          const left = Math.max(0, e.quotaPerCycle - e.used);
-                          const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
-                          return (
-                            <li key={e.id}>
-                              <div className="flex items-center justify-between text-[13px] text-(--text-primary) mb-1">
-                                <span className="font-semibold">{BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}</span>
-                                <span className="text-(--text-muted)">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
-                              </div>
-                              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.08)' }}>
-                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${accent}, #FF2E93)` }} />
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      {active ? <PassQr membershipId={m.id} /> : <p className="text-[12px] text-(--text-muted) text-center py-3">Este pase no está vigente.</p>}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {m.entitlements.slice(0, 3).map((e) => (
+                        <span key={e.id} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,.06)', color: 'var(--text-secondary)' }}>
+                          {BENEFIT_LABEL[e.benefitType] ?? e.benefitType}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-[11px] font-bold mt-2" style={{ color: accent }}>Abrir pase →</p>
+                  </div>
+                </div>
+              </motion.button>
             );
           })}
         </div>
       )}
+
+      {/* ── Fullscreen: tarjeta animada + QR al reverso ── */}
+      <AnimatePresence>
+        {active && activeCard && (
+          <motion.div
+            className="fixed inset-0 z-[100] overflow-y-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-black/85 backdrop-blur-md" onClick={() => setActive(null)} />
+            <div className="relative min-h-full flex flex-col items-center justify-start p-4 pt-10 pb-8">
+              <button
+                onClick={() => setActive(null)}
+                className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center"
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
+
+              <motion.div
+                initial={{ scale: 0.92, y: 24, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.94, y: 16, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 160, damping: 20 }}
+                className="w-[min(88vw,380px)]"
+              >
+                <MembershipCard
+                  data={activeCard}
+                  flipped={flipped}
+                  onFlip={() => setFlipped((v) => !v)}
+                  qr={
+                    pass.error ? (
+                      <span className="text-[11px] text-center" style={{ color: '#6B5568' }}>{pass.error}</span>
+                    ) : pass.token ? (
+                      <QRCodeSVG value={pass.token} size={220} level="M" />
+                    ) : (
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500" />
+                    )
+                  }
+                />
+              </motion.div>
+
+              <p className="text-[12px] text-white/60 mt-3">
+                {flipped ? 'Toca la tarjeta para volver' : 'Toca la tarjeta para ver tu QR'}
+                {flipped && pass.token ? ` · se renueva en ${pass.seconds}s` : ''}
+              </p>
+
+              {/* Beneficios del ciclo */}
+              <div className="w-[min(88vw,380px)] mt-4 rounded-2xl border border-white/10 bg-white/[.035] p-3 space-y-2.5">
+                <p className="text-[10px] font-black uppercase tracking-wider text-white/50">Beneficios de este ciclo</p>
+                {active.entitlements.map((e) => {
+                  const left = Math.max(0, e.quotaPerCycle - e.used);
+                  const pct = Math.min(100, Math.round((e.used / Math.max(1, e.quotaPerCycle)) * 100));
+                  return (
+                    <div key={e.id}>
+                      <div className="flex items-center justify-between text-[12px] text-white/85 mb-1">
+                        <span className="font-semibold">
+                          {BENEFIT_LABEL[e.benefitType] ?? e.benefitType}{e.discountPct ? ` ${e.discountPct}%` : ''}
+                        </span>
+                        <span className="text-white/45">{left}/{e.quotaPerCycle} · {RESET_LABEL[e.cycleResetType] ?? ''}</span>
+                      </div>
+                      <div className="h-1.5 rounded-full overflow-hidden bg-white/10">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${active.badgeColor || '#E91E63'}, #FF2E93)` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Historial */}
+              <div className="w-[min(88vw,380px)] mt-3">
+                <button
+                  onClick={() => setHistoryOpen((v) => !v)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[.04] py-2.5 text-[12px] font-bold text-white/80"
+                >
+                  {historyOpen ? 'Ocultar historial de uso' : 'Ver historial de uso'}
+                </button>
+                {historyOpen && (
+                  <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 p-3 max-h-[220px] overflow-y-auto">
+                    {usageLoading ? (
+                      <div className="flex justify-center py-4"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500" /></div>
+                    ) : usage.length === 0 ? (
+                      <p className="text-[12px] text-white/45 text-center py-3">Todavía no hay usos registrados.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {usage.map((u) => (
+                          <li key={u.id} className="flex items-center justify-between gap-2 text-[11px]">
+                            <span className="text-white/80">
+                              {BENEFIT_LABEL[u.benefitType] ?? u.benefitType}
+                              {u.orderId ? <span className="text-white/35"> · #{u.orderId.slice(0, 6)}</span> : null}
+                            </span>
+                            <span className="text-white/35 shrink-0">
+                              {new Date(u.redeemedAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </ProfileSubpageLayout>
   );
 }
-

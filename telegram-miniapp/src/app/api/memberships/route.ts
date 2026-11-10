@@ -6,6 +6,7 @@ import {
   membershipPlans,
   membershipEntitlements,
   ownedBusinesses,
+  users,
 } from "@/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
@@ -26,9 +27,13 @@ export async function GET(req: NextRequest) {
         giftNote: membershipSubscriptions.giftNote,
         cancelAtPeriodEnd: membershipSubscriptions.cancelAtPeriodEnd,
         planName: membershipPlans.name,
+        planDescription: membershipPlans.description,
         badgeColor: membershipPlans.badgeColor,
         coverImageUrl: membershipPlans.coverImageUrl,
         businessName: ownedBusinesses.name,
+        businessLogoUrl: ownedBusinesses.logoUrl,
+        maxMembersLimit: membershipPlanVersions.maxMembersLimit,
+        createdAt: membershipSubscriptions.createdAt,
         priceFiat: membershipPlanVersions.priceFiat,
         currency: membershipPlanVersions.currency,
         billingInterval: membershipPlanVersions.billingInterval,
@@ -57,6 +62,13 @@ export async function GET(req: NextRequest) {
           .where(inArray(membershipEntitlements.subscriptionId, ids))
       : [];
 
+    const [me] = await db
+      .select({ firstName: users.firstName, lastName: users.lastName, username: users.username })
+      .from(users)
+      .where(eq(users.id, caller.id))
+      .limit(1);
+    const memberName = [me?.firstName, me?.lastName].filter(Boolean).join(" ") || me?.username || null;
+
     const nowMs = Date.now();
     const memberships = rows.map((r) => ({
       ...r,
@@ -72,7 +84,7 @@ export async function GET(req: NextRequest) {
             : e.used,
         })),
     }));
-    return NextResponse.json({ success: true, memberships });
+    return NextResponse.json({ success: true, memberName, memberships });
   } catch (err) {
     console.error("[memberships] list error:", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

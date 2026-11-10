@@ -9,3 +9,4 @@ export { Table } from "./components/Table";
 export { Dialog } from "./components/Dialog";
 export { toast, Toaster } from "./components/Toast";
 export { ErrorBoundary } from "./components/ErrorBoundary";
+export { MembershipCard, type MembershipCardData } from "./components/MembershipCard";

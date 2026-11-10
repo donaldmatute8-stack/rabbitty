@@ -3,11 +3,11 @@
 import RabbitterScannerModal from "@/components/RabbitterScannerModal";
 import { useState, useEffect } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Button, cn, toast } from "@rabbitty/ui";
+import { Button, cn, toast, MembershipCard } from "@rabbitty/ui";
 import { Ticket, Plus, Users, ScanLine, X, Trash2, Send, Gift, Edit3 } from "lucide-react";
 
 type Interval = "MONTHLY" | "QUARTERLY" | "SEMIANNUAL" | "ANNUAL" | "ONE_TIME";
-type BenefitType = "INCLUDED_PRODUCT" | "DISCOUNT_PCT" | "CREDIT_BALANCE" | "EVENT_ACCESS" | "BULK_PACK";
+type BenefitType = "INCLUDED_PRODUCT" | "DISCOUNT_PCT" | "CREDIT_BALANCE" | "EVENT_ACCESS" | "BULK_PACK" | "MEMBER_CONSUMPTION";
 type Reset = "DAILY" | "WEEKLY" | "MONTHLY" | "FIXED";
 
 interface RuleDraft {
@@ -32,6 +32,7 @@ const BENEFIT_LABEL: Record<BenefitType, string> = {
   CREDIT_BALANCE: "Saldo de crédito",
   EVENT_ACCESS: "Acceso a evento",
   BULK_PACK: "Bolsa de consumos",
+  MEMBER_CONSUMPTION: "Consumo del socio",
 };
 const RESET_LABEL: Record<Reset, string> = { DAILY: "Diario", WEEKLY: "Semanal", MONTHLY: "Mensual", FIXED: "Toda la vigencia" };
 
@@ -46,6 +47,7 @@ export default function MembershipsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editPlan, setEditPlan] = useState<null | {
     planId: string; name: string; description: string | null; price: number; interval: Interval; rules: RuleDraft[];
+    coverImageUrl?: string | null; badgeColor?: string | null; maxMembersLimit?: number | null;
   }>(null);
 
   // GAP 7/8: revocación de pagadas + renovación de caja
@@ -61,8 +63,14 @@ export default function MembershipsPage() {
     onError: (e) => toast.error(e.message),
   });
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
+  const [usageFor, setUsageFor] = useState<{ id: string; name: string } | null>(null);
+  const { data: usageData, isFetching: usageFetching } = trpc.memberships.listMemberUsage.useQuery(
+    { subscriptionId: usageFor?.id ?? "" },
+    { enabled: !!usageFor },
+  );
 
   const enabled = !!businessId;
+  const businessName = (businesses ?? []).find((b) => b.id === businessId)?.name ?? "Tu negocio";
   const { data: plans } = trpc.memberships.listPlansAdmin.useQuery({ businessId }, { enabled });
   const { data: members } = trpc.memberships.listMembers.useQuery({ businessId }, { enabled: enabled && tab === "members" });
 
@@ -173,6 +181,9 @@ export default function MembershipsPage() {
                           description: plan.description ?? null,
                           price: Number(latest.priceFiat ?? 0),
                           interval: latest.billingInterval as Interval,
+                          coverImageUrl: plan.coverImageUrl ?? null,
+                          badgeColor: plan.badgeColor ?? "#FF2D95",
+                          maxMembersLimit: latest.maxMembersLimit ?? null,
                           rules: ((latest.benefitRules as RuleDraft[]) ?? []).map((r) => ({
                             type: r.type,
                             quotaPerCycle: String(r.quotaPerCycle ?? 1),
@@ -235,10 +246,10 @@ export default function MembershipsPage() {
         <div className="rounded-2xl border border-white/10 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-white/5 text-white/50 text-xs">
-              <tr><th className="text-left p-3">Plan</th><th className="text-left p-3">Estado</th><th className="text-left p-3">Vence</th><th className="text-left p-3">Pago</th><th className="text-right p-3">Acciones</th></tr>
+              <tr><th className="text-left p-3">Plan</th><th className="text-left p-3">Cliente</th><th className="text-left p-3">Estado</th><th className="text-left p-3">Vence</th><th className="text-left p-3">Usos</th><th className="text-left p-3">Pago</th><th className="text-right p-3">Acciones</th></tr>
             </thead>
             <tbody>
-              {members?.length === 0 && <tr><td colSpan={5} className="p-4 text-white/50">Sin miembros todavía.</td></tr>}
+              {members?.length === 0 && <tr><td colSpan={7} className="p-4 text-white/50">Sin miembros todavía.</td></tr>}
               {members?.map((m) => (
                 <tr key={m.id} className="border-t border-white/5 text-white/80">
                   <td className="p-3">
@@ -247,10 +258,24 @@ export default function MembershipsPage() {
                     {m.membershipOrigin === "INVITATION" && <span className="ml-1.5 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300">INVITACIÓN</span>}
                     {m.giftNote && <span className="block text-[10px] italic text-white/40">"{m.giftNote}"</span>}
                   </td>
+                  <td className="p-3">
+                    <span className="block text-white/85">{m.memberName}</span>
+                    <span className="block text-[10px] text-white/40">{m.memberEmail ?? m.memberPhone ?? ""}</span>
+                  </td>
                   <td className="p-3">{m.status}{m.cancelAtPeriodEnd ? " (cancela)" : ""}</td>
                   <td className="p-3">{m.currentPeriodEnd ? new Date(m.currentPeriodEnd).toLocaleDateString() : 'Indefinida'}</td>
+                  <td className="p-3">
+                    <span className="text-white/80">{m.usageCount ?? 0}</span>
+                    {m.lastUsedAt && <span className="block text-[10px] text-white/40">{new Date(m.lastUsedAt).toLocaleDateString()}</span>}
+                  </td>
                   <td className="p-3">{m.paymentProvider ?? "—"}</td>
                   <td className="p-3 text-right">
+                    <button
+                      onClick={() => setUsageFor({ id: m.id, name: m.memberName })}
+                      className="px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-white/70 text-[10px] font-bold hover:bg-white/10 cursor-pointer mr-2"
+                    >
+                      Historial
+                    </button>
                     {m.status === "ACTIVE" && m.membershipOrigin !== "COURTESY" && m.membershipOrigin !== "INVITATION" && (
                       memberActionId === m.id ? (
                         <div className="inline-flex items-center gap-1.5">
@@ -293,9 +318,46 @@ export default function MembershipsPage() {
 
       {enabled && tab === "scanner" && <RedeemPanel businessId={businessId} />}
 
+      {usageFor && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">Historial de uso</h2>
+                <p className="text-xs text-white/50">{usageFor.name}</p>
+              </div>
+              <button onClick={() => setUsageFor(null)}><X className="w-5 h-5 text-white/60" /></button>
+            </div>
+            {usageFetching ? (
+              <p className="text-sm text-white/50">Cargando…</p>
+            ) : (usageData?.usages?.length ?? 0) === 0 ? (
+              <p className="text-sm text-white/50">Todavía no hay usos registrados.</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-white/40">{usageData?.total ?? 0} uso(s) registrados</p>
+                {usageData?.usages?.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <p className="text-white/85 font-semibold">{u.benefitType}</p>
+                      <p className="text-white/40 text-[10px] truncate">
+                        {u.orderId ? `Orden ${u.orderId.slice(0, 8)}…` : "Sin orden"} · {u.branchId ?? "sucursal"}
+                      </p>
+                    </div>
+                    <span className="text-white/40 shrink-0">
+                      {new Date(u.redeemedAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {(showForm || editPlan) && (
         <PlanForm
           businessId={businessId}
+          businessName={businessName}
           editPlan={editPlan}
           onClose={() => { setShowForm(false); setEditPlan(null); }}
           onDone={() => { setShowForm(false); setEditPlan(null); utils.memberships.listPlansAdmin.invalidate(); }}
@@ -305,12 +367,14 @@ export default function MembershipsPage() {
   );
 }
 
-function PlanForm({ businessId, editPlan, onClose, onDone }: {
+function PlanForm({ businessId, businessName, editPlan, onClose, onDone }: {
   businessId: string;
+  businessName: string;
   /** GAP 5: si viene, el form edita ese plan (crea versión N+1). */
   editPlan?: {
     planId: string; name: string; description: string | null;
     price: number; interval: Interval; rules: RuleDraft[];
+    coverImageUrl?: string | null; badgeColor?: string | null; maxMembersLimit?: number | null;
   } | null;
   onClose: () => void;
   onDone: () => void;
@@ -321,6 +385,10 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
   const [price, setPrice] = useState(editPlan ? String(editPlan.price) : "299");
   const [interval, setInterval_] = useState<Interval>(editPlan?.interval ?? "MONTHLY");
   const [rules, setRules] = useState<RuleDraft[]>(editPlan?.rules ?? [{ type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "DAILY" }]);
+  const [coverImageUrl, setCoverImageUrl] = useState(editPlan?.coverImageUrl ?? "");
+  const [badgeColor, setBadgeColor] = useState(editPlan?.badgeColor ?? "#FF2D95");
+  const [maxMembers, setMaxMembers] = useState(editPlan?.maxMembersLimit ? String(editPlan.maxMembersLimit) : "");
+  const [uploading, setUploading] = useState(false);
 
   const create = trpc.memberships.createPlan.useMutation({
     onSuccess: () => { toast.success("Plan creado como borrador"); onDone(); },
@@ -336,6 +404,26 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
   });
 
   const updateRule = (i: number, patch: Partial<RuleDraft>) => setRules(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/uploads/membership", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || "No se pudo subir");
+      setCoverImageUrl(data.url);
+      toast.success("Imagen subida");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Error al subir la imagen");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   // GAP 6: catálogo para el picker de platillo incluido
   const { data: menuItems } = trpc.pos.getMenuItems.useQuery({});
@@ -354,7 +442,7 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-6 space-y-4">
+      <div className="w-full max-w-4xl max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10 bg-zinc-950 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">{isEdit ? `Editar plan — nueva versión` : "Nuevo plan"}</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-white/60" /></button>
@@ -364,6 +452,8 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
             El versionado es inmutable: guardar crea una <b>versión nueva</b> del plan (los miembros actuales conservan la suya hasta renovar). Aparecerá como "Borrador" — publícala para hacerla vigente.
           </p>
         )}
+        <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="space-y-3">
         <input className={inputCls} placeholder="Nombre (ej. Plan Mensual)" value={name} onChange={(e) => setName(e.target.value)} />
         <input className={inputCls} placeholder="Descripción" value={description} onChange={(e) => setDescription(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
@@ -378,6 +468,44 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
           <select className={inputCls} value={interval} onChange={(e) => setInterval_(e.target.value as Interval)}>
             {(Object.keys(INTERVAL_LABEL) as Interval[]).map((k) => <option key={k} value={k}>{INTERVAL_LABEL[k]}</option>)}
           </select>
+          <input
+            className={cn(inputCls, "col-span-2")}
+            type="text"
+            inputMode="numeric"
+            placeholder="Tope de miembros (vacío = ilimitado)"
+            value={maxMembers}
+            onChange={(e) => setMaxMembers(e.target.value.replace(/\D/g, "").slice(0, 4))}
+          />
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+          <p className="text-xs text-white/50">Imagen de la tarjeta (arte del afiliado)</p>
+          <div className="flex gap-2">
+            <input
+              className={inputCls}
+              placeholder="https://… o /memberships/626/bunnyFamily.png"
+              value={coverImageUrl}
+              onChange={(e) => setCoverImageUrl(e.target.value)}
+            />
+            <label className={cn("shrink-0 px-3 py-2 rounded-xl border text-xs font-bold cursor-pointer flex items-center justify-center", uploading ? "border-white/10 text-white/40" : "border-pink-500/40 bg-pink-500/15 text-pink-200")}>
+              {uploading ? "Subiendo…" : "Subir"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                disabled={uploading}
+                onChange={onUpload}
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-[11px] text-white/50">Color de acento</label>
+            <input type="color" value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} className="h-8 w-12 rounded bg-transparent cursor-pointer" />
+            <input className={cn(inputCls, "!w-28")} value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} />
+          </div>
+          {coverImageUrl && (
+            <img src={coverImageUrl} alt="" className="h-24 w-full object-cover rounded-lg border border-white/10" />
+          )}
         </div>
 
         <div className="space-y-2">
@@ -446,11 +574,34 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
           <button className="text-xs text-pink-400" onClick={() => setRules([...rules, { type: "INCLUDED_PRODUCT", quotaPerCycle: "1", cycleResetType: "MONTHLY" }])}>+ Añadir beneficio</button>
         </div>
 
+        </div>
+        <div className="space-y-2">
+          <p className="text-[11px] font-black uppercase tracking-wider text-white/40">Preview de la tarjeta</p>
+          <MembershipCard
+            preview
+            data={{
+              planName: name || "Nuevo plan",
+              businessName,
+              branchLabel: `Solo en ${businessName}`,
+              validityLabel: "Vigencia Indefinida",
+              membersLabel: maxMembers ? `Hasta ${maxMembers} miembros` : "Miembros ilimitados",
+              transferableLabel: "Intransferible",
+              tagline: "Una familia, más beneficios",
+              heroImageUrl: coverImageUrl || "/memberships/626/bunnyFamily.png",
+              accentColor: badgeColor,
+            }}
+          />
+          <p className="text-[10px] text-white/35 leading-snug">
+            Así se verá en la app del Rabbitter. La animación y el QR se activan en pantalla completa.
+          </p>
+        </div>
+        </div>
+
       <Button
           className="w-full"
           disabled={(isEdit ? update.isPending : create.isPending) || name.trim().length < 2}
           onClick={() => isEdit
-            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [] })
+            ? update.mutate({ planId: editPlan!.planId, name: name.trim(), description: description.trim() || undefined, priceFiat: Number(price) || 0, billingInterval: interval, benefitRules: submitRules(), branchesAllowed: [], coverImageUrl: coverImageUrl.trim() || null, badgeColor, maxMembersLimit: maxMembers ? Number(maxMembers) : undefined })
             : create.mutate({
                 businessId,
                 name: name.trim(),
@@ -460,6 +611,9 @@ function PlanForm({ businessId, editPlan, onClose, onDone }: {
                 billingInterval: interval,
                 benefitRules: submitRules(),
                 branchesAllowed: [],
+                coverImageUrl: coverImageUrl.trim() || undefined,
+                badgeColor,
+                maxMembersLimit: maxMembers ? Number(maxMembers) : undefined,
               })}
         >
           {isEdit ? "Guardar como nueva versión" : "Crear plan"}

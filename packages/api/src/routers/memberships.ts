@@ -646,6 +646,8 @@ export const membershipsRouter = router({
       name: z.string().min(2).max(80).optional(),
       description: z.string().max(500).optional(),
       isActive: z.boolean().optional(),
+      coverImageUrl: z.string().max(500).nullable().optional(),
+      badgeColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
       priceFiat: z.number().min(0),
       billingInterval: intervalSchema,
       benefitRules: z.array(benefitRuleSchema).min(1),
@@ -679,6 +681,10 @@ export const membershipsRouter = router({
         name: input.name ?? plan.name,
         description: input.description ?? plan.description,
         isActive: input.isActive ?? plan.isActive,
+        coverImageUrl: input.coverImageUrl === undefined
+          ? plan.coverImageUrl
+          : (input.coverImageUrl?.trim() || null),
+        badgeColor: input.badgeColor ?? plan.badgeColor,
         updatedAt: new Date(),
       }).where(eq(membershipPlans.id, plan.id));
 
@@ -1207,8 +1213,14 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           // Cortesías visibles también: planVersionId es null para cortesías
           membershipOrigin: membershipSubscriptions.membershipOrigin,
           giftNote: membershipSubscriptions.giftNote,
+          memberName: sql<string>`COALESCE(NULLIF(TRIM(CONCAT(${users.firstName}, ' ', ${users.lastName})), ''), ${users.username}, ${users.email}, 'Rabbitter')`,
+          memberEmail: users.email,
+          memberPhone: users.phoneNumber,
+          usageCount: sql<number>`(SELECT count(*)::int FROM entitlement_usages eu WHERE eu."subscriptionId" = ${membershipSubscriptions.id})`,
+          lastUsedAt: sql<string | null>`(SELECT max(eu."redeemedAt") FROM entitlement_usages eu WHERE eu."subscriptionId" = ${membershipSubscriptions.id})`,
         })
         .from(membershipSubscriptions)
+        .leftJoin(users, eq(users.id, membershipSubscriptions.userId))
         .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
         .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
         .where(eq(membershipSubscriptions.businessId, input.businessId))
@@ -1217,6 +1229,43 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         ...r,
         planName: r.planName ?? "🎁 Cortesía",
       }));
+    }),
+
+  /** Admin: historial de uso de una membresía (quién, qué beneficio, cuándo). */
+  listMemberUsage: posProcedure
+    .input(z.object({ subscriptionId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [sub] = await ctx.coreDb
+        .select({ businessId: membershipSubscriptions.businessId })
+        .from(membershipSubscriptions)
+        .where(eq(membershipSubscriptions.id, input.subscriptionId))
+        .limit(1);
+      if (!sub) throw new TRPCError({ code: "NOT_FOUND", message: "Membresía no encontrada" });
+      await assertBusinessOwner(ctx, sub.businessId);
+
+      const rows = await ctx.coreDb
+        .select({
+          id: entitlementUsages.id,
+          benefitType: membershipEntitlements.benefitType,
+          quantityUsed: entitlementUsages.quantityUsed,
+          redeemedAt: entitlementUsages.redeemedAt,
+          orderId: entitlementUsages.orderId,
+          branchId: entitlementUsages.branchId,
+          staffId: entitlementUsages.staffId,
+        })
+        .from(entitlementUsages)
+        .innerJoin(
+          membershipEntitlements,
+          eq(membershipEntitlements.id, entitlementUsages.entitlementId),
+        )
+        .where(eq(entitlementUsages.subscriptionId, input.subscriptionId))
+        .orderBy(desc(entitlementUsages.redeemedAt))
+        .limit(100);
+
+      return {
+        usages: rows,
+        total: rows.reduce((sum, r) => sum + Number(r.quantityUsed || 1), 0),
+      };
     }),
 
   /** Usuario: cancela al final del periodo (conserva beneficios hasta entonces). */
