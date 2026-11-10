@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Abriendo Rabbitty…</title>
+  <style>
+    html, body { margin: 0; background: #070308; color: #fff; font-family: -apple-system, system-ui, sans-serif; }
+    body { min-height: 100vh; display: grid; place-items: center; }
+    .dot { width: 10px; height: 10px; border-radius: 999px; background: #E91E63; box-shadow: 0 0 18px #E91E63; margin: 0 auto 14px; }
+    p { font-size: 13px; color: rgba(255,255,255,.55); }
+  </style>
+</head>
+<body>
+  <div style="text-align:center">
+    <div class="dot"></div>
+    <p>Abriendo Rabbitty…</p>
+  </div>
+  <script>
+    try {
+      const p = new URLSearchParams(location.search);
+      const token = p.get('token');
+      if (token) localStorage.setItem('rabbitty_auth_session_token', token);
+      setTimeout(function () { location.replace('/profile'); }, 250);
+    } catch (e) {
+      document.body.textContent = String(e);
+    }
+  </script>
+</body>
+</html>
