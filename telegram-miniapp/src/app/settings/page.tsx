@@ -11,7 +11,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { toast } from '@rabbitty/ui';
-import { ArrowLeft, Bell, BellRing, Smartphone, Mail, ShieldCheck, HelpCircle, ChevronRight, Megaphone } from 'lucide-react';
+import { ArrowLeft, Bell, BellRing, Smartphone, Mail, ShieldCheck, HelpCircle, ChevronRight, Megaphone, Settings2 } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 import BottomNav from '@/components/BottomNav';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -152,6 +153,12 @@ export default function SettingsPage() {
 
       {!authLoading && user?.id ? (
         <div className="px-4 py-4 space-y-6">
+          <PremiumHero
+            icon={Settings2}
+            eyebrow="CONFIGURACIÓN"
+            title="Tu cuenta, a tu manera"
+            subtitle="Notificaciones, privacidad y preferencias"
+          />
           {/* ── Notificaciones (push y email) ── */}
           <div
             ref={notiSectionRef}

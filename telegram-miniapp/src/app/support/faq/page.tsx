@@ -6,6 +6,8 @@ import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import Link from 'next/link';
 
 import { FAQS } from '@/lib/support-content';
+import { HelpCircle } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 
 export default function FAQPage() {
   const [query, setQuery] = useState('');
@@ -19,6 +21,12 @@ export default function FAQPage() {
   return (
     <ProfileSubpageLayout title="FAQs">
       <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <PremiumHero
+          icon={HelpCircle}
+          eyebrow="AYUDA"
+          title="Preguntas frecuentes"
+          subtitle="Encuentra respuestas rápidas sobre Rabbitty"
+        />
         
         {/* Buscador Inteligente */}
         <div style={{ position: 'relative' }}>

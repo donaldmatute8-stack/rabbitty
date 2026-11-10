@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Images, Flashlight, FlashlightOff } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -106,6 +107,7 @@ export default function ScanPage() {
   const [result, setResult] = useState<PaymentIntentData | null>(null);
   const [webTorchOn, setWebTorchOn] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const qrShareRef = useRef<HTMLDivElement | null>(null);
   // Tamaño del QR adaptado a la altura: en pantallas bajas se reduce
   // para que la hoja inferior nunca quede fuera de vista.
   const [qrSize, setQrSize] = useState(234);
@@ -963,6 +965,19 @@ export default function ScanPage() {
         {/* My Code tab - Official Rabbitty Code Hologram / Telegram style */}
         {activeTab === 'my-code' && (
           <div className="flex flex-col items-center justify-between w-full h-full flex-1 z-20">
+            {/* Lienzo oculto para compartir el QR como imagen */}
+            <div
+              ref={qrShareRef}
+              aria-hidden
+              style={{ position: 'absolute', left: -9999, top: 0, width: 1024, height: 1024 }}
+            >
+              <QRCodeCanvas
+                value={`https://app.rabbitty.me/u/${encodeURIComponent(user?.username || String(qrValue || ''))}`}
+                size={1024}
+                marginSize={2}
+                level="M"
+              />
+            </div>
             {RABBITTY_CODE_STYLE === 'simple' ? (
               <RabbittyCodeSimple
                 value={`https://app.rabbitty.me/u/${encodeURIComponent(
@@ -981,6 +996,25 @@ export default function ScanPage() {
                   const handle = raw.replace(/^@/, '');
                   const url = `https://app.rabbitty.me/u/${encodeURIComponent(handle)}`;
                   try {
+                    // 1) Intentar compartir el QR como imagen (Web Share con archivos).
+                    const canvas = qrShareRef.current?.querySelector('canvas');
+                    const blob = canvas
+                      ? await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'))
+                      : null;
+                    if (blob && typeof navigator !== 'undefined' && navigator.canShare) {
+                      const file = new File([blob], `rabbitty-code-${handle || 'rabbitty'}.png`, { type: 'image/png' });
+                      if (navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                          files: [file],
+                          title: 'Mi Rabbitty Code',
+                          text: `Mi Rabbitty Code: @${handle}`,
+                          url,
+                        });
+                        return;
+                      }
+                    }
+
+                    // 2) Fallback: link (nativo/Telegram/copiar).
                     const shared = await PlatformBridge.share({
                       title: 'Mi Rabbitty Code',
                       text: `Mi Rabbitty Code: @${handle}`,

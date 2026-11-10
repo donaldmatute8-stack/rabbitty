@@ -7,6 +7,7 @@ import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
+import AnimatedBunz from '@/components/ui/AnimatedBunz';
 
 interface Transaction {
   id: string;
@@ -236,13 +237,14 @@ export default function WalletPage() {
   };
 
   return (
-    <ProfileSubpageLayout title="Ra Wallet">
+    <ProfileSubpageLayout title="Mi Billetera">
       <div className="flex flex-col gap-5">
 
         {/* Main balance card */}
         <div style={{
-          background: 'linear-gradient(135deg, #0F0F1A 0%, #1A1025 50%, #2A0845 100%)',
-        }} className="rounded-4xl px-6 py-7 relative overflow-hidden border border-[rgba(255,255,255,0.08)] shadow-[0_20px_60px_rgba(0,0,0,0.4)] text-white">
+          background: 'linear-gradient(145deg, rgba(233,30,99,.20) 0%, #1A0A16 48%, #2A0B24 100%)',
+          borderColor: 'rgba(233,30,99,.28)',
+        }} className="rounded-4xl px-6 py-7 relative overflow-hidden border shadow-[0_20px_60px_-24px_rgba(233,30,99,.55)] text-white">
           <div className="absolute right-[-20%] top-[-20%] w-64 h-64 bg-[rgba(233,30,99,0.2)] rounded-full" style={{ filter: 'blur(80px)' }} />
           <div className="absolute left-[-10%] bottom-[-10%] w-40 h-40 bg-[rgba(59,130,246,0.15)] rounded-full" style={{ filter: 'blur(60px)' }} />
 
@@ -254,7 +256,7 @@ export default function WalletPage() {
                   <path d="M3 5h14M3 10h14M3 15h8" stroke="#E91E63" strokeWidth="1.8" strokeLinecap="round"/>
                 </svg>
               </div>
-              <span className="font-extrabold text-[11px] tracking-widest text-[rgba(255,255,255,0.85)]">RA WALLET</span>
+              <span className="font-extrabold text-[11px] tracking-widest text-[rgba(255,255,255,0.85)]">MI BILLETERA</span>
             </div>
           </div>
 
@@ -262,7 +264,7 @@ export default function WalletPage() {
           <div className="relative z-1 mb-7">
             <p className="text-[rgba(255,255,255,0.5)] text-[11px] font-semibold tracking-widest uppercase mb-2">Balance Disponible</p>
             <div className="flex items-baseline gap-2">
-              <h1 className="text-[52px] font-extrabold tracking-tighter leading-none m-0 text-white">{balance}</h1>
+              <AnimatedBunz value={Number(balance) || 0} className="text-[52px] font-extrabold tracking-tighter leading-none text-white" />
               <span className="text-[#E91E63] font-extrabold text-xl tracking-wide">BUNZ</span>
             </div>
             <button

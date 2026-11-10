@@ -9,6 +9,8 @@ import { PlatformBridge } from '@/lib/platform';
 
 
 import { openInviteChannel, shareInvite } from '@/lib/invite';
+import { Gift } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 type TelegramWebApp = { openTelegramLink?: (url: string) => void };
 
 const getTelegram = (): TelegramWebApp | null => {
@@ -100,33 +102,26 @@ export default function ReferralPage() {
           </div>
         ) : (
           <>
-            {/* Level + Pending Bunz */}
-            <div
-              className="rounded-[28px] px-5 py-6 relative overflow-hidden border border-(--border-subtle) shadow-(--shadow-md) bg-(--bg-elevated)"
+            <PremiumHero
+              icon={Gift}
+              eyebrow="PROGRAMA DE REFERIDOS"
+              title="Invita y gana"
+              subtitle="Comparte Rabbitty y gana Bunz con cada amigo"
             >
-              <div className="flex justify-between items-start relative z-10">
-                <div>
-                  <p className="text-(--text-muted) text-[10px] font-black tracking-[1.5px] uppercase mb-2">Tu Nivel</p>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-[52px] font-black leading-none tracking-[-2px] text-(--text-primary)">{levelName}</span>
-                    <span className="text-xl text-[#FCD34D]">⭐</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-white/10 bg-white/[.05] px-3 py-2">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-white/45">Tu nivel</p>
+                  <p className="text-lg font-black text-white">{levelName}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-(--text-muted) text-[10px] font-black tracking-[1.5px] uppercase mb-2">Bunz Pendientes</p>
-                  <p className="text-[42px] font-black text-[#E91E63] tracking-[-1px] leading-none m-0">
-                    {profile?.pendingBunz ?? 0}
-                  </p>
+                <div className="rounded-xl border border-[#E91E63]/25 bg-[#E91E63]/15 px-3 py-2">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-[#FF8BC2]">Bunz pendientes</p>
+                  <p className="text-lg font-black text-[#FF5FA8]">{profile?.pendingBunz ?? 0}</p>
                 </div>
               </div>
-
-              <div className="mt-5 bg-(--bg-subtle) border border-(--border-subtle) rounded-2xl p-3.5 relative z-10">
-                <p className="text-xs leading-normal text-(--text-secondary) m-0">
-                  <span className="font-bold text-[#FCD34D]">💡 </span>
-                  Sube de nivel consumiendo en negocios afiliados para desbloquear tus Bunz de referidos.
-                </p>
-              </div>
-            </div>
+              <p className="mt-3 text-[11px] leading-normal text-white/50">
+                💡 Sube de nivel consumiendo en negocios afiliados para desbloquear tus Bunz de referidos.
+              </p>
+            </PremiumHero>
 
             {/* Invite card */}
             <div className="bg-(--bg-elevated) rounded-[28px] p-6 border border-(--border-subtle) shadow-(--shadow-sm) text-center">

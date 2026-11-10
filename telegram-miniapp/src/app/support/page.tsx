@@ -7,6 +7,8 @@ import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { PlatformBridge } from '@/lib/platform';
 import { openBunzy } from '@/lib/bunzyLaunch';
+import { LifeBuoy } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 
 const GROUP_LINK = 'https://t.me/rabbittyhub/3';
 
@@ -51,14 +53,12 @@ export default function SupportHubPage() {
     <ProfileSubpageLayout title="Centro de Ayuda">
       <div className="flex flex-col gap-4 mt-[10px]">
 
-        <div className="bg-[linear-gradient(135deg,#FF4081_0%,#E91E63_100%)] rounded-[20px] p-6 text-white shadow-[0_8px_32px_rgba(233,30,99,0.2)]">
-          <h2 className="text-[24px] font-extrabold m-0 mb-2 leading-[1.2]">
-            ¿En qué podemos ayudarte?
-          </h2>
-          <p className="m-0 opacity-90 text-sm">
-            Elige una de las opciones para encontrar la respuesta que necesitas.
-          </p>
-        </div>
+        <PremiumHero
+          icon={LifeBuoy}
+          eyebrow="CENTRO DE AYUDA"
+          title="¿En qué podemos ayudarte?"
+          subtitle="Elige una opción para encontrar la respuesta que necesitas."
+        />
 
         {links.map((link, idx) => (
           <Link key={idx} href={link.href} className="no-underline">

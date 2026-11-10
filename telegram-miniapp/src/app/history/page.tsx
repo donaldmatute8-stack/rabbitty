@@ -6,6 +6,9 @@ import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
+import { History as HistoryIcon } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
+import AnimatedBunz from '@/components/ui/AnimatedBunz';
 
 const FILTERS = ["Todos", "Ganado", "Gastado", "Pagos", "Comida", "Fitness", "Tecnología"];
 
@@ -82,48 +85,27 @@ export default function HistoryPage() {
   return (
     <ProfileSubpageLayout title="Historial">
 
-        {/* Stats Blocks */}
-        <div className="flex gap-2.5 mb-4">
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex-1 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-3.5 py-3"
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v6m0 0l-3-3m3 3l3-3" stroke="#4CAF50" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <span className="text-[12px] text-[#4CAF50] font-semibold">Ganado</span>
+        <PremiumHero
+          icon={HistoryIcon}
+          eyebrow="HISTORIAL"
+          title="Tu actividad"
+          subtitle="Cada movimiento de tu economía Rabbitty"
+        >
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/10 px-3 py-2">
+              <p className="text-[9px] font-black uppercase tracking-wider text-emerald-300/70">Ganado</p>
+              <AnimatedBunz value={totalEarned} className="text-[15px] font-black text-emerald-300" />
             </div>
-            <span className="text-[24px] font-extrabold text-(--text-primary)">{totalEarned}</span>
-            <span className="text-[13px] text-(--text-muted) ml-1">bunz</span>
-          </motion.div>
-          
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex-1 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-3.5 py-3"
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 13V7m0 0l-3 3m3-3l3 3" stroke="#E91E63" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              <span className="text-[12px] text-[#E91E63] font-semibold">Gastado</span>
+            <div className="rounded-xl border border-rose-400/15 bg-rose-400/10 px-3 py-2">
+              <p className="text-[9px] font-black uppercase tracking-wider text-rose-300/70">Gastado</p>
+              <AnimatedBunz value={totalSpent} className="text-[15px] font-black text-rose-300" />
             </div>
-            <span className="text-[24px] font-extrabold text-(--text-primary)">{totalSpent}</span>
-            <span className="text-[13px] text-(--text-muted) ml-1">bunz</span>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex-1 bg-(--bg-elevated) border border-(--border-subtle) rounded-[14px] px-3.5 py-3"
-          >
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="text-[12px] text-sky-400 font-semibold">Pagado</span>
+            <div className="rounded-xl border border-white/10 bg-white/[.05] px-3 py-2">
+              <p className="text-[9px] font-black uppercase tracking-wider text-white/45">Pagado</p>
+              <p className="text-[15px] font-black text-white">${totalPaidMxn.toFixed(0)}</p>
             </div>
-            <span className="text-[24px] font-extrabold text-(--text-primary)">${totalPaidMxn.toFixed(0)}</span>
-            <span className="text-[13px] text-(--text-muted) ml-1">mxn</span>
-          </motion.div>
-        </div>
+          </div>
+        </PremiumHero>
 
         {/* Filters */}
         <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">

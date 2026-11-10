@@ -7,6 +7,8 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
+import { Trophy } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 
 interface LevelInfo {
   level: number;
@@ -102,44 +104,35 @@ export default function GamificationPage() {
       ) : (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
           
-          {/* Header Stats */}
-          <div className="bg-(--bg-elevated) border border-(--border-subtle) rounded-2xl p-5 mb-5 relative overflow-hidden shadow-sm">
-            <div className="absolute -top-5 -right-5 text-[100px] opacity-10 select-none text-(--text-primary)">🐰</div>
-            
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[#E91E63] font-black text-xs uppercase tracking-[1.5px]">Rango de Explorador</span>
-              <span className="bg-[#E91E63]/15 border border-[#E91E63]/30 text-[#E91E63] text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                Nivel {data?.level?.level || 1}
-              </span>
-            </div>
-            
-            <h2 className="text-(--text-primary) text-[26px] font-black m-0 mb-4 tracking-tight">{data?.level?.name || 'Rabbitter Novato'}</h2>
-            
-            {/* XP progress bar toward next rank */}
-            <div className="mb-4">
-              <div className="flex justify-between text-xs text-(--text-muted) font-semibold mb-1.5">
+          <PremiumHero
+            icon={Trophy}
+            eyebrow="IDENTIDAD Y LOGROS"
+            title={data?.level?.name || 'Rabbitter Novato'}
+            subtitle={`Nivel ${data?.level?.level || 1} · ${data?.hops || 0} Hops`}
+          >
+            <div>
+              <div className="flex justify-between text-[11px] font-semibold text-white/45 mb-1.5">
                 <span>Progreso a siguiente rango</span>
-                <span className="text-(--text-primary) font-mono">{data?.hops || 0} / {data?.level?.nextLevelHops || 100} HOPS</span>
+                <span className="font-mono text-white/70">{data?.hops || 0} / {data?.level?.nextLevelHops || 100} HOPS</span>
               </div>
-              <div className="h-2 bg-(--bg-subtle) rounded-full overflow-hidden p-0.5 border border-(--border-subtle)">
-                <div 
-                  className="h-full bg-linear-to-r from-[#E91E63] to-[#FF4081] rounded-full transition-all duration-500 shadow-[0_0_10px_#E91E63]" 
-                  style={{ width: `${Math.min(((data?.hops || 0) / (data?.level?.nextLevelHops || 100)) * 100, 100)}%` }} 
+              <div className="h-2 rounded-full bg-white/10 p-0.5">
+                <div
+                  className="h-full rounded-full bg-linear-to-r from-[#E91E63] to-[#FF4081] shadow-[0_0_10px_#E91E63] transition-all duration-500"
+                  style={{ width: `${Math.min(((data?.hops || 0) / (data?.level?.nextLevelHops || 100)) * 100, 100)}%` }}
                 />
               </div>
             </div>
-
-            <div className="flex gap-3">
-              <div className="flex-1 bg-(--bg-subtle) border border-(--border-subtle) p-3 rounded-xl">
-                <p className="text-(--text-muted) text-[11px] font-semibold m-0 mb-1">Saltos (Hops)</p>
-                <p className="text-(--text-primary) text-xl font-extrabold m-0 tracking-tight">{data?.hops || 0}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-white/10 bg-white/[.05] px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-wider text-white/45">Saltos (Hops)</p>
+                <p className="text-lg font-black text-white">{data?.hops || 0}</p>
               </div>
-              <div className="flex-1 bg-(--bg-subtle) border border-(--border-subtle) p-3 rounded-xl">
-                <p className="text-(--text-muted) text-[11px] font-semibold m-0 mb-1">Multiplicador Bunz</p>
-                <p className="text-[#E91E63] text-xl font-extrabold m-0 tracking-tight">x{data?.level?.bunzMultiplier || '1.0'}</p>
+              <div className="rounded-xl border border-white/10 bg-white/[.05] px-3 py-2">
+                <p className="text-[9px] font-black uppercase tracking-wider text-white/45">Multiplicador Bunz</p>
+                <p className="text-lg font-black text-[#FF5FA8]">x{data?.level?.bunzMultiplier || '1.0'}</p>
               </div>
             </div>
-          </div>
+          </PremiumHero>
 
           {/* Tabs */}
           <div className="flex bg-(--bg-subtle) border border-(--border-subtle) rounded-xl p-1 mb-5">

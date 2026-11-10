@@ -141,14 +141,17 @@ export function FeedbackModal({ isOpen, onClose, initialType = 'BUG' }: Feedback
             </button>
           </div>
 
-          <h3 className="text-lg font-black text-[var(--text-primary)] mb-1">
-            {type === 'BUG' ? 'Reportar un problema' : 'Compartir sugerencia o idea'}
-          </h3>
-          <p className="text-xs text-[var(--text-secondary)] mb-4">
-            {type === 'BUG'
-              ? 'Describe qué falló o qué pantalla no respondió como esperabas. Nuestro equipo lo revisará.'
-              : 'Dinos qué te gustaría ver en Rabbitty para hacer tu experiencia más rápida y divertida.'}
-          </p>
+          <div className="mb-4 rounded-2xl border border-[#E91E63]/25 bg-gradient-to-br from-[#E91E63]/15 to-transparent p-4">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#FF5FA8]">FEEDBACK</p>
+            <h3 className="mt-1 text-lg font-black text-[var(--text-primary)] mb-1">
+              {type === 'BUG' ? 'Reportar un problema' : 'Compartir sugerencia o idea'}
+            </h3>
+            <p className="text-xs text-[var(--text-secondary)]">
+              {type === 'BUG'
+                ? 'Describe qué falló o qué pantalla no respondió como esperabas. Nuestro equipo lo revisará.'
+                : 'Dinos qué te gustaría ver en Rabbitty para hacer tu experiencia más rápida y divertida.'}
+            </p>
+          </div>
 
           {sent ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">

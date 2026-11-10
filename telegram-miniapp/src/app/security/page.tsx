@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 import { QRCodeSVG } from 'qrcode.react';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -618,6 +619,14 @@ export default function SecurityPage() {
 
         {currentSection === 'root' && (
           <div className="flex flex-col">
+            <div className="mb-4">
+              <PremiumHero
+                icon={ShieldCheck}
+                eyebrow="SEGURIDAD Y PRIVACIDAD"
+                title="Tu cuenta protegida"
+                subtitle="Acceso, privacidad y auditoría en un solo lugar"
+              />
+            </div>
             <div className="relative mb-2">
               <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
               <input

@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 
 import { DOC_SECTIONS } from '@/lib/support-content';
+import { BookOpen } from 'lucide-react';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 import React from 'react';
 
 export default function DocsPage() {
@@ -22,19 +24,12 @@ export default function DocsPage() {
     <ProfileSubpageLayout title="Documentación">
       <div style={{ padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
         
-        <div style={{ 
-          background: 'linear-gradient(135deg, #111 0%, #222 100%)', 
-          borderRadius: 20, 
-          padding: 24, 
-          color: 'white',
-        }}>
-          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 8px', lineHeight: 1.2 }}>
-            Whitepaper
-          </h2>
-          <p style={{ margin: 0, opacity: 0.8, fontSize: 14, lineHeight: 1.5 }}>
-            Una guía rápida y destilada sobre cómo funciona el ecosistema Rabbitty desde la perspectiva del usuario.
-          </p>
-        </div>
+        <PremiumHero
+          icon={BookOpen}
+          eyebrow="DOCUMENTACIÓN"
+          title="Whitepaper"
+          subtitle="Una guía rápida y destilada sobre cómo funciona el ecosistema Rabbitty desde la perspectiva del usuario."
+        />
 
         {sections.map((sec, idx) => (
           <motion.div 

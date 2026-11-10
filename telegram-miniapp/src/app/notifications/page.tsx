@@ -10,6 +10,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { readSettings, subscribeSettings } from '@/lib/userSettings';
 import { useToast } from '@/contexts/ToastContext';
 import { useRealtimeEvents } from '@/lib/useRealtimeEvents';
+import { PremiumHero } from '@/components/premium/PremiumUI';
 
 interface Notification {
   id: string;
@@ -215,6 +216,12 @@ export default function NotificationsPage() {
       }
     >
       <PullToRefresh onRefresh={() => fetchNotifications()}>
+      <PremiumHero
+        icon={Bell}
+        eyebrow="NOTIFICACIONES"
+        title={unreadCount > 0 ? `${unreadCount} sin leer` : 'Todo al día'}
+        subtitle="Ofertas, recompensas y actividad de tu cuenta"
+      />
       {/* Ajuste de campana (única fuente: /settings) — acceso por el gear del header */}
 
       {!inAppBell ? (
