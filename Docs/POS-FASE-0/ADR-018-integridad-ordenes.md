@@ -34,6 +34,10 @@ TOTAL ................................... 85
 > Si el helper solo cubre `pos.ts`, la concurrencia sigue rota por las rutas de la miniapp.
 > El test de arquitectura debe cubrir **los 18 archivos**.
 
+**Nota de 0B-1:** el escaneo del test de arquitectura da **89** porque suma 2 del propio
+helper + 2 del script de seed. Las **85** de producción no cambian.
+Ver [`0B-1-EJECUCION.md`](./0B-1-EJECUCION.md).
+
 ## 4. Los 46 caminos de `pos.ts` (individualizados)
 
 **Destino:**

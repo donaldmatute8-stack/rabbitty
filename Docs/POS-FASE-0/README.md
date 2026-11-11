@@ -31,6 +31,7 @@ El principio rector, dictado por dirección:
 | [`RIESGOS.md`](./RIESGOS.md) | Matriz de riesgos pendientes (R-01 … R-12) | Vivo |
 | [`ROADMAP-Y-CHECKPOINTS.md`](./ROADMAP-Y-CHECKPOINTS.md) | Fases, dependencias y puntos de reanudación | Vivo |
 | [`RAMAS-Y-FLUJO.md`](./RAMAS-Y-FLUJO.md) | Modelo de ramas, PR, gates, handoff y rollback | **Vigente** |
+| [`0B-1-EJECUCION.md`](./0B-1-EJECUCION.md) | Qué se construyó en 0B-1 y qué falta para cerrarlo | **En curso** |
 
 ---
 

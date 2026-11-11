@@ -78,13 +78,16 @@ Cuando el trabajo se pause por otro frente, retomar es:
 ### §7 · Estado actual
 
 ```
-FASE:                     0A — DOCUMENTADO
+FASE:                     0B-1 — EN CURSO (rama)
 ÚLTIMO CHECKPOINT CERRADO: C0
-RAMA DE INTEGRACIÓN:      feat/pos-phase0
-MAIN:                     30952b0 (intacto, sin cambios por 0A)
-SIGUIENTE ACCIÓN:         Solicitar autorización de 0B-1
-                          (helper withOrderMutation + orders.version + test de arquitectura)
-BLOQUEADO POR:            Autorización de dirección
+RAMA DE INTEGRACIÓN:      feat/pos-phase0 (C0)
+RAMA DE TRABAJO:          feat/pos-0b1-integridad-ordenes
+MAIN:                     30952b0 (intacto)
+HECHO:                    helper withOrderMutation · migración 0038 (NO aplicada)
+                          · order_events · test de arquitectura con trinquete (77 pendientes)
+SIGUIENTE ACCIÓN:         Aplicar 0038 en staging y cablear los primeros 4 procedimientos
+                          (addToCart, removeFromCart, clearCart, voidItem)
+BLOQUEADO POR:            Base de staging disponible
 PREGUNTAS ABIERTAS:
   - Autorizar corrección de mensajes CFDI (M-01 … M-04)
   - Autorizar PAC sandbox Facturama

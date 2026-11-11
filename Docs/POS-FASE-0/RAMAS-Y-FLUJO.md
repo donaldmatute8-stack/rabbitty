@@ -192,7 +192,7 @@ Actualizar al crear/mergear/borrar.
 | Rama | Estado | Base | Último commit | PR | Notas |
 |---|---|---|---|---|---|
 | `feat/pos-phase0` | **abierta** | `main@30952b0` | docs 0A | — | Solo documentación (0A). No despliega |
-| `feat/pos-0b1-integridad-ordenes` | no creada | `feat/pos-phase0` | — | — | Requiere autorización |
+| `feat/pos-0b1-integridad-ordenes` | **abierta** | `feat/pos-phase0` | 0B-1 | — | Helper + migración 0038 + test de arquitectura. Sin cablear |
 | `feat/pos-0b2-rutas-miniapp` | no creada | `feat/pos-phase0` | — | — | Requiere 0B-1 |
 | `feat/pos-0b3-saga-pagos` | no creada | `feat/pos-phase0` | — | — | Requiere autorización |
 | `feat/pos-0b4-eventos-impresion` | no creada | `feat/pos-phase0` | — | — | Requiere autorización |

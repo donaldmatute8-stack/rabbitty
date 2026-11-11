@@ -219,8 +219,39 @@ export const orders = pgTable("orders", {
   cfdiUrl: text("cfdiUrl"),
   /** RP-2A: clave de idempotencia del cobro. Única cuando existe. */
   idempotencyKey: text("idempotencyKey"),
+  // ── Integridad de órdenes (ADR-018, migración 0038) ──
+  /** Versión optimista: toda mutación la incrementa. */
+  version: integer("version").default(1).notNull(),
+  updatedByStaffId: text("updatedByStaffId"),
+  updatedByTerminalId: text("updatedByTerminalId"),
   ...timestamps,
-}, (t) => [uniqueIndex("orders_idempotency_key_idx").on(t.idempotencyKey)]);
+}, (t) => [
+  uniqueIndex("orders_idempotency_key_idx").on(t.idempotencyKey),
+  index("orders_version_idx").on(t.version),
+]);
+
+/**
+ * Bitácora append-only de mutaciones de una orden (ADR-018 §6.2).
+ * `versionBefore/After` permiten reconstruir qué pasó y detectar escrituras
+ * fuera del helper `withOrderMutation`.
+ */
+export const orderEvents = pgTable("order_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text("orderId").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  versionBefore: integer("versionBefore").notNull(),
+  versionAfter: integer("versionAfter").notNull(),
+  staffId: text("staffId"),
+  terminalId: text("terminalId"),
+  idempotencyKey: text("idempotencyKey"),
+  payload: jsonb("payload"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("order_events_idempotency_uidx")
+    .on(t.idempotencyKey)
+    .where(sql`${t.idempotencyKey} IS NOT NULL`),
+  index("order_events_order_idx").on(t.orderId, t.createdAt),
+]);
 
 /**
  * 🛵 Entregas (última milla) — capa proveedor-agnóstica.
