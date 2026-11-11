@@ -520,9 +520,10 @@ export async function confirmPaymentIntentSettled(
     // 4. Insertar registro de pago fiat si hubo importe con tarjeta/efectivo.
     //
     //    ⚠️ `BUNZ_ONLY` NO registra fiat: en el split (efectivo + Bunz) el POS
-    //    cobra la parte en efectivo por su cuenta y el intento solo aporta el
+    //    cobra la parte en efectivo por su cuenta, y el intento solo aporta el
     //    asiento BUNZ. Sin esta guarda, una orden de $120 quedaba con $180 en
     //    pagos (CREDIT_CARD fantasma + BUNZ + CASH) y la caja cuadraba mal.
+    //    Ver Docs/POS-FASE-0/ADR-022 (riesgo H-4).
     if (intent.netFiatCents > 0 && params.verifiedMethod !== "BUNZ_ONLY") {
       const intentTipMxn = Math.max(0, Number((intent as { tipMxn?: number | null }).tipMxn || 0));
       await tx.insert(payments).values({

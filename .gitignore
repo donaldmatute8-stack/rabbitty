@@ -84,6 +84,10 @@ _secure-backup/
 
 # Local documentation
 DOCS/
+# Excepción: documentación versionada de Fase 0 POS (ver Docs/POS-FASE-0/RAMAS-Y-FLUJO.md)
+!DOCS/
+DOCS/*
+!DOCS/POS-FASE-0/
 MB-REFERENCE.md
 \!LEEME.md
 

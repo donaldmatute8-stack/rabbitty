@@ -8,6 +8,7 @@ import { assertCardPaymentAllowed, isCardMethod } from "../services/cardGuard";
 import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayableStatus } from "../services/payments/contracts";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
+import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
@@ -105,6 +106,12 @@ const r2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 /** Calcula base (subtotal), IVA y total a partir de los items de una orden.
  *  Garantía: subtotal + tax === total (sin discrepancias de redondeo). */
+/** Identidad para la bitácora de órdenes: quién (empleado) y desde dónde (terminal). */
+const posActor = (ctx: { posOperator?: { staffId?: string } | null; posAuth?: { terminalId?: string } | null }) => ({
+  staffId: ctx.posOperator?.staffId ?? null,
+  terminalId: ctx.posAuth?.terminalId ?? null,
+});
+
 export function calcTax(itemsTotal: number): { total: number; subtotal: number; tax: number } {
   const total = r2(itemsTotal);
   const subtotal = r2(total / (1 + TAX_RATE));
@@ -891,21 +898,44 @@ export const posRouter = router({
           .filter((c) => !withItems.has(c.id) && Number(c.total || 0) === 0)
           .map((c) => c.id);
         if (blankIds.length > 0) {
-          await ctx.restaurantDb
-            .update(orders)
-            .set({ status: "EXPIRED", voidReason: "DRAFT_RELEASED", updatedAt: new Date() })
+          // Un lock por orden: la limpieza de borradores también respeta la versión.
+          const pendingBlanks = await ctx.restaurantDb
+            .select({ id: orders.id })
+            .from(orders)
             .where(and(inArray(orders.id, blankIds), eq(orders.status, "PENDING")));
+          await ctx.restaurantDb.transaction(async (tx: any) => {
+            for (const blank of pendingBlanks) {
+              await withOrderMutation(
+                tx,
+                { orderId: blank.id, type: "DRAFT_RELEASED", actor: posActor(ctx) },
+                async (_o: any, _c: any) => {
+                  await tx
+                    .update(orders)
+                    .set({ status: "EXPIRED", voidReason: "DRAFT_RELEASED", updatedAt: new Date() })
+                    .where(eq(orders.id, blank.id));
+                },
+              );
+            }
+          });
         }
         return { orderId: null, created: false, total: 0, hasItems: false };
       }
 
       if (existing) {
         // Mantener fresca la identidad del cliente vinculado (teléfono/nombre).
-        await ctx.restaurantDb.update(orders).set({
-          customerName: input.customerName ?? undefined,
-          customerPhone: input.customerPhone ?? undefined,
-          updatedAt: new Date(),
-        }).where(eq(orders.id, existing.id));
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: existing.id, type: "CUSTOMER_UPDATED", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
+              await tx.update(orders).set({
+                customerName: input.customerName ?? undefined,
+                customerPhone: input.customerPhone ?? undefined,
+                updatedAt: new Date(),
+              }).where(eq(orders.id, existing.id));
+            },
+          );
+        });
         return {
           orderId: existing.id,
           created: false,
@@ -914,20 +944,25 @@ export const posRouter = router({
         };
       }
 
-      const [order] = await ctx.restaurantDb.insert(orders).values({
-        branchId: ctx.branchId,
-        tableId: input.tableId ?? null,
-        orderType: input.orderType,
-        customerId: input.customerId,
-        customerName: input.customerName ?? null,
-        customerPhone: input.customerPhone ?? null,
-        subtotal: 0,
-        tax: 0,
-        discount: 0,
-        tip: 0,
-        total: 0,
-        status: "PENDING",
-      }).returning();
+      const order = await ctx.restaurantDb.transaction(async (tx: any) =>
+        withOrderCreate(tx, { actor: posActor(ctx) }, async () => {
+          const [created] = await tx.insert(orders).values({
+            branchId: ctx.branchId,
+            tableId: input.tableId ?? null,
+            orderType: input.orderType,
+            customerId: input.customerId,
+            customerName: input.customerName ?? null,
+            customerPhone: input.customerPhone ?? null,
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            tip: 0,
+            total: 0,
+            status: "PENDING",
+          }).returning();
+          return created;
+        }),
+      );
       if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo abrir la comanda del cliente" });
       bus.emit(EventTypes.ORDER_CREATED, { orderId: order.id, tableId: input.tableId });
       return { orderId: order.id, created: true, total: 0 };
@@ -959,10 +994,18 @@ export const posRouter = router({
         .limit(1);
       if (item) return { released: false, reason: "HAS_ITEMS" as const };
 
-      await ctx.restaurantDb
-        .update(orders)
-        .set({ status: "EXPIRED", voidReason: "DRAFT_RELEASED", updatedAt: new Date() })
-        .where(and(eq(orders.id, order.id), eq(orders.status, "PENDING")));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: order.id, type: "DRAFT_RELEASED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({ status: "EXPIRED", voidReason: "DRAFT_RELEASED", updatedAt: new Date() })
+              .where(eq(orders.id, order.id));
+          },
+        );
+      });
       return { released: true, reason: "RELEASED" as const };
     }),
 
@@ -982,7 +1025,9 @@ export const posRouter = router({
       })
     )
      .mutation(async ({ ctx, input }) => {
-       const [order] = await ctx.restaurantDb.insert(orders).values({
+       const order = await ctx.restaurantDb.transaction(async (tx: any) =>
+         withOrderCreate(tx, { actor: posActor(ctx) }, async () => {
+           const [created] = await tx.insert(orders).values({
          branchId: ctx.branchId,
          tableId: input.billOnly ? null : (input.tableId ?? null),
          orderType: input.orderType,
@@ -996,7 +1041,10 @@ export const posRouter = router({
          total: 0,
          billOnly: input.billOnly,
          status: input.billOnly ? "AWAITING_PAYMENT" : "PENDING",
-       }).returning();
+           }).returning();
+           return created;
+         }),
+       );
        if (!order) throw new Error("Error al crear la orden");
        // Una cuenta al móvil NO es un pedido: no emite ORDER_CREATED (KDS,
        // seguimiento, live activity) hasta que efectivamente se cobre.
@@ -1026,64 +1074,81 @@ export const posRouter = router({
         if (!menuItem) {
           throw new Error("Producto no encontrado");
         }
-        const unitPrice = menuItem.price;
-        const totalPrice = unitPrice * input.quantity;
-        const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-        const nextSortOrder = existingItems.length;
-        const [orderItem] = await tx.insert(orderItems).values({
-          orderId: input.orderId,
-          menuItemId: input.menuItemId,
-          quantity: input.quantity,
-          unitPrice,
-          totalPrice,
-          sortOrder: nextSortOrder,
-          modifiers: input.modifiers ?? null,
-          notes: input.notes ?? null,
-        }).returning();
-        const allItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-        const { total, subtotal, tax } = calcTax(allItems.reduce((s: number, i: any) => s + Number(i.totalPrice), 0));
-        await tx.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
-        return orderItem;
+
+        // Ítem + totales bajo el helper: bloqueo de orden, versión y bitácora.
+        const { result } = await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "ITEM_ADDED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+            const [orderItem] = await tx.insert(orderItems).values({
+              orderId: input.orderId,
+              menuItemId: input.menuItemId,
+              quantity: input.quantity,
+              unitPrice: menuItem.price,
+              totalPrice: menuItem.price * input.quantity,
+              sortOrder: existingItems.length,
+              modifiers: input.modifiers ?? null,
+              notes: input.notes ?? null,
+            }).returning();
+            await octx.recalcTotals();
+            return orderItem;
+          },
+        );
+        return result;
       });
     }),
 
   removeFromCart: posProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [item] = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.id, input.id));
-      if (!item) throw new Error("Item no encontrado");
-      const [parentOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, item.orderId)).limit(1);
-      if (!parentOrd || parentOrd.branchId !== ctx.branchId) throw new Error("Item no encontrado");
-      if (item.status !== "PENDING") {
-        throw new Error("No puedes eliminar un artículo que ya está en cocina. Usa la función de Cancelación (Void).");
-      }
+      // Transaccional: antes el borrado y el recálculo de totales iban sueltos y
+      // podían dejar la orden descuadrada si fallaba a la mitad (ADR-018).
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [item] = await tx.select().from(orderItems).where(eq(orderItems.id, input.id));
+        if (!item) throw new Error("Item no encontrado");
+        const [parentOrd] = await tx.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, item.orderId)).limit(1);
+        if (!parentOrd || parentOrd.branchId !== ctx.branchId) throw new Error("Item no encontrado");
+        if (item.status !== "PENDING") {
+          throw new Error("No puedes eliminar un artículo que ya está en cocina. Usa la función de Cancelación (Void).");
+        }
 
-      const [removed] = await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
-      if (removed) {
-        const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, removed.orderId));
-        const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-        await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, removed.orderId));
-        return removed;
-      }
-      return null;
+        const { result } = await withOrderMutation(
+          tx,
+          { orderId: item.orderId, type: "ITEM_REMOVED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            const [removed] = await tx.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
+            if (!removed) throw new Error("Item no encontrado");
+            await octx.recalcTotals();
+            return removed;
+          },
+        );
+        return result;
+      });
     }),
 
   clearCart: posProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [cartOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
-      if (!cartOrd || cartOrd.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
-      // Only delete PENDING items
-      await ctx.restaurantDb.delete(orderItems).where(and(
-        eq(orderItems.orderId, input.orderId),
-        eq(orderItems.status, "PENDING")
-      )).returning();
-      
-      const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-      await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
-      
-      return { success: true };
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [cartOrd] = await tx.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+        if (!cartOrd || cartOrd.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
+
+        await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "CART_CLEARED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            // Solo se borran los que aún no entraron a cocina.
+            await tx.delete(orderItems).where(and(
+              eq(orderItems.orderId, input.orderId),
+              eq(orderItems.status, "PENDING")
+            )).returning();
+            await octx.recalcTotals();
+          },
+        );
+
+        return { success: true };
+      });
     }),
 
   // Guard multi-tenant: la orden DEBE pertenecer a la branch del ctx (evita IDOR cross-tenant)
@@ -1131,30 +1196,41 @@ export const posRouter = router({
       const [parentOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, targetItem.orderId)).limit(1);
       if (!parentOrder || parentOrder.branchId !== ctx.branchId) throw new Error("Item no encontrado");
 
-      const [item] = await ctx.restaurantDb.update(orderItems).set({
-        status: "CANCELLED",
-        voidReason: input.reason,
-        authorizedById: authorizedStaffId,
-        voidedAt: new Date(),
-        totalPrice: 0, // Voided items cost 0
-      }).where(eq(orderItems.id, input.id)).returning();
-
-      if (item) {
-        const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, item.orderId));
-        const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-        await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, item.orderId));
-      }
+      // Cancelación de ítem bajo el helper: bloqueo de orden, versión y bitácora
+      // (con el PIN de manager como autorizante queda registrado el actor).
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: targetItem.orderId, type: "ITEM_VOIDED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            const [voided] = await tx.update(orderItems).set({
+              status: "CANCELLED",
+              voidReason: input.reason,
+              authorizedById: authorizedStaffId,
+              voidedAt: new Date(),
+              totalPrice: 0, // Un ítem anulado cuesta 0
+            }).where(eq(orderItems.id, input.id)).returning();
+            if (!voided) throw new Error("Item no encontrado");
+            await octx.recalcTotals();
+          },
+        );
+      });
 
       return { success: true };
     }),
 
+  /**
+   * @deprecated LEGACY — no cablear al helper ni usar en código nuevo.
+   *
+   * El POS activo usa `directCheckout` para fiat y `createPaymentIntent` para
+   * Bunz. Esta ruta escribía `bunzPaid` y cobraba el saldo DESPUÉS del commit:
+   * si el cobro fallaba, la orden quedaba pagada.
+   *
+   * Bunz ya está bloqueado aquí salvo rollback explícito
+   * (`RABBITTY_LEGACY_BUNZ=true`). Plan: retirarla cuando ningún cliente la use.
+   */
   payOrder: posProcedure
-    /**
-     * LEGACY. El POS activo (admin) usa `directCheckout` para fiat y
-     * `createPaymentIntent` para Bunz. Esta ruta escribía `bunzPaid` y cobraba
-     * el saldo DESPUÉS del commit: si el cobro fallaba, la orden quedaba pagada.
-     * Se bloquea Bunz salvo rollback explícito (`RABBITTY_LEGACY_BUNZ=true`).
-     */
+    // @deprecated LEGACY · no cablear al helper: esta ruta se retira.
     .input(
       z.object({
         orderId: z.string(),
@@ -1470,20 +1546,30 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const [order] = await ctx.restaurantDb.update(orders)
-        .set({
-          customerPhone: input.customerPhone,
-          customerName: input.customerName ?? null,
-          customerId: input.customerId ?? null,
-        })
-        .where(
-          and(
-            eq(orders.id, input.orderId),
-            eq(orders.branchId, ctx.branchId)
-          )
-        )
-        .returning();
-      if (!order) throw new Error("Orden no encontrada");
+      // Guard de sucursal ANTES de mutar (el helper bloquea por id, no por branch).
+      const [ownedOrder] = await ctx.restaurantDb
+        .select({ id: orders.id, branchId: orders.branchId })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!ownedOrder || ownedOrder.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
+
+      const order = await ctx.restaurantDb.transaction(async (tx: any) => {
+        const { order: updated } = await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "CUSTOMER_LINKED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx.update(orders)
+              .set({
+                customerPhone: input.customerPhone,
+                customerName: input.customerName ?? null,
+                customerId: input.customerId ?? null,
+              })
+              .where(eq(orders.id, input.orderId));
+          },
+        );
+        return updated;
+      });
 
       // ── Asignación POST-cobro con emisión atómica e idempotente ──
       let awardedBunz = 0;
@@ -1502,9 +1588,17 @@ export const posRouter = router({
             );
             if (res?.success) {
               awardedBunz = res.bunz || 0;
-              await ctx.restaurantDb.update(orders)
-                .set({ bunzReward: awardedBunz })
-                .where(eq(orders.id, order.id));
+              await ctx.restaurantDb.transaction(async (tx: any) => {
+                await withOrderMutation(
+                  tx,
+                  { orderId: order.id, type: "BUNZ_LINKED", actor: posActor(ctx) },
+                  async (_o: any, _c: any) => {
+                    await tx.update(orders)
+                      .set({ bunzReward: awardedBunz })
+                      .where(eq(orders.id, order.id));
+                  },
+                );
+              });
               // OT-3: la recompensa se considera emitida al cobrar. Idempotente.
               await recordEmissionBooks(ctx.restaurantDb, {
                 orderId: order.id,
@@ -1590,18 +1684,21 @@ export const posRouter = router({
 
           // Todo dentro de la MISMA transacción: si el intent falla, no queda
           // orden huérfana (antes orders/orderItems se escribían fuera de tx).
-          const [order] = await tx.insert(orders).values({
-            branchId: ctx.branchId,
-            tableId: input.tableId ?? null,
-            orderType: input.orderType,
-            customerName: input.customerName ?? null,
-            customerPhone: input.customerPhone ?? null,
-            customerId: input.customerId ?? null,
-            subtotal: calcSubtotal,
-            tax: calcTaxAmt,
-            total: calcTotal,
-            status: "PENDING",
-          }).returning();
+          const order = await withOrderCreate(tx, { actor: posActor(ctx) }, async () => {
+            const [row] = await tx.insert(orders).values({
+              branchId: ctx.branchId,
+              tableId: input.tableId ?? null,
+              orderType: input.orderType,
+              customerName: input.customerName ?? null,
+              customerPhone: input.customerPhone ?? null,
+              customerId: input.customerId ?? null,
+              subtotal: calcSubtotal,
+              tax: calcTaxAmt,
+              total: calcTotal,
+              status: "PENDING",
+            }).returning();
+            return row;
+          });
           if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
 
           for (const [i, row] of itemRows.entries()) {
@@ -1628,12 +1725,18 @@ export const posRouter = router({
             if (applied.discount > 0) {
               const adjusted = calcTax(applied.finalAmount);
               orderTotal = adjusted.total;
-              await tx.update(orders).set({
-                subtotal: adjusted.subtotal,
-                tax: adjusted.tax,
-                discount: applied.discount,
-                total: adjusted.total,
-              }).where(eq(orders.id, order.id));
+              await withOrderMutation(
+                tx,
+                { orderId: order.id, type: "INTENT_PRICED", actor: posActor(ctx) },
+                async (_o: any, _c: any) => {
+                  await tx.update(orders).set({
+                    subtotal: adjusted.subtotal,
+                    tax: adjusted.tax,
+                    discount: applied.discount,
+                    total: adjusted.total,
+                  }).where(eq(orders.id, order.id));
+                },
+              );
             }
           }
 
@@ -1707,10 +1810,18 @@ export const posRouter = router({
         }
       }
 
-      await ctx.restaurantDb.update(orders).set({
-        status: "VOIDED",
-        voidReason: input.reason,
-      }).where(eq(orders.id, input.orderId));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "ORDER_VOIDED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx.update(orders).set({
+              status: "VOIDED",
+              voidReason: input.reason,
+            }).where(eq(orders.id, input.orderId));
+          },
+        );
+      });
       // Fase 1 Rabbitty Score (H2): exclusión IMEDIATA del rating al anular
       await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, input.orderId, "ORDER_VOIDED");
       bus.emit(EventTypes.ORDER_VOIDED, { orderId: input.orderId });
@@ -1840,14 +1951,22 @@ export const posRouter = router({
         .limit(1);
 
       if (pendingOrder) {
-        await ctx.restaurantDb
-          .update(orders)
-          .set({
-            customerId: effectiveCustomerId,
-            customerName: customerName || pendingOrder.customerName,
-            customerPhone: customerPhone || pendingOrder.customerPhone,
-          })
-          .where(eq(orders.id, pendingOrder.id));
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: pendingOrder.id, type: "TABLE_CLAIMED", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  customerId: effectiveCustomerId,
+                  customerName: customerName || pendingOrder.customerName,
+                  customerPhone: customerPhone || pendingOrder.customerPhone,
+                })
+                .where(eq(orders.id, pendingOrder.id));
+            },
+          );
+        });
       }
 
       // 4. Asegurar una table_session en estado OPEN para esta mesa
@@ -2027,28 +2146,45 @@ export const posRouter = router({
           .from(orders)
           .where(and(eq(orders.id, input.existingOrderId), eq(orders.branchId, ctx.branchId)))
           .limit(1);
-        if (reusedOrder && !isOrderPayableStatus(reusedOrder.status)) {
+        // El helper bloquea por id, no por sucursal: la pertenencia se valida aquí
+        // ANTES de mutar (si no, se podría tocar una orden de otro tenant).
+        if (!reusedOrder) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo.",
+          });
+        }
+        if (!isOrderPayableStatus(reusedOrder.status)) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: `La orden existente no admite cobros (estado ${reusedOrder.status}).`,
           });
         }
-        const [reused] = await ctx.restaurantDb
-          .update(orders)
-          .set({
-            tableId: input.tableId ?? null,
-            orderType: input.orderType,
-            customerId: input.customerId ?? null,
-            customerName: input.customerName ?? null,
-            customerPhone: input.customerPhone ?? null,
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(orders.id, input.existingOrderId),
-            eq(orders.branchId, ctx.branchId),
-            inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.CASH_REQUESTED]),
-          ))
-          .returning();
+        const reused = await ctx.restaurantDb.transaction(async (tx: any) => {
+          const { order: updated } = await withOrderMutation(
+            tx,
+            {
+              orderId: input.existingOrderId!,
+              type: "CHECKOUT_REUSED_ORDER",
+              actor: posActor(ctx),
+              allowedStatuses: [ORDER_STATUS.PENDING, ORDER_STATUS.CASH_REQUESTED],
+            },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  tableId: input.tableId ?? null,
+                  orderType: input.orderType,
+                  customerId: input.customerId ?? null,
+                  customerName: input.customerName ?? null,
+                  customerPhone: input.customerPhone ?? null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(orders.id, input.existingOrderId!));
+            },
+          );
+          return updated;
+        });
         if (!reused) {
           throw new TRPCError({ code: "NOT_FOUND", message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo." });
         }
@@ -2068,25 +2204,30 @@ export const posRouter = router({
           });
         }
       } else {
-        const [created] = await ctx.restaurantDb
-          .insert(orders)
-          .values({
-            branchId: ctx.branchId,
-            tableId: input.tableId ?? null,
-            orderType: input.orderType,
-            customerId: input.customerId ?? null,
-            customerName: input.customerName ?? null,
-            customerPhone: input.customerPhone ?? null,
-            subtotal: 0,
-            tax: 0,
-            discount: 0,
-            tip: 0,
-            total: 0,
-            status: "PENDING",
-            idempotencyKey: input.idempotencyKey ?? null,
-          })
-          .onConflictDoNothing({ target: orders.idempotencyKey })
-          .returning();
+        const created = await ctx.restaurantDb.transaction(async (tx: any) =>
+          withOrderCreate(tx, { actor: posActor(ctx), idempotencyKey: input.idempotencyKey }, async () => {
+            const [row] = await tx
+              .insert(orders)
+              .values({
+                branchId: ctx.branchId,
+                tableId: input.tableId ?? null,
+                orderType: input.orderType,
+                customerId: input.customerId ?? null,
+                customerName: input.customerName ?? null,
+                customerPhone: input.customerPhone ?? null,
+                subtotal: 0,
+                tax: 0,
+                discount: 0,
+                tip: 0,
+                total: 0,
+                status: "PENDING",
+                idempotencyKey: input.idempotencyKey ?? null,
+              })
+              .onConflictDoNothing({ target: orders.idempotencyKey })
+              .returning();
+            return row;
+          }),
+        );
         if (!created) {
           // Carrera: otra petición con la misma clave ganó el insert.
           const [prior] = input.idempotencyKey
@@ -2266,16 +2407,25 @@ export const posRouter = router({
           });
         }
         try {
-          await ctx.restaurantDb
-            .update(orders)
-            .set({
-              subtotal: calcSubtotal,
-              tax: calcTaxAmt,
-              discount: calculatedDiscount,
-              total: calcTotal,
-              tip: posTip,
-            })
-            .where(eq(orders.id, order.id));
+          // Los totales deben estar escritos antes de crear el intent.
+          await ctx.restaurantDb.transaction(async (tx: any) => {
+            await withOrderMutation(
+              tx,
+              { orderId: order.id, type: "CHECKOUT_PRICED", actor: posActor(ctx) },
+              async (_o: any, _c: any) => {
+                await tx
+                  .update(orders)
+                  .set({
+                    subtotal: calcSubtotal,
+                    tax: calcTaxAmt,
+                    discount: calculatedDiscount,
+                    total: calcTotal,
+                    tip: posTip,
+                  })
+                  .where(eq(orders.id, order.id));
+              },
+            );
+          });
 
           const { createOrGetPaymentIntent, confirmPaymentIntentSettled } = await import("../services/paymentCore");
           const intent = await createOrGetPaymentIntent(ctx.restaurantDb, {
@@ -2356,16 +2506,24 @@ export const posRouter = router({
 
       // El intent de Bunz necesita el total de la orden ya escrito.
       if (isSplit) {
-        await ctx.restaurantDb
-          .update(orders)
-          .set({
-            subtotal: calcSubtotal,
-            tax: calcTaxAmt,
-            discount: calculatedDiscount,
-            total: calcTotal,
-            tip: posTip,
-          })
-          .where(eq(orders.id, order.id));
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: order.id, type: "CHECKOUT_PRICED", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  subtotal: calcSubtotal,
+                  tax: calcTaxAmt,
+                  discount: calculatedDiscount,
+                  total: calcTotal,
+                  tip: posTip,
+                })
+                .where(eq(orders.id, order.id));
+            },
+          );
+        });
       }
 
       // 1) Capturar la parte Bunz con el motor canónico (antes del efectivo).
@@ -2413,6 +2571,13 @@ export const posRouter = router({
 
       try {
         await ctx.restaurantDb.transaction(async (tx: any) => {
+          // Cobro bajo el helper: lock de la orden, versión y bitácora.
+          // Todo lo que sigue (totales, pagos, cierre, stock) ocurre con la
+          // orden bloqueada, así que dos terminales no pueden cobrarla a la vez.
+          await withOrderMutation(
+            tx,
+            { orderId: order.id, type: "CHECKOUT_PAID", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
           await tx.update(orders).set({
             subtotal: calcSubtotal,
             tax: calcTaxAmt,
@@ -2520,6 +2685,8 @@ export const posRouter = router({
           for (const item of input.items) {
             await deductRecipe(item.menuItemId, item.quantity, new Set());
           }
+            },
+          );
         });
       } catch (err) {
         // Si la parte Bunz ya se capturó y el cierre falla, se devuelve.
@@ -2544,20 +2711,38 @@ export const posRouter = router({
           }
         }
         // Si la orden era nueva, no dejar un borrador huérfano.
+        // `withOrderRollback` rechaza el borrado si ya hay un pago aplicado:
+        // nunca se borra una orden cobrada (ADR-022, riesgo R-A).
         if (createdNew) {
           try {
-            await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.orderId, order.id));
-            await ctx.restaurantDb.delete(orders).where(eq(orders.id, order.id));
+            await ctx.restaurantDb.transaction(async (tx: any) => {
+              await withOrderRollback(
+                tx,
+                { orderId: order.id, reason: "CHECKOUT_FAILED" },
+                async () => {
+                  await tx.delete(orderItems).where(eq(orderItems.orderId, order.id));
+                  await tx.delete(orders).where(eq(orders.id, order.id));
+                },
+              );
+            });
           } catch (cleanupError) {
             console.error("[CHECKOUT_CLEANUP]", cleanupError);
           }
         } else if (input.idempotencyKey) {
           // Orden reutilizada: liberar la clave para permitir reintento.
           try {
-            await ctx.restaurantDb
-              .update(orders)
-              .set({ idempotencyKey: null })
-              .where(eq(orders.id, order.id));
+            await ctx.restaurantDb.transaction(async (tx: any) => {
+              await withOrderMutation(
+                tx,
+                { orderId: order.id, type: "CHECKOUT_KEY_RELEASED", actor: posActor(ctx) },
+                async (_o: any, _c: any) => {
+                  await tx
+                    .update(orders)
+                    .set({ idempotencyKey: null })
+                    .where(eq(orders.id, order.id));
+                },
+              );
+            });
           } catch (cleanupError) {
             console.error("[CHECKOUT_CLEANUP_KEY]", cleanupError);
           }
@@ -2664,8 +2849,17 @@ export const posRouter = router({
             const res = await attemptReward();
             if (res?.success) {
               totalAwardedBunz = res.bunz || Math.floor(finalAmount * ((restaurant.defaultRewardRate ?? 20) / 100));
-              // Guardar Bunz otorgados en la orden para auditoría
-              await ctx.restaurantDb.update(orders).set({ bunzReward: totalAwardedBunz }).where(eq(orders.id, order.id));
+              // Guardar Bunz otorgados en la orden para auditoría.
+              // Post-commit del cobro: mutación protegida para no pisar una versión ajena.
+              await ctx.restaurantDb.transaction(async (tx: any) => {
+                await withOrderMutation(
+                  tx,
+                  { orderId: order.id, type: "BUNZ_REWARD_RECORDED", actor: posActor(ctx) },
+                  async (_o: any, _c: any) => {
+                    await tx.update(orders).set({ bunzReward: totalAwardedBunz }).where(eq(orders.id, order.id));
+                  },
+                );
+              });
               await recordEmissionBooks(ctx.restaurantDb, {
                 orderId: order.id,
                 bunz: totalAwardedBunz,
@@ -2736,19 +2930,24 @@ export const posRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // 1. Create order
-      const [order] = await ctx.restaurantDb.insert(orders).values({
-        branchId: ctx.branchId,
-        tableId: input.tableId ?? null,
-        orderType: input.orderType,
-        customerName: input.customerName ?? null,
-        customerPhone: input.customerPhone ?? null,
-        subtotal: 0,
-        tax: 0,
-        discount: 0,
-        tip: 0,
-        total: 0,
-        status: "PENDING_PAYMENT",
-      }).returning();
+      const order = await ctx.restaurantDb.transaction(async (tx: any) =>
+        withOrderCreate(tx, { actor: posActor(ctx) }, async () => {
+          const [row] = await tx.insert(orders).values({
+            branchId: ctx.branchId,
+            tableId: input.tableId ?? null,
+            orderType: input.orderType,
+            customerName: input.customerName ?? null,
+            customerPhone: input.customerPhone ?? null,
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            tip: 0,
+            total: 0,
+            status: "PENDING_PAYMENT",
+          }).returning();
+          return row;
+        }),
+      );
 
       if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la orden" });
 
@@ -2781,12 +2980,20 @@ export const posRouter = router({
 
       const { total: intentTotal, subtotal: intentBase, tax: intentTax } = calcTax(finalAmount);
 
-      await ctx.restaurantDb.update(orders).set({
-        subtotal: intentBase,
-        tax: intentTax,
-        discount: calculatedDiscount,
-        total: intentTotal,
-      }).where(eq(orders.id, order.id));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: order.id, type: "INTENT_PRICED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx.update(orders).set({
+              subtotal: intentBase,
+              tax: intentTax,
+              discount: calculatedDiscount,
+              total: intentTotal,
+            }).where(eq(orders.id, order.id));
+          },
+        );
+      });
 
       // 3. Create Payment Intent
       const expiresAt = new Date();
@@ -2876,11 +3083,19 @@ export const posRouter = router({
         await ctx.restaurantDb.update(dbSchema.paymentIntents).set({ status: "EXPIRED" })
           .where(eq(dbSchema.paymentIntents.id, intent.id));
         
-        if (intent.orderId) {
-          await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
-            .where(eq(orders.id, intent.orderId));
+        const expiredOrderId = String(intent.orderId ?? "");
+        if (expiredOrderId) {
+          await ctx.restaurantDb.transaction(async (tx: any) => {
+            await withOrderMutation(
+              tx,
+              { orderId: expiredOrderId, type: "INTENT_EXPIRED", actor: posActor(ctx) },
+              async (_o: any, _c: any) => {
+                await tx.update(orders).set({ status: "EXPIRED" }).where(eq(orders.id, expiredOrderId));
+              },
+            );
+          });
           // Fase 1 Rabbitty Score: exclusión inmediata del rating (intent expirado)
-          await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, intent.orderId, "INTENT_EXPIRED");
+          await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, expiredOrderId, "INTENT_EXPIRED");
         }
 
         // Liberar el hold de Bunz reservado (sin esto el saldo queda bloqueado para siempre)
@@ -3136,49 +3351,60 @@ export const posRouter = router({
 
       const etaMinutes =
         input.stage === "PREPARING" && input.etaMinutes ? input.etaMinutes : null;
-      if (etaMinutes) {
-        const prepEtaAt = new Date(Date.now() + etaMinutes * 60_000);
-        // Si ya hay repartidor (p. ej. Uber), el ETA del cliente lo manda la
-        // entrega: aquí solo se guarda el tiempo de cocina para no pisarlo.
-        const [hasDelivery] = await ctx.restaurantDb
-          .select({ id: deliveries.id })
-          .from(deliveries)
-          .where(eq(deliveries.orderId, input.orderId))
-          .limit(1);
-        await ctx.restaurantDb
-          .update(orders)
-          .set({
-            prepEtaMinutes: etaMinutes,
-            prepEtaAt,
-            ...(hasDelivery ? {} : { etaMinutes, etaAt: prepEtaAt }),
-            updatedAt: new Date(),
-          })
-          .where(eq(orders.id, input.orderId));
-      }
 
-      if (input.stage === "DONE") {
-        // Entrega confirmada por el personal: la orden se cierra operativamente.
-        await ctx.restaurantDb
-          .update(orders)
-          .set({ status: "COMPLETED", updatedAt: new Date() })
-          .where(eq(orders.id, input.orderId));
-      }
-      // Items: movimiento BULK de KDS en la etapa; PREPARING no pisa items
-      // READY previos (item-level fino lo hace la página de cocina).
-      if (input.stage === "PREPARING") {
-        await ctx.restaurantDb
-          .update(orderItems)
-          .set({ status: "IN_PROGRESS" })
-          .where(and(
-            eq(orderItems.orderId, input.orderId),
-            eq(orderItems.status, "PENDING"),
-          ));
-      } else {
-        await ctx.restaurantDb
-          .update(orderItems)
-          .set({ status: itemStatus })
-          .where(eq(orderItems.orderId, input.orderId));
-      }
+      // Etapa + ítems en una sola mutación protegida: lock, versión y bitácora.
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "STAGE_CHANGED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            if (etaMinutes) {
+              const prepEtaAt = new Date(Date.now() + etaMinutes * 60_000);
+              // Si ya hay repartidor (p. ej. Uber), el ETA del cliente lo manda la
+              // entrega: aquí solo se guarda el tiempo de cocina para no pisarlo.
+              const [hasDelivery] = await tx
+                .select({ id: deliveries.id })
+                .from(deliveries)
+                .where(eq(deliveries.orderId, input.orderId))
+                .limit(1);
+              await tx
+                .update(orders)
+                .set({
+                  prepEtaMinutes: etaMinutes,
+                  prepEtaAt,
+                  ...(hasDelivery ? {} : { etaMinutes, etaAt: prepEtaAt }),
+                  updatedAt: new Date(),
+                })
+                .where(eq(orders.id, input.orderId));
+            }
+
+            if (input.stage === "DONE") {
+              // Entrega confirmada por el personal: la orden se cierra operativamente.
+              await tx
+                .update(orders)
+                .set({ status: "COMPLETED", updatedAt: new Date() })
+                .where(eq(orders.id, input.orderId));
+            }
+
+            // Items: movimiento BULK de KDS en la etapa; PREPARING no pisa items
+            // READY previos (item-level fino lo hace la página de cocina).
+            if (input.stage === "PREPARING") {
+              await tx
+                .update(orderItems)
+                .set({ status: "IN_PROGRESS" })
+                .where(and(
+                  eq(orderItems.orderId, input.orderId),
+                  eq(orderItems.status, "PENDING"),
+                ));
+            } else {
+              await tx
+                .update(orderItems)
+                .set({ status: itemStatus })
+                .where(eq(orderItems.orderId, input.orderId));
+            }
+          },
+        );
+      });
 
       // Si el pedido tiene repartidor asignado y el POS marca "listo/en camino",
       // la entrega avanza con la etapa para que el seguimiento no se contradiga.
@@ -3418,19 +3644,27 @@ export const posRouter = router({
             .join(", ")
         : null;
 
-      await ctx.restaurantDb
-        .update(orders)
-        .set({
-          externalProvider: "UBER_DIRECT",
-          externalId: created.id,
-          ...(shouldCharge ? { deliveryFee: fee } : {}),
-          ...(etaAt ? { etaAt, etaMinutes } : {}),
-          ...(capturedAddress
-            ? { deliveryAddress: capturedText, deliveryAddressData: capturedAddress }
-            : {}),
-          updatedAt: now,
-        })
-        .where(eq(orders.id, c.order.id));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: c.order.id, type: "DELIVERY_CREATED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({
+                externalProvider: "UBER_DIRECT",
+                externalId: created.id,
+                ...(shouldCharge ? { deliveryFee: fee } : {}),
+                ...(etaAt ? { etaAt, etaMinutes } : {}),
+                ...(capturedAddress
+                  ? { deliveryAddress: capturedText, deliveryAddressData: capturedAddress }
+                  : {}),
+                updatedAt: now,
+              })
+              .where(eq(orders.id, c.order.id));
+          },
+        );
+      });
 
       if (c.order.customerId) {
         try {
@@ -3592,14 +3826,22 @@ export const posRouter = router({
       const alreadyCharged = Number(order.deliveryFee ?? 0) > 0;
       const shouldCharge =
         effectiveFeePaidBy === "CUSTOMER" && fee > 0 && !alreadyCharged && order.status === "PENDING";
-      await ctx.restaurantDb
-        .update(orders)
-        .set({
-          externalProvider: provider.id,
-          ...(shouldCharge ? { deliveryFee: fee, total: Number(order.total ?? 0) + fee } : {}),
-          updatedAt: now,
-        })
-        .where(eq(orders.id, order.id));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: order.id, type: "DELIVERY_ASSIGNED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({
+                externalProvider: provider.id,
+                ...(shouldCharge ? { deliveryFee: fee, total: Number(order.total ?? 0) + fee } : {}),
+                updatedAt: now,
+              })
+              .where(eq(orders.id, order.id));
+          },
+        );
+      });
 
       if (order.customerId) {
         try {
@@ -3754,14 +3996,22 @@ export const posRouter = router({
 
       // 3. Vincular cliente a la orden si no estaba vinculado
       if (input.customerId || input.customerName || input.phone) {
-        await ctx.restaurantDb
-          .update(orders)
-          .set({
-            customerId: input.customerId || order.customerId,
-            customerName: input.customerName || order.customerName,
-            customerPhone: input.phone || order.customerPhone,
-          })
-          .where(eq(orders.id, order.id));
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: order.id, type: "BILL_CUSTOMER_LINKED", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  customerId: input.customerId || order.customerId,
+                  customerName: input.customerName || order.customerName,
+                  customerPhone: input.phone || order.customerPhone,
+                })
+                .where(eq(orders.id, order.id));
+            },
+          );
+        });
       }
 
       let pushSent = false;

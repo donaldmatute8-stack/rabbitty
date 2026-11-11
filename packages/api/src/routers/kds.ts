@@ -5,6 +5,7 @@ import { router, protectedProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { orders, tables, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
+import { withOrderMutation } from "../services/orderIntegrity";
 
 export const kdsRouter = router({
   getOrders: protectedProcedure
@@ -91,9 +92,19 @@ export const kdsRouter = router({
         const [kdsOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, kdsItem.orderId)).limit(1);
         if (!kdsOrder || kdsOrder.branchId !== ctx.branchId) throw new TRPCError({ code: "FORBIDDEN", message: "Item no pertenece a esta sucursal" });
       }
-      await ctx.restaurantDb.update(orderItems).set({
-        status: input.status,
-      }).where(eq(orderItems.id, input.orderItemId));
+      if (!kdsItem) throw new TRPCError({ code: "NOT_FOUND", message: "Item no encontrado" });
+      // El bump de cocina también respeta el lock y la versión de la orden.
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: kdsItem.orderId, type: "KDS_ITEM_STATUS", actor: { staffId: null, terminalId: null } },
+          async (_o: any, _c: any) => {
+            await tx.update(orderItems).set({
+              status: input.status,
+            }).where(eq(orderItems.id, input.orderItemId));
+          },
+        );
+      });
       bus.emit(EventTypes.KDS_ITEM_UPDATED, { orderItemId: input.orderItemId, status: input.status });
       return { success: true };
     }),

@@ -6,6 +6,7 @@ import { tables, tableSessions, orders, branches } from "@rabbitty/database-rest
 import { eq, and, desc } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { withOrderMutation } from "@rabbitty/api/services/orderIntegrity";
 
 function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000;
@@ -115,14 +116,22 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (pendingOrder) {
-      await restaurantDb
-        .update(orders)
-        .set({
-          customerId: caller.id,
-          customerName,
-          customerPhone: customerPhone || pendingOrder.customerPhone,
-        })
-        .where(eq(orders.id, pendingOrder.id));
+      await restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: pendingOrder.id, type: "TABLE_CLAIMED", actor: { staffId: null, terminalId: null } },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({
+                customerId: caller.id,
+                customerName,
+                customerPhone: customerPhone || pendingOrder.customerPhone,
+              })
+              .where(eq(orders.id, pendingOrder.id));
+          },
+        );
+      });
     }
 
     // 4. Asegurar una table_session en estado OPEN para esta mesa
