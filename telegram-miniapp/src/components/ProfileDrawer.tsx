@@ -128,7 +128,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                 {/* Main Avatar — “mancha”: cuadrado redondeado, rotado y pegado al borde */}
                 <div className="relative shrink-0 -ml-3">
                   <div
-                    className="h-[68px] w-[68px] overflow-hidden rounded-[22px] border-2 border-[#E91E63]"
+                    className="h-17 w-17 overflow-hidden rounded-[22px] border-2 border-[#E91E63]"
                     style={{
                       background: 'var(--bg-elevated)',
                       transform: 'rotate(-8deg)',
@@ -319,7 +319,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
                   );
                 })}
 
-                <div className="h-px bg-[var(--border-subtle)] my-1" />
+                <div className="h-px bg-(--border-subtle) my-1" />
 
                 {/* Reportar error o Feedback (unificado en un solo renglón) */}
                 <button
@@ -431,7 +431,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
               onClose();
             }}
             aria-label="Cerrar menú"
-            className="fixed z-[203] left-[calc(min(75vw,18rem)-21px)] sm:left-[calc(min(75vw,20rem)-21px)] flex h-[42px] w-[42px] items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.35)] cursor-pointer"
+            className="fixed z-203 left-[calc(min(75vw,18rem)-21px)] sm:left-[calc(min(75vw,20rem)-21px)] flex h-10.5 w-10.5 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.35)] cursor-pointer"
             style={{
               top: 'calc(max(var(--safe-top, 0px), 12px) + 15px)',
               background: 'var(--bg-elevated)',
