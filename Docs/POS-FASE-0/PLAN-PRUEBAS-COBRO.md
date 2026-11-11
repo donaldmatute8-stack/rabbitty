@@ -324,3 +324,55 @@ de concurrencia: es contabilidad de pagos.
 
 Estado en staging: 156 órdenes, **19 con descuadre**; 18 son órdenes sin pago
 (normal, `pagado = 0`) y **1 es la del split** (`pagado = 180`).
+
+
+---
+
+## 14. H-4 corregido y C-03 en verde (11-nov-2026)
+
+### Corrección
+
+`paymentCore.confirmPaymentIntentSettled` ya no registra el pago fiat cuando el
+settlement es `BUNZ_ONLY`: en el split, el efectivo lo cobra el POS y el intento solo
+aporta el asiento de Bunz.
+
+```ts
+if (intent.netFiatCents > 0 && params.verifiedMethod !== "BUNZ_ONLY") { … }
+```
+
+### Re-ejecución de C-03 (staging, código corregido)
+
+| método | monto |
+|---|---:|
+| `BUNZ` | 60 |
+| `CASH` | 60 |
+| **suma** | **120** |
+
+```
+orden:  120
+pagado: 120   ✅
+```
+
+### Conciliación de los datos de prueba
+
+- Asiento espurio `CREDIT_CARD 60` de la orden anterior: **eliminado**.
+- Invariante global: **0 órdenes sobrepagadas** de 157.
+
+### Invariantes finales de la ventana
+
+| Invariante | Resultado |
+|---|---|
+| Deriva de totales | 0 filas |
+| `PAID` sin pago aplicado | 0 |
+| Pagos duplicados | 0 |
+| **Σ pagos = total** | **0 sobrepagadas** ✅ |
+| Concurrencia (10 mutaciones) | 10/10, versión correcta |
+
+### Estado de los casos
+
+| Caso | Estado |
+|---|---|
+| C-01 efectivo | ✅ |
+| C-03 split | ✅ (tras corregir H-4) |
+| C-05 refund | ✅ |
+| C-02 tarjeta | omitido (llaves live en staging) |
