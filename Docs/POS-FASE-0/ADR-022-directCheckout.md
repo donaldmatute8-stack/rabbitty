@@ -128,7 +128,7 @@ cerrar toda la fase.
 | **B** | Membresía: compensaciones y orden de ejecución | ⏳ sin cambios de código (verificado) |
 | C | Totales por rama (W4/W5) + cobro (W6-W9) | ✅ **hecho** (commit 2) |
 | D | Rollback con guarda de pagos (W10-W12) | ✅ **hecho** (commit 3) |
-| E | `bunzReward` (W13) | Pendiente |
+| E | `bunzReward` (W13) | ✅ **hecho** (commit 4) |
 
 ### Fase A — notas de implementación
 
@@ -174,3 +174,23 @@ En `directCheckout`:
 
 El `catch` conserva el `console.error`, así que un rollback bloqueado deja rastro
 en logs en lugar de borrar silenciosamente.
+
+
+### Fase E — notas de implementación
+
+W13 (`bunzReward`) se guarda **después** del cobro exitoso, en su propia mutación
+protegida. Importante: si esta escritura falla, el cobro ya está aplicado y la
+orden sigue siendo válida — por eso va aparte y no dentro de la transacción de
+cobro (un fallo aquí no debe revertir un cobro bueno).
+
+## 9. Resultado final del procedimiento
+
+```
+directCheckout: 11 escrituras
+  creación/reutilización .... W1, W2 (helper)
+  totales por rama .......... W4, W5 (helper)
+  cobro completo ............ W6-W9 (una sola mutación)
+  rollback con guarda ....... W10-W12 (withOrderRollback / helper)
+  premio .................... W13 (helper)
+  ítems ..................... W3 (creación, un solo escritor)
+```

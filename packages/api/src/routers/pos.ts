@@ -2840,8 +2840,17 @@ export const posRouter = router({
             const res = await attemptReward();
             if (res?.success) {
               totalAwardedBunz = res.bunz || Math.floor(finalAmount * ((restaurant.defaultRewardRate ?? 20) / 100));
-              // Guardar Bunz otorgados en la orden para auditoría
-              await ctx.restaurantDb.update(orders).set({ bunzReward: totalAwardedBunz }).where(eq(orders.id, order.id));
+              // Guardar Bunz otorgados en la orden para auditoría.
+              // Post-commit del cobro: mutación protegida para no pisar una versión ajena.
+              await ctx.restaurantDb.transaction(async (tx: any) => {
+                await withOrderMutation(
+                  tx,
+                  { orderId: order.id, type: "BUNZ_REWARD_RECORDED", actor: posActor(ctx) },
+                  async (_o: any, _c: any) => {
+                    await tx.update(orders).set({ bunzReward: totalAwardedBunz }).where(eq(orders.id, order.id));
+                  },
+                );
+              });
               await recordEmissionBooks(ctx.restaurantDb, {
                 orderId: order.id,
                 bunz: totalAwardedBunz,
