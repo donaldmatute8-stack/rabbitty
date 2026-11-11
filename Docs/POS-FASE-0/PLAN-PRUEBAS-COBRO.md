@@ -220,3 +220,56 @@ curl -sG ".../api/trpc/pos.getTables" \
 RESTAURANT_DATABASE_URL=<staging> CORE_DATABASE_URL=<staging> \
   npx tsx packages/api/scripts/staging-test-access.ts
 ```
+
+
+---
+
+## 10. Resultados de la ventana (11-nov-2026, tarde)
+
+| Caso | Resultado | Evidencia |
+|---|---|---|
+| **C-01** efectivo | ✅ **PASA** | Pago CASH 350, orden `COMPLETED` |
+| **C-02** tarjeta | ⛔ **BLOQUEADO** | Staging tiene llaves **LIVE** de Stripe (heredadas). Un cobro de prueba sería real |
+| **C-03** split Bunz+efectivo | ⏳ Pendiente | Faltaba Rabbitter de prueba y bóveda. **Ya provistos** (ver §11) |
+| **C-05** refund total | ✅ **PASA** (ejecutado por API) | Pago original y reverso −350, ambos `REFUNDED`, neto 0 |
+
+### Invariante tras C-05
+
+```
+deriva de totales: 0 filas  ✅
+pagos de la orden: 350 (REFUNDED) + (−350) (REFUNDED)  → neto 0
+```
+
+---
+
+## 11. Hallazgos de la ventana
+
+### H-1 · Stripe con llaves LIVE en staging (crítico)
+
+El clon copió `STRIPE_SECRET_KEY=sk_live_…`. **No se deben hacer cobros con tarjeta en staging.**
+Para habilitar C-02 hay que poner llaves `sk_test_`/`pk_test_` en el ambiente.
+
+### H-2 · El split depende de un Rabbitter con saldo
+
+Sin cliente vinculado (o con saldo 0), el POS cae a efectivo completo aunque la UI
+ofrezca dividir. Con el Rabbitter de prueba y bóveda con fondos, el split ya puede probarse.
+
+### H-3 · Una orden reembolsada al 100 % sigue `COMPLETED`
+
+Tras el refund total, la orden conserva `status = COMPLETED`. Los pagos quedan
+`REFUNDED` con neto 0. **Decisión pendiente:** ¿una orden 100 % reembolsada debe pasar a
+`REFUNDED`/`VOIDED`? Hoy el estado de la orden no refleja el reembolso.
+
+---
+
+## 12. Datos de prueba creados
+
+| Dato | Valor |
+|---|---|
+| Rabbitter | `Rabbitter Prueba` · `@pruebarabbit` · `+5215500000001` |
+| Saldo Bunz | 500 |
+| Bóveda del negocio (Ka13) | 2000 BZ |
+| Asientos de ledger | ALLOCATION 2000 (sys→biz) + EARN 500 (biz→usr), marcados `sandbox = true` |
+
+Scripts: `packages/api/scripts/staging-test-customer.ts` y `staging-test-access.ts`
+(ambos abortan si la base no es `ancient-meadow`).
