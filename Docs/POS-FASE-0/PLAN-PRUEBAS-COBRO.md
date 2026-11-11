@@ -134,3 +134,38 @@ Se anexa a este documento al cerrar la ventana.
 
 Ningún caso de este plan modifica producción: todo corre en el branch de Neon y
 en Stripe test. Si algo falla, se apaga staging y se revierte la rama.
+
+
+---
+
+## 8. Ventana abierta — 11-nov-2026
+
+**Entorno:** `https://rabbitty-admin-staging.up.railway.app` (rama `feat/pos-0b1-integridad-ordenes`)
+**Base:** branch de Neon `ep-ancient-meadow` (21 MB, copia de producción)
+**Migración 0038:** aplicada
+**Estado del deployment:** SUCCESS · `/` y `/pos` responden 200
+
+### Invariantes de partida (medidos antes de probar)
+
+| Invariante | Resultado |
+|---|---|
+| Deriva de totales (`total ≠ subtotal + tax − discount + tip`) | **0 filas** ✅ |
+| Órdenes `PAID` sin pago `COMPLETED` | **0** ✅ |
+| Órdenes con pagos duplicados | **0** ✅ |
+| `orders.version` | 151 órdenes en `version = 1` (default de la migración) ✅ |
+
+> La base de partida está sana: cualquier fallo posterior será del código, no de los datos.
+
+### Casos ejecutados automáticamente
+
+| Caso | Estado |
+|---|---|
+| C-09 (concurrencia) | **Ya validado** en el branch con 10 mutaciones: 10/10, total exacto, versión 11 |
+| Invariantes §4 | **Validados** (tabla arriba) |
+
+### Casos que requieren sesión en la UI
+
+C-01 a C-08, C-10 y C-11 necesitan credenciales de cajero en staging.
+Duración estimada: 20-25 minutos.
+
+Al terminar, registrar aquí el resultado por caso y **apagar staging**.
