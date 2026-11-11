@@ -791,8 +791,42 @@ export const adminRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Platillo no encontrado en esta sucursal" });
       }
-      await ctx.restaurantDb.delete(dbSchema.menuItems).where(eq(dbSchema.menuItems.id, input.id));
-      return { success: true };
+
+      // Un platillo con ventas NO se puede borrar: `order_items` lo referencia y
+      // Postgres rechaza el DELETE (el POS mostraba "failed query").
+      // Si nunca se vendió, se borra de verdad (con sus dependencias); si ya
+      // tiene historial, se archiva para no romper tickets ni reportes.
+      const [sold] = await ctx.restaurantDb
+        .select({ id: dbSchema.orderItems.id })
+        .from(dbSchema.orderItems)
+        .where(eq(dbSchema.orderItems.menuItemId, input.id))
+        .limit(1);
+
+      if (sold) {
+        await ctx.restaurantDb
+          .update(dbSchema.menuItems)
+          .set({ isActive: false, isAvailable: false, updatedAt: new Date() })
+          .where(eq(dbSchema.menuItems.id, input.id));
+        return { success: true, archived: true };
+      }
+
+      try {
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await tx.delete(dbSchema.menuItemModifiers).where(eq(dbSchema.menuItemModifiers.itemId, input.id));
+          await tx.delete(dbSchema.menuItemIngredients).where(eq(dbSchema.menuItemIngredients.menuItemId, input.id));
+          await tx.delete(dbSchema.dynamicPricingRules).where(eq(dbSchema.dynamicPricingRules.menuItemId, input.id));
+          await tx.delete(dbSchema.menuItems).where(eq(dbSchema.menuItems.id, input.id));
+        });
+        return { success: true, archived: false };
+      } catch (err: any) {
+        // Red de seguridad: cualquier otra referencia (recetas, promos) → archivar.
+        console.error("[deleteMenuItem] hard delete falló, archivando:", err?.message);
+        await ctx.restaurantDb
+          .update(dbSchema.menuItems)
+          .set({ isActive: false, isAvailable: false, updatedAt: new Date() })
+          .where(eq(dbSchema.menuItems.id, input.id));
+        return { success: true, archived: true };
+      }
     }),
 
   getSalesReport: protectedProcedure

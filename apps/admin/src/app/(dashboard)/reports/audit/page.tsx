@@ -92,6 +92,9 @@ export default function AuditReportPage() {
     fromParam === "all" ? "all" : (fromParam ? "custom" : "today")
   );
   const [selectedDate, setSelectedDate] = useState<string>(fromParam && fromParam !== "all" ? fromParam : mxTodayStr());
+  // Rango explícito: dos o tres días juntos sin tener que repetir la fecha.
+  const [rangeFrom, setRangeFrom] = useState<string>(fromParam && fromParam !== "all" ? fromParam : mxTodayStr());
+  const [rangeTo, setRangeTo] = useState<string>(toParam || (fromParam && fromParam !== "all" ? fromParam : mxTodayStr()));
 
   const [loading, setLoading] = useState(true);
   const [logoError, setLogoError] = useState(false);
@@ -136,19 +139,35 @@ export default function AuditReportPage() {
     }
   };
 
+  const applyRange = (from: string, to: string) => {
+    setDateFilterMode("custom");
+    const safeFrom = from || to;
+    const safeTo = to || from;
+    setRangeFrom(safeFrom);
+    setRangeTo(safeTo);
+    setSelectedDate(safeFrom === safeTo ? safeFrom : `${safeFrom} → ${safeTo}`);
+    fetchReport(safeFrom, safeTo);
+  };
+
   const applyFilter = (mode: "today" | "yesterday" | "week" | "all" | "custom", dateVal?: string) => {
     setDateFilterMode(mode);
     if (mode === "today") {
       const t = mxTodayStr();
       setSelectedDate(t);
+      setRangeFrom(t);
+      setRangeTo(t);
       fetchReport(t, t);
     } else if (mode === "yesterday") {
       const y = getPastDateStr(1);
       setSelectedDate(y);
+      setRangeFrom(y);
+      setRangeTo(y);
       fetchReport(y, y);
     } else if (mode === "week") {
       const w = getPastDateStr(7);
       const t = mxTodayStr();
+      setRangeFrom(w);
+      setRangeTo(t);
       fetchReport(w, t);
     } else if (mode === "all") {
       fetchReport("all", "");
@@ -393,13 +412,32 @@ export default function AuditReportPage() {
             </button>
 
             <div className="flex items-center gap-1.5 ml-1">
-              <span className="text-[11px] text-gray-400 font-semibold">Día específico:</span>
+              <span className="text-[11px] text-gray-400 font-semibold">Desde:</span>
               <input
                 type="date"
-                value={selectedDate}
-                onChange={(e) => applyFilter("custom", e.target.value)}
+                value={rangeFrom}
+                onChange={(e) => applyRange(e.target.value, rangeTo || e.target.value)}
                 className="px-2.5 py-1 rounded-xl bg-black/60 border border-white/15 text-white text-xs font-mono focus:border-pink-500 focus:outline-none cursor-pointer"
+                aria-label="Fecha desde"
               />
+              <span className="text-gray-500 text-[11px]">→</span>
+              <span className="text-[11px] text-gray-400 font-semibold">Hasta:</span>
+              <input
+                type="date"
+                value={rangeTo}
+                onChange={(e) => applyRange(rangeFrom || e.target.value, e.target.value)}
+                className="px-2.5 py-1 rounded-xl bg-black/60 border border-white/15 text-white text-xs font-mono focus:border-pink-500 focus:outline-none cursor-pointer"
+                aria-label="Fecha hasta"
+              />
+              {rangeFrom !== rangeTo && (
+                <button
+                  type="button"
+                  onClick={() => applyRange(rangeFrom, rangeFrom)}
+                  className="text-[10px] text-pink-300 hover:text-pink-200 underline underline-offset-2"
+                >
+                  mismo día
+                </button>
+              )}
             </div>
           </div>
 

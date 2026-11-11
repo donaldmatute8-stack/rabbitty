@@ -92,6 +92,7 @@ export function CashShiftModal({
   const [payTips, setPayTips] = useState(false);
   const [tipPayout, setTipPayout] = useState("");
   const [withdrawCategory, setWithdrawCategory] = useState<"EXPENSE" | "SAFE">("SAFE");
+  const [registerExpense, setRegisterExpense] = useState(true);
   const [needManager, setNeedManager] = useState(false);
   const [showManualCount, setShowManualCount] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -347,7 +348,14 @@ export function CashShiftModal({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              withdrawMut.mutate({ pin, amount: num, category: withdrawCategory, notes: notes || undefined, managerPin: managerPin || undefined });
+              withdrawMut.mutate({
+                pin,
+                amount: num,
+                category: withdrawCategory,
+                notes: notes || undefined,
+                managerPin: managerPin || undefined,
+                registerExpense: withdrawCategory === "EXPENSE" ? registerExpense : undefined,
+              });
             }}
           >
             {/* Saldo disponible en tiempo real */}
@@ -357,6 +365,55 @@ export function CashShiftModal({
                 <span className="text-lg font-black text-cyan-300">{fmt(currentTotals?.expectedCash ?? 0)}</span>
               </div>
               <HandCoins className="h-6 w-6 text-cyan-400 opacity-60" />
+            </div>
+
+            {/* ¿Qué es este dinero? Gasto del día vs salida a caja fuerte */}
+            <div>
+              <span className="text-[10px] font-bold text-gray-400 block mb-1.5 uppercase tracking-wider">
+                ¿Qué es este dinero?
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setWithdrawCategory("EXPENSE"); setRegisterExpense(true); }}
+                  className={cn(
+                    "rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer",
+                    withdrawCategory === "EXPENSE"
+                      ? "border-amber-400 bg-amber-500/15 text-amber-200"
+                      : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10",
+                  )}
+                >
+                  <span className="block text-[12px] font-black">Gasto del negocio</span>
+                  <span className="block text-[10px] opacity-70">Insumos, proveedor, pagos</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setWithdrawCategory("SAFE"); }}
+                  className={cn(
+                    "rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer",
+                    withdrawCategory === "SAFE"
+                      ? "border-cyan-400 bg-cyan-500/15 text-cyan-200"
+                      : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10",
+                  )}
+                >
+                  <span className="block text-[12px] font-black">Retiro a caja fuerte</span>
+                  <span className="block text-[10px] opacity-70">Solo guardar el efectivo</span>
+                </button>
+              </div>
+              {withdrawCategory === "EXPENSE" && (
+                <label className="mt-2 flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/25 px-2.5 py-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={registerExpense}
+                    onChange={(e) => setRegisterExpense(e.target.checked)}
+                    className="mt-0.5 accent-amber-400"
+                  />
+                  <span className="text-[11px] text-amber-100/90 leading-snug">
+                    Registrarlo como <b>gasto del día</b> (aparece en Gastos y en el P&L).
+                    Desmarca si ya lo vas a capturar a mano.
+                  </span>
+                </label>
+              )}
             </div>
 
             {/* Selector rápido de justificación */}

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, posProcedure, posPermission, adminOnlyProcedure, resolveBranchId } from "../trpc";
-import { branches, cashDrops, cashShiftEvents, cashShifts, staff } from "@rabbitty/database-restaurant/schema";
+import { branches, cashDrops, cashShiftEvents, cashShifts, expenses, staff } from "@rabbitty/database-restaurant/schema";
 import {
   CASHIER_ROLES,
   MANAGER_ROLES,
@@ -108,6 +108,8 @@ export const cashShiftsRouter = router({
         amount: z.number().positive().max(10_000_000),
         category: z.enum(["EXPENSE", "SAFE"]).default("SAFE"),
         notes: z.string().max(300).optional(),
+        /** Si el retiro es un gasto, registrarlo también en el libro de gastos. */
+        registerExpense: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -169,7 +171,39 @@ export const cashShiftsRouter = router({
           amount: round2(input.amount),
           notes: input.notes,
         });
-        return { drop, cashierName: actor.name, authorizedByName: await nameOf(tx, authorizedById) };
+
+        // Un retiro para pagar algo es un GASTO del día, no solo una salida de
+        // efectivo. Si no se registra en `expenses`, el P&L del día lo ignora y
+        // el dueño acaba capturándolo a mano (o nunca).
+        let expenseId: string | null = null;
+        const shouldRegisterExpense = input.category === "EXPENSE" && input.registerExpense !== false;
+        if (shouldRegisterExpense) {
+          const [expense] = await tx
+            .insert(expenses)
+            .values({
+              branchId,
+              category: "OTHER",
+              description: input.notes?.trim() || "Pago en efectivo desde caja",
+              amount: round2(input.amount),
+              expenseDate: new Date(),
+              notes: `Registrado desde un retiro de caja · ${actor.name}`,
+            })
+            .returning({ id: expenses.id });
+          expenseId = expense?.id ?? null;
+          if (expenseId) {
+            // Misma convención que usa `expenses.ts`: (Ref: <expenseId>) liga el
+            // retiro con su gasto para que editar/borrar el gasto lo revierta.
+            const linkedNote = `${input.notes?.trim() ? `${input.notes.trim()} ` : ""}(Ref: ${expenseId})`;
+            await tx.update(cashDrops).set({ notes: linkedNote }).where(eq(cashDrops.id, drop.id));
+          }
+        }
+
+        return {
+          drop,
+          expenseId,
+          cashierName: actor.name,
+          authorizedByName: await nameOf(tx, authorizedById),
+        };
       });
     }),
 

@@ -682,12 +682,14 @@ export const posRouter = router({
   getMenuItems: posProcedure
     .input(z.object({ categoryId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
+      // `isActive = false` = archivado (tenía ventas y no se pudo borrar).
       const where = input.categoryId
         ? and(
             eq(menuItems.categoryId, input.categoryId),
-            eq(menuItems.branchId, ctx.branchId)
+            eq(menuItems.branchId, ctx.branchId),
+            eq(menuItems.isActive, true)
           )
-        : eq(menuItems.branchId, ctx.branchId);
+        : and(eq(menuItems.branchId, ctx.branchId), eq(menuItems.isActive, true));
       const items = await ctx.restaurantDb.select().from(menuItems).where(where).orderBy(asc(menuItems.sortOrder));
       return items;
     }),

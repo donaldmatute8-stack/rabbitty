@@ -53,7 +53,17 @@ export default function MenuPage() {
 
   const createItem = trpc.admin.createMenuItem.useMutation({ onSuccess: () => { utils.pos.getMenuItems.invalidate(); utils.pos.getCategories.invalidate(); toast.success("Platillo creado"); setItemDialog(null); }, onError: (e) => toast.error(e.message) });
   const updateItem = trpc.admin.updateMenuItem.useMutation({ onSuccess: () => { utils.pos.getMenuItems.invalidate(); toast.success("Platillo actualizado"); setItemDialog(null); }, onError: (e) => toast.error(e.message) });
-  const deleteItem = trpc.admin.deleteMenuItem.useMutation({ onSuccess: () => { utils.pos.getMenuItems.invalidate(); toast.success("Platillo eliminado"); }, onError: (e) => toast.error(e.message) });
+  const deleteItem = trpc.admin.deleteMenuItem.useMutation({
+    onSuccess: (r: any) => {
+      utils.pos.getMenuItems.invalidate();
+      toast.success(
+        r?.archived
+          ? "Platillo archivado: tiene ventas registradas y se conserva en el historial"
+          : "Platillo eliminado",
+      );
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const createCategory = trpc.admin.createCategory.useMutation({ onSuccess: () => { utils.pos.getCategories.invalidate(); toast.success("Categoría creada"); setCatDialog(null); }, onError: (e) => toast.error(e.message) });
   const updateCategory = trpc.admin.updateCategory.useMutation({ onSuccess: () => { utils.pos.getCategories.invalidate(); toast.success("Categoría actualizada"); setCatDialog(null); }, onError: (e) => toast.error(e.message) });
   const deleteCategory = trpc.admin.deleteCategory.useMutation({ onSuccess: () => { utils.pos.getCategories.invalidate(); toast.success("Categoría eliminada"); setCatDialog(null); }, onError: (e) => toast.error(e.message) });
