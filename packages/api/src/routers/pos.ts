@@ -2398,16 +2398,25 @@ export const posRouter = router({
           });
         }
         try {
-          await ctx.restaurantDb
-            .update(orders)
-            .set({
-              subtotal: calcSubtotal,
-              tax: calcTaxAmt,
-              discount: calculatedDiscount,
-              total: calcTotal,
-              tip: posTip,
-            })
-            .where(eq(orders.id, order.id));
+          // Los totales deben estar escritos antes de crear el intent.
+          await ctx.restaurantDb.transaction(async (tx: any) => {
+            await withOrderMutation(
+              tx,
+              { orderId: order.id, type: "CHECKOUT_PRICED", actor: posActor(ctx) },
+              async (_o: any, _c: any) => {
+                await tx
+                  .update(orders)
+                  .set({
+                    subtotal: calcSubtotal,
+                    tax: calcTaxAmt,
+                    discount: calculatedDiscount,
+                    total: calcTotal,
+                    tip: posTip,
+                  })
+                  .where(eq(orders.id, order.id));
+              },
+            );
+          });
 
           const { createOrGetPaymentIntent, confirmPaymentIntentSettled } = await import("../services/paymentCore");
           const intent = await createOrGetPaymentIntent(ctx.restaurantDb, {
@@ -2488,16 +2497,24 @@ export const posRouter = router({
 
       // El intent de Bunz necesita el total de la orden ya escrito.
       if (isSplit) {
-        await ctx.restaurantDb
-          .update(orders)
-          .set({
-            subtotal: calcSubtotal,
-            tax: calcTaxAmt,
-            discount: calculatedDiscount,
-            total: calcTotal,
-            tip: posTip,
-          })
-          .where(eq(orders.id, order.id));
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: order.id, type: "CHECKOUT_PRICED", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  subtotal: calcSubtotal,
+                  tax: calcTaxAmt,
+                  discount: calculatedDiscount,
+                  total: calcTotal,
+                  tip: posTip,
+                })
+                .where(eq(orders.id, order.id));
+            },
+          );
+        });
       }
 
       // 1) Capturar la parte Bunz con el motor canónico (antes del efectivo).
@@ -2545,6 +2562,13 @@ export const posRouter = router({
 
       try {
         await ctx.restaurantDb.transaction(async (tx: any) => {
+          // Cobro bajo el helper: lock de la orden, versión y bitácora.
+          // Todo lo que sigue (totales, pagos, cierre, stock) ocurre con la
+          // orden bloqueada, así que dos terminales no pueden cobrarla a la vez.
+          await withOrderMutation(
+            tx,
+            { orderId: order.id, type: "CHECKOUT_PAID", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
           await tx.update(orders).set({
             subtotal: calcSubtotal,
             tax: calcTaxAmt,
@@ -2652,6 +2676,8 @@ export const posRouter = router({
           for (const item of input.items) {
             await deductRecipe(item.menuItemId, item.quantity, new Set());
           }
+            },
+          );
         });
       } catch (err) {
         // Si la parte Bunz ya se capturó y el cierre falla, se devuelve.

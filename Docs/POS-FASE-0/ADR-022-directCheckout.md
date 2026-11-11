@@ -126,7 +126,7 @@ cerrar toda la fase.
 |---|---|---|
 | **A** | Reutilizar comanda (W1) + crear orden (W2) | ✅ **hecho** (commit 1) |
 | **B** | Membresía: compensaciones y orden de ejecución | ⏳ sin cambios de código (verificado) |
-| C | Totales por rama (W4/W5) + cobro (W6-W9) | Pendiente |
+| C | Totales por rama (W4/W5) + cobro (W6-W9) | ✅ **hecho** (commit 2) |
 | D | Rollback con guarda de pagos (W10-W12) | Pendiente |
 | E | `bunzReward` (W13) | Pendiente |
 
@@ -140,3 +140,17 @@ cerrar toda la fase.
 - Los ítems (W3) siguen fuera del helper: en la creación hay un solo escritor y
   el lock de la orden ya protege el resto. Se revisará en Fase C si conviene
   moverlos a la misma transacción.
+
+
+### Fase C — notas de implementación
+
+- W4 (rama Bunz) y W5 (rama split) escriben los totales **antes** de crear su
+  intent, ahora bajo el helper. Siguen siendo ramas excluyentes.
+- El cobro completo (W6 totales, W7 pago principal, W8 crédito de membresía,
+  W9 `COMPLETED`, cierre de mesa y deducción de stock) ocurre dentro de **una
+  sola** llamada a `withOrderMutation`: la orden queda bloqueada durante todo el
+  cierre, así que dos terminales no pueden cobrarla a la vez.
+- El `throw` de `SPLIT_INCOMPLETE` dentro del callback aborta la transacción y,
+  con ella, la subida de versión: no queda una orden "a medias".
+- Deuda cosmética: el cuerpo del callback conserva la indentación original
+  (quedó desplazado). Se re-indenta cuando se toque el bloque por otra razón.
