@@ -1219,13 +1219,18 @@ export const posRouter = router({
       return { success: true };
     }),
 
+  /**
+   * @deprecated LEGACY — no cablear al helper ni usar en código nuevo.
+   *
+   * El POS activo usa `directCheckout` para fiat y `createPaymentIntent` para
+   * Bunz. Esta ruta escribía `bunzPaid` y cobraba el saldo DESPUÉS del commit:
+   * si el cobro fallaba, la orden quedaba pagada.
+   *
+   * Bunz ya está bloqueado aquí salvo rollback explícito
+   * (`RABBITTY_LEGACY_BUNZ=true`). Plan: retirarla cuando ningún cliente la use.
+   */
   payOrder: posProcedure
-    /**
-     * LEGACY. El POS activo (admin) usa `directCheckout` para fiat y
-     * `createPaymentIntent` para Bunz. Esta ruta escribía `bunzPaid` y cobraba
-     * el saldo DESPUÉS del commit: si el cobro fallaba, la orden quedaba pagada.
-     * Se bloquea Bunz salvo rollback explícito (`RABBITTY_LEGACY_BUNZ=true`).
-     */
+    // @deprecated LEGACY · no cablear al helper: esta ruta se retira.
     .input(
       z.object({
         orderId: z.string(),

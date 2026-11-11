@@ -107,6 +107,8 @@ function pendingProcedures(file: string): string[] {
     const next = bounds[i + 1];
     if (!current || !next) continue;
     const block = lines.slice(current.line, next.line).join("\n");
+    // Los procedimientos LEGACY marcados @deprecated no se cablean: se retiran.
+    if (block.includes("@deprecated")) continue;
     if (WRITE_TEST.test(block) && !HELPER_CALL.test(block)) {
       pending.push(current.name);
     }

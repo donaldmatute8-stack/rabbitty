@@ -123,13 +123,15 @@
     "createPaymentIntent",
     "createStripeChargeIntent",
     "directCheckout",
-    "payOrder",
     "pollPaymentIntent"
   ],
   "totals": {
     "files": 21,
     "writes": 85,
     "pendingFiles": 0,
-    "pendingPosProcedures": 5
-  }
+    "pendingPosProcedures": 4
+  },
+  "deprecatedProcedures": [
+    "payOrder"
+  ]
 }

@@ -301,3 +301,38 @@ escrituras totales:        85
 
 Quedan **solo** los 5 caminos de dinero, bloqueados a propósito hasta ejecutar
 [`PLAN-PRUEBAS-COBRO.md`](./PLAN-PRUEBAS-COBRO.md) en staging.
+
+
+---
+
+## 13. Deprecación de `payOrder` (11-nov-2026)
+
+`payOrder` queda marcado `@deprecated` dentro del propio procedimiento:
+
+- El POS activo usa `directCheckout` (fiat) y `createPaymentIntent` (Bunz).
+- Ya está bloqueado para Bunz salvo `RABBITTY_LEGACY_BUNZ=true`.
+- El test de arquitectura **excluye** los procedimientos marcados `@deprecated`:
+  no se protege código que se va a retirar.
+
+### Trinquete actualizado
+
+```
+procedimientos sin helper en pos.ts:  4
+  createStripeChargeIntent · directCheckout
+  createPaymentIntent · pollPaymentIntent
+archivos sin helper:                  0
+```
+
+## 14. Hotfix del split fuera de la fase
+
+El arreglo H-4 vive en una rama aparte sobre `main`:
+
+```
+fix/split-doble-asiento  @28d9659
+  └── solo packages/api/src/services/paymentCore.ts (1 archivo, 7 líneas)
+      sin esquema, sin migración, sin helper
+```
+
+Motivo: la rama de 0B-1 **no puede mergearse** a `main` porque incluye
+`orders.version` y `order_events`, y producción no tiene la migración `0038`.
+El hotfix permite corregir el dinero en producción sin arrastrar la fase.
