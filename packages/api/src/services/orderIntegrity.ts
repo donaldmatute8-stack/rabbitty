@@ -15,8 +15,8 @@
  *  · Conflicto explícito (`OrderConflictError`) en vez de sobrescritura silenciosa.
  */
 
-import { eq, sql } from "drizzle-orm";
-import { orders, orderEvents, orderItems } from "@rabbitty/database-restaurant/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { orders, orderEvents, orderItems, payments } from "@rabbitty/database-restaurant/schema";
 
 /** Tasa de IVA vigente en el POS. Debe coincidir con `pos.ts`. */
 const TAX_RATE = 0.16;
@@ -65,6 +65,18 @@ export class OrderConflictError extends Error {
       `La orden ${orderId} cambió (esperaba v${expectedVersion}, está en v${currentVersion}). Recarga y vuelve a intentar.`,
     );
     this.name = "OrderConflictError";
+  }
+}
+
+/**
+ * Se lanza cuando se intenta borrar/rollbackear una orden que ya tiene dinero
+ * aplicado. Nunca se debe borrar una orden cobrada: dejaría el pago huérfano.
+ */
+export class OrderRollbackBlockedError extends Error {
+  readonly code = "CONFLICT";
+  constructor(readonly orderId: string, readonly reason: string) {
+    super(`No se puede revertir la orden ${orderId}: ${reason}`);
+    this.name = "OrderRollbackBlockedError";
   }
 }
 
@@ -215,4 +227,44 @@ export function assertTotalsInvariant(order: {
   const expected = r2(Number(order.subtotal) + Number(order.tax));
   const drift = r2(Number(order.total) - expected);
   return { ok: Math.abs(drift) <= 0.01, drift };
+}
+
+
+/**
+ * ── Rollback seguro de una orden recién creada ─────────────────────────────
+ *
+ * Pensado para el camino de error de `directCheckout`: si el cobro falla y la
+ * orden era nueva, se borra para no dejar borradores huérfanos.
+ *
+ * **Guarda obligatoria:** rechaza el borrado si la orden ya tiene algún pago
+ * `COMPLETED` o si su estado es terminal (`PAID`, `COMPLETED`). Sin esto, un
+ * fallo posterior al cobro borraría una orden pagada y el dinero quedaría sin
+ * respaldo. Ver Docs/POS-FASE-0/ADR-022 (riesgo R-A).
+ */
+export async function withOrderRollback<T>(
+  tx: any,
+  opts: { orderId: string; reason?: string },
+  fn: (order: any) => Promise<T>,
+): Promise<T> {
+  const [order] = await tx
+    .select()
+    .from(orders)
+    .where(eq(orders.id, opts.orderId))
+    .for("update");
+
+  if (!order) throw new OrderNotFoundError(opts.orderId);
+
+  const [applied] = await tx
+    .select({ id: payments.id })
+    .from(payments)
+    .where(and(eq(payments.orderId, opts.orderId), eq(payments.status, "COMPLETED")))
+    .limit(1);
+  if (applied) throw new OrderRollbackBlockedError(opts.orderId, "PAYMENT_ALREADY_APPLIED");
+
+  const terminal = new Set(["PAID", "COMPLETED", "REFUNDED"]);
+  if (terminal.has(String(order.status))) {
+    throw new OrderRollbackBlockedError(opts.orderId, `STATUS_${order.status}`);
+  }
+
+  return fn(order);
 }

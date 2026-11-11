@@ -8,7 +8,7 @@ import { assertCardPaymentAllowed, isCardMethod } from "../services/cardGuard";
 import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayableStatus } from "../services/payments/contracts";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
-import { withOrderMutation, withOrderCreate } from "../services/orderIntegrity";
+import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
@@ -2702,20 +2702,38 @@ export const posRouter = router({
           }
         }
         // Si la orden era nueva, no dejar un borrador huérfano.
+        // `withOrderRollback` rechaza el borrado si ya hay un pago aplicado:
+        // nunca se borra una orden cobrada (ADR-022, riesgo R-A).
         if (createdNew) {
           try {
-            await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.orderId, order.id));
-            await ctx.restaurantDb.delete(orders).where(eq(orders.id, order.id));
+            await ctx.restaurantDb.transaction(async (tx: any) => {
+              await withOrderRollback(
+                tx,
+                { orderId: order.id, reason: "CHECKOUT_FAILED" },
+                async () => {
+                  await tx.delete(orderItems).where(eq(orderItems.orderId, order.id));
+                  await tx.delete(orders).where(eq(orders.id, order.id));
+                },
+              );
+            });
           } catch (cleanupError) {
             console.error("[CHECKOUT_CLEANUP]", cleanupError);
           }
         } else if (input.idempotencyKey) {
           // Orden reutilizada: liberar la clave para permitir reintento.
           try {
-            await ctx.restaurantDb
-              .update(orders)
-              .set({ idempotencyKey: null })
-              .where(eq(orders.id, order.id));
+            await ctx.restaurantDb.transaction(async (tx: any) => {
+              await withOrderMutation(
+                tx,
+                { orderId: order.id, type: "CHECKOUT_KEY_RELEASED", actor: posActor(ctx) },
+                async (_o: any, _c: any) => {
+                  await tx
+                    .update(orders)
+                    .set({ idempotencyKey: null })
+                    .where(eq(orders.id, order.id));
+                },
+              );
+            });
           } catch (cleanupError) {
             console.error("[CHECKOUT_CLEANUP_KEY]", cleanupError);
           }

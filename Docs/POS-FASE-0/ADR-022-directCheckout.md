@@ -127,7 +127,7 @@ cerrar toda la fase.
 | **A** | Reutilizar comanda (W1) + crear orden (W2) | ✅ **hecho** (commit 1) |
 | **B** | Membresía: compensaciones y orden de ejecución | ⏳ sin cambios de código (verificado) |
 | C | Totales por rama (W4/W5) + cobro (W6-W9) | ✅ **hecho** (commit 2) |
-| D | Rollback con guarda de pagos (W10-W12) | Pendiente |
+| D | Rollback con guarda de pagos (W10-W12) | ✅ **hecho** (commit 3) |
 | E | `bunzReward` (W13) | Pendiente |
 
 ### Fase A — notas de implementación
@@ -154,3 +154,23 @@ cerrar toda la fase.
   con ella, la subida de versión: no queda una orden "a medias".
 - Deuda cosmética: el cuerpo del callback conserva la indentación original
   (quedó desplazado). Se re-indenta cuando se toque el bloque por otra razón.
+
+
+### Fase D — notas de implementación
+
+Se añadió `withOrderRollback(tx, { orderId, reason }, fn)` a `orderIntegrity.ts`:
+
+1. Bloquea la orden (`FOR UPDATE`).
+2. **Rechaza** si existe un `payment` con `status = COMPLETED` → `OrderRollbackBlockedError`
+   (`PAYMENT_ALREADY_APPLIED`).
+3. **Rechaza** si el estado es terminal (`PAID`, `COMPLETED`, `REFUNDED`).
+4. Solo entonces permite borrar.
+
+En `directCheckout`:
+
+- **W10/W11** (borrar ítems + orden) van dentro de `withOrderRollback`.
+- **W12** (liberar `idempotencyKey` al reutilizar orden) va dentro de
+  `withOrderMutation` con tipo `CHECKOUT_KEY_RELEASED`.
+
+El `catch` conserva el `console.error`, así que un rollback bloqueado deja rastro
+en logs en lugar de borrar silenciosamente.
