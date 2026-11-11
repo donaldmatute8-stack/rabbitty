@@ -187,3 +187,37 @@ tsc     packages/api              → 0 errores
 tsc     packages/database-restaurant → 0 errores
 main                               → intacto (30952b0)
 ```
+
+
+---
+
+## 9. Restricciones de infraestructura (Neon)
+
+**Medido el 11-nov-2026:** la base de staging pesa **21 MB** y no tiene conexiones
+externas activas. El consumo de Neon (97 %) **no es almacenamiento**; es **horas de
+compute**.
+
+### Por qué el compute no duerme
+
+| Fuente | Intervalo | ¿Despierta Neon? |
+|---|---|---|
+| KDS abierto (`apps/kds`) | 10 s | **Sí** |
+| POS abierto (`apps/admin/(pos)`) | 5–15 s | **Sí** |
+| Bot de Telegram | 2 s (poll a Telegram) | **No** (no consulta la DB) |
+| Healthcheck del bot | estático (`/health`) | **No** |
+
+Un KDS o un POS dejados abiertos mantienen el compute despierto 24/7.
+730 h/mes × 0.25 CU ≈ **182 CU-h**, que es prácticamente el cupo gratuito.
+
+### Reglas para no salirnos
+
+1. **Staging**: el branch de Neon solo se usa en ventanas de prueba. No dejar los
+   servicios de Railway apuntando a él de forma permanente.
+2. **Nada de deploys de staging 24/7**: duplicaría las horas de compute.
+3. **Autosuspend 5 min** y **mínimo de CU** configurados en el branch.
+4. **Crons externos**: verificar que ningún scheduler llame `/api/cron/*` cada minuto.
+5. **Ahorro estimado** de pausar el polling con la pestaña oculta: ~10 h/día × 30 =
+   300 h → **~75 CU-h menos al mes** (≈ 39 % del cupo).
+
+> Acción pendiente (no autorizada aún): rama `fix/neon-idle` desde `main` para
+> pausar el polling cuando la pestaña no es visible y aplicar backoff al KDS.
