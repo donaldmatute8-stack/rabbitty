@@ -1,106 +1,151 @@
 {
   "_meta": {
-    "description": "Baseline de escrituras a orders/orderItems (ADR-018). Es un trinquete: puede BAJAR, nunca subir. Si una escritura nueva aparece, el test falla.",
+    "description": "Trinquete de la frontera de escritura (ADR-018). Mide PROTECCI\u00d3N por procedimiento en pos.ts y por archivo en el resto. Ambas listas solo pueden ENCOGER.",
     "generatedAt": "2026-11-11",
-    "regex": "(insert|update|delete)\\((orders|orderItems)\\)",
-    "categories": {
-      "ALLOWED": "el helper withOrderMutation / orderIntegrity.ts \u2014 destino final de todas las escrituras",
-      "PENDING_MIGRATION": "debe migrar al helper antes de 0B-2",
-      "SANDBOX": "entorno sandbox; migra al helper con flag sandbox",
-      "SEED": "script de seed; no corre en producci\u00f3n"
-    },
-    "totals": {
-      "scanned": 89,
-      "pendingMigration": 77,
-      "allowed": 2,
-      "sandbox": 8,
-      "seed": 2
+    "rules": {
+      "ALLOWED": "orderIntegrity.ts",
+      "ALLOWED_EXCEPTION": "aplicaci\u00f3n de pago (ADR-019)",
+      "PROTECTED": "importa withOrderMutation",
+      "SANDBOX": "sandbox",
+      "SEED": "seed",
+      "PENDING_MIGRATION": "escribe sin helper"
     }
   },
   "files": {
     "apps/admin/src/app/api/aggregators/webhook/route.ts": {
       "count": 2,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "apps/admin/src/app/api/cron/expire-orders/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "apps/admin/src/app/api/webhooks/uber-direct/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "packages/api/src/routers/customer.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "packages/api/src/routers/invoices.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "packages/api/src/routers/kds.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "packages/api/src/routers/payments.ts": {
       "count": 3,
-      "category": "PENDING_MIGRATION"
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
     },
     "packages/api/src/routers/pos.ts": {
-      "count": 46,
-      "category": "PENDING_MIGRATION"
+      "count": 42,
+      "category": "PROTECTED",
+      "importsHelper": true
     },
     "packages/api/src/routers/sandbox.ts": {
       "count": 8,
-      "category": "SANDBOX"
+      "category": "SANDBOX",
+      "importsHelper": false
     },
     "packages/api/src/services/orderIntegrity.ts": {
       "count": 2,
-      "category": "ALLOWED"
+      "category": "ALLOWED",
+      "importsHelper": true
     },
     "packages/api/src/services/paymentCore.ts": {
       "count": 5,
-      "category": "PENDING_MIGRATION"
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
     },
     "packages/api/src/services/paymentIntentDomain.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
     },
     "packages/api/src/services/tabsSweep.ts": {
       "count": 2,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "packages/database-restaurant/src/seed.ts": {
       "count": 2,
-      "category": "SEED"
+      "category": "SEED",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/bot/webhook/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/chat/order/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/pos/checkout/route.ts": {
       "count": 7,
-      "category": "PENDING_MIGRATION"
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/pos/claim-table/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/pos/claim-ticket/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/pos/request-cash/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     },
     "telegram-miniapp/src/app/api/track/[orderId]/cancel/route.ts": {
       "count": 1,
-      "category": "PENDING_MIGRATION"
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
     }
+  },
+  "pendingFiles": [
+    "apps/admin/src/app/api/aggregators/webhook/route.ts",
+    "apps/admin/src/app/api/cron/expire-orders/route.ts",
+    "apps/admin/src/app/api/webhooks/uber-direct/route.ts",
+    "packages/api/src/routers/customer.ts",
+    "packages/api/src/routers/invoices.ts",
+    "packages/api/src/routers/kds.ts",
+    "packages/api/src/services/tabsSweep.ts",
+    "telegram-miniapp/src/app/api/chat/order/route.ts",
+    "telegram-miniapp/src/app/api/pos/claim-table/route.ts",
+    "telegram-miniapp/src/app/api/pos/claim-ticket/route.ts",
+    "telegram-miniapp/src/app/api/pos/request-cash/route.ts",
+    "telegram-miniapp/src/app/api/track/[orderId]/cancel/route.ts"
+  ],
+  "pendingPosProcedures": [
+    "assignDelivery",
+    "createPaymentIntent",
+    "createStripeChargeIntent",
+    "createUberDelivery",
+    "directCheckout",
+    "payOrder",
+    "pollPaymentIntent",
+    "sendBillToCustomer"
+  ],
+  "totals": {
+    "files": 21,
+    "writes": 85,
+    "pendingFiles": 12,
+    "pendingPosProcedures": 8
   }
 }

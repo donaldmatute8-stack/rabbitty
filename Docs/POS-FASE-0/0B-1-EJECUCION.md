@@ -221,3 +221,50 @@ Un KDS o un POS dejados abiertos mantienen el compute despierto 24/7.
 
 > Acción pendiente (no autorizada aún): rama `fix/neon-idle` desde `main` para
 > pausar el polling cuando la pestaña no es visible y aplicar backoff al KDS.
+
+
+---
+
+## 10. Lote 2 — procedimientos cableados (11-nov-2026)
+
+Además de los 4 iniciales, quedaron bajo el helper:
+
+| Procedimiento | Qué se protegió |
+|---|---|
+| `ensureCustomerTab` | limpieza de borradores $0 (una por orden), refresco de identidad y alta |
+| `releaseCustomerTab` | liberar borrador |
+| `linkCustomerToOrder` | vínculo de cliente + emisión de Bunz |
+| `voidOrder` | anulación de orden |
+| `claimTableSession` | vínculo de cliente a la mesa |
+| `createOrder` | alta de orden (`withOrderCreate`) |
+| `setOrderStage` | ETA, cierre y movimiento bulk de ítems |
+
+**Procedimientos de `pos.ts` aún pendientes: 8**
+
+```
+payOrder · createStripeChargeIntent · directCheckout · createPaymentIntent
+pollPaymentIntent · createUberDelivery · assignDelivery · sendBillToCustomer
+```
+
+Son los caminos de dinero: se cablean con la saga de [ADR-019](./ADR-019-saga-pagos.md)
+y requieren prueba en staging antes de darlos por cerrados.
+
+## 11. El trinquete, corregido
+
+La primera versión contaba *sitios de escritura*: al cablear, las escrituras se mueven
+dentro del callback del helper y el número no bajaba. Se cambió a medir **protección**:
+
+| Nivel | Regla |
+|---|---|
+| `pos.ts` | **por procedimiento**: si escribe órdenes, debe contener `withOrderMutation(`/`withOrderCreate(` |
+| resto de archivos | **por archivo**: debe importar el helper o estar en una excepción documentada |
+
+Estado medido:
+
+```
+archivos sin helper:        12  (14 escrituras)
+procedimientos sin helper:   8  (en pos.ts)
+escrituras totales:         85
+```
+
+Ambas listas viven en `order-write-baseline.json` y **solo pueden encoger**.
