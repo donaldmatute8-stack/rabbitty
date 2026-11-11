@@ -78,20 +78,18 @@ Cuando el trabajo se pause por otro frente, retomar es:
 ### §7 · Estado actual
 
 ```
-FASE:                     0B-1 — EN CURSO (rama)
-ÚLTIMO CHECKPOINT CERRADO: C0
-RAMA DE INTEGRACIÓN:      feat/pos-phase0 (C0)
-RAMA DE TRABAJO:          feat/pos-0b1-integridad-ordenes
-MAIN:                     30952b0 (intacto)
-HECHO:                    helper withOrderMutation · migración 0038 (NO aplicada)
-                          · order_events · trinquete (77 → 73) · 4 procedimientos cableados
-SIGUIENTE ACCIÓN:         Aislar la base de staging (branch de Neon) y aplicar 0038
-BLOQUEADO POR:            staging comparte la base de producción (mismas URLs)
+FASE:                     0B-1 — CERRADA Y EN MAIN
+ÚLTIMO CHECKPOINT CERRADO: C1 · integridad de órdenes
+MIGRACIÓN 0038:           APLICADA en producción (11-nov-2026)
+MERGE:                    76f8175 · deploy SUCCESS · / y /pos → 200
+TRINQUETE:                0 procedimientos y 0 archivos sin helper
+SIGUIENTE ACCIÓN:         0C — modelo de estaciones y contratos KDS (diseño)
+BLOQUEADO POR:            nada
 PREGUNTAS ABIERTAS:
+  - Ventana para 0C
+  - Actualizar la rama `staging` a main (al hacerlo, despliega staging)
   - Autorizar corrección de mensajes CFDI (M-01 … M-04)
   - Autorizar PAC sandbox Facturama
-  - Confirmar base de staging para pruebas de concurrencia
-  - Definir perfiles reales de pilotos P1/P2/P3
 ```
 
 > **Instrucción:** al cerrar cada checkpoint, actualizar este bloque. Es el contrato de reanudación.

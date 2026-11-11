@@ -1,6 +1,6 @@
 # Plan de merge a `main` — cierre de 0B-1
 
-**Estado:** propuesto (no ejecutado)
+**Estado:** ✅ **EJECUTADO** el 11-nov-2026 · merge `76f8175` · deploy SUCCESS
 **Fecha:** 11 de noviembre de 2026
 **Rama a integrar:** `feat/pos-0b1-integridad-ordenes` @ `fed5cd2`
 **Base actual de `main`:** `02837fd` (incluye el hotfix del split)
@@ -140,3 +140,27 @@ sin pérdida de datos.
 | Deploy tarda y el POS queda sin sesión | Ventana de bajo tráfico; el rollback de código es inmediato |
 | Terminal con bundle viejo | Sigue funcionando: los contratos no cambiaron, solo se agregó `version` interno |
 | `order_events` crece rápido | Índice por `orderId` + política de retención a definir en 0C |
+
+
+---
+
+## 8. Registro de la ejecución (11-nov-2026)
+
+| Paso | Resultado |
+|---|---|
+| Respaldo | `pg_dump` incompatible (cliente v14 / servidor v17) → **CSV de `orders`** (151 filas) + DDL versionado |
+| Migración `0038` | **aplicada** con `SET search_path TO public` |
+| Verificación | 3 columnas · `order_events` creada · 151 órdenes en `version = 1` · 0 eventos |
+| Merge | `76f8175` (conflicto solo en un comentario de `paymentCore`) |
+| Deploy | SUCCESS · `/` y `/pos` → 200 · logs sin errores |
+
+### Nota operativa
+
+La conexión **pooled** de Neon rechaza `PGOPTIONS=-c search_path=...`
+(`unsupported startup parameter`). Para correr DDL:
+
+```sql
+SET search_path TO public;
+```
+
+en la misma sesión, o usar la conexión **directa** (sin `-pooler`).
