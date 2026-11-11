@@ -78,15 +78,22 @@ Cuando el trabajo se pause por otro frente, retomar es:
 ### §7 · Estado actual
 
 ```
-FASE:                     0B-1 — CERRADA Y EN MAIN
+FASE:                     0B-1 — CERRADA Y EN MAIN (producción)
 ÚLTIMO CHECKPOINT CERRADO: C1 · integridad de órdenes
 MIGRACIÓN 0038:           APLICADA en producción (11-nov-2026)
 MERGE:                    76f8175 · deploy SUCCESS · / y /pos → 200
 TRINQUETE:                0 procedimientos y 0 archivos sin helper
-SIGUIENTE ACCIÓN:         0C — modelo de estaciones y contratos KDS (diseño)
+
+SIGUIENTE FASE:           0C · estaciones y KDS (diseño listo)
+DOCUMENTO DE ARRANQUE:    ADR-023-estaciones-y-kds.md
+PRIMER PASO EXACTO:       git checkout -b feat/pos-0c1-estaciones
+                          · migración 0039_pos_stations.sql
+                          · tabla stations + columnas nullable
+                          · router stations.*
+                          · aplicar SOLO en staging y verificar que el POS no cambia
 BLOQUEADO POR:            nada
+
 PREGUNTAS ABIERTAS:
-  - Ventana para 0C
   - Actualizar la rama `staging` a main (al hacerlo, despliega staging)
   - Autorizar corrección de mensajes CFDI (M-01 … M-04)
   - Autorizar PAC sandbox Facturama
