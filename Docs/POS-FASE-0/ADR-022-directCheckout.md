@@ -23,7 +23,7 @@ cierra mesa, premia y limpia si algo falla**. Es el camino más crítico del POS
 | W2 | 2182 | `insert(orders)` | Crea orden nueva | `withOrderCreate` |
 | W3 | 2228 | `insert(orderItems)` | Inserta ítems en loop | `withOrderCreate` (misma tx) |
 | W4 | 2380 | `update(orders)` | Escribe subtotal/IVA/total antes de cobrar | `withOrderMutation` |
-| W5 | 2470 | `update(orders)` | **Repite** W4 solo para el split (el intent necesita el total) | **eliminar** (W4 ya lo escribió) |
+| W5 | 2470 | `update(orders)` | Rama **split**: escribe totales antes del intent de Bunz | `withOrderMutation` (no se elimina) |
 | W6 | 2526 | `update(orders)` | Totales dentro de la tx de cobro | `withOrderMutation` (tx de cobro) |
 | W7 | 2534 | `insert(payments)` | Pago principal | misma tx de cobro |
 | W8 | 2546 | `insert(payments)` | Crédito de membresía aplicado | misma tx de cobro |
@@ -86,7 +86,7 @@ pagada.
 | Riesgo | Detalle | Mitigación |
 |---|---|---|
 | **R-A** Borrar orden pagada | La limpieza (W10/W11) no verifica pagos | `withOrderRollback` exige 0 pagos |
-| **R-B** Doble precio | W4 y W5 escriben los mismos totales | Eliminar W5; una sola escritura |
+| **R-B** Doble precio | W4 y W5 escriben totales, pero en ramas distintas | Cablear cada una en su rama; no fusionar |
 | **R-C** Compensación de membresía | Si el cobro falla, se devuelven créditos/cuotas | Debe ejecutarse **antes** del rollback de la orden |
 | **R-D** Idempotencia | La clave se libera solo si se reutilizó orden | Mantener semántica exacta; probar reintento |
 | **R-E** Split | Ya corregido H-4; el intent solo aporta Bunz | Re-ejecutar C-03 tras el refactor |
@@ -116,3 +116,27 @@ pagada.
 
 Cada paso se puede mergear a `feat/pos-phase0` por separado; **nada a `main`** hasta
 cerrar toda la fase.
+
+
+---
+
+## 8. Estado de implementación
+
+| Fase | Alcance | Estado |
+|---|---|---|
+| **A** | Reutilizar comanda (W1) + crear orden (W2) | ✅ **hecho** (commit 1) |
+| **B** | Membresía: compensaciones y orden de ejecución | ⏳ sin cambios de código (verificado) |
+| C | Totales por rama (W4/W5) + cobro (W6-W9) | Pendiente |
+| D | Rollback con guarda de pagos (W10-W12) | Pendiente |
+| E | `bunzReward` (W13) | Pendiente |
+
+### Fase A — notas de implementación
+
+- W1 ahora valida **sucursal y estado antes de mutar**: el helper bloquea por `id`,
+  no por `branchId`, así que la pertenencia se comprueba en un `select` previo.
+  Sin eso se podría tocar la orden de otro tenant.
+- W2 usa `withOrderCreate`. La `idempotencyKey` sigue en la orden, así que el
+  `onConflictDoNothing` conserva su semántica de carrera.
+- Los ítems (W3) siguen fuera del helper: en la creación hay un solo escritor y
+  el lock de la orden ya protege el resto. Se revisará en Fase C si conviene
+  moverlos a la misma transacción.

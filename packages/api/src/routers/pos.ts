@@ -2137,28 +2137,45 @@ export const posRouter = router({
           .from(orders)
           .where(and(eq(orders.id, input.existingOrderId), eq(orders.branchId, ctx.branchId)))
           .limit(1);
-        if (reusedOrder && !isOrderPayableStatus(reusedOrder.status)) {
+        // El helper bloquea por id, no por sucursal: la pertenencia se valida aquí
+        // ANTES de mutar (si no, se podría tocar una orden de otro tenant).
+        if (!reusedOrder) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo.",
+          });
+        }
+        if (!isOrderPayableStatus(reusedOrder.status)) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: `La orden existente no admite cobros (estado ${reusedOrder.status}).`,
           });
         }
-        const [reused] = await ctx.restaurantDb
-          .update(orders)
-          .set({
-            tableId: input.tableId ?? null,
-            orderType: input.orderType,
-            customerId: input.customerId ?? null,
-            customerName: input.customerName ?? null,
-            customerPhone: input.customerPhone ?? null,
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(orders.id, input.existingOrderId),
-            eq(orders.branchId, ctx.branchId),
-            inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.CASH_REQUESTED]),
-          ))
-          .returning();
+        const reused = await ctx.restaurantDb.transaction(async (tx: any) => {
+          const { order: updated } = await withOrderMutation(
+            tx,
+            {
+              orderId: input.existingOrderId!,
+              type: "CHECKOUT_REUSED_ORDER",
+              actor: posActor(ctx),
+              allowedStatuses: [ORDER_STATUS.PENDING, ORDER_STATUS.CASH_REQUESTED],
+            },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  tableId: input.tableId ?? null,
+                  orderType: input.orderType,
+                  customerId: input.customerId ?? null,
+                  customerName: input.customerName ?? null,
+                  customerPhone: input.customerPhone ?? null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(orders.id, input.existingOrderId!));
+            },
+          );
+          return updated;
+        });
         if (!reused) {
           throw new TRPCError({ code: "NOT_FOUND", message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo." });
         }
@@ -2178,25 +2195,30 @@ export const posRouter = router({
           });
         }
       } else {
-        const [created] = await ctx.restaurantDb
-          .insert(orders)
-          .values({
-            branchId: ctx.branchId,
-            tableId: input.tableId ?? null,
-            orderType: input.orderType,
-            customerId: input.customerId ?? null,
-            customerName: input.customerName ?? null,
-            customerPhone: input.customerPhone ?? null,
-            subtotal: 0,
-            tax: 0,
-            discount: 0,
-            tip: 0,
-            total: 0,
-            status: "PENDING",
-            idempotencyKey: input.idempotencyKey ?? null,
-          })
-          .onConflictDoNothing({ target: orders.idempotencyKey })
-          .returning();
+        const created = await ctx.restaurantDb.transaction(async (tx: any) =>
+          withOrderCreate(tx, { actor: posActor(ctx), idempotencyKey: input.idempotencyKey }, async () => {
+            const [row] = await tx
+              .insert(orders)
+              .values({
+                branchId: ctx.branchId,
+                tableId: input.tableId ?? null,
+                orderType: input.orderType,
+                customerId: input.customerId ?? null,
+                customerName: input.customerName ?? null,
+                customerPhone: input.customerPhone ?? null,
+                subtotal: 0,
+                tax: 0,
+                discount: 0,
+                tip: 0,
+                total: 0,
+                status: "PENDING",
+                idempotencyKey: input.idempotencyKey ?? null,
+              })
+              .onConflictDoNothing({ target: orders.idempotencyKey })
+              .returning();
+            return row;
+          }),
+        );
         if (!created) {
           // Carrera: otra petición con la misma clave ganó el insert.
           const [prior] = input.idempotencyKey
