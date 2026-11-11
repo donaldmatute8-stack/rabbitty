@@ -9,6 +9,7 @@ import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
 import { checkRateLimit } from "@/lib/rateLimit";
 import crypto from "crypto";
+import { withOrderMutation } from "@rabbitty/api/services/orderIntegrity";
 
 export async function POST(req: NextRequest) {
   try {
@@ -403,10 +404,18 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. Marcar la orden en restaurantDb con los Bunz acreditados y el customerId
-    await restaurantDb.update(orders).set({
-      bunzReward: bunzToMint,
-      customerId: caller.id,
-    }).where(eq(orders.id, orderId));
+    await restaurantDb.transaction(async (tx: any) => {
+      await withOrderMutation(
+        tx,
+        { orderId, type: "TICKET_CLAIMED", actor: { staffId: null, terminalId: null } },
+        async (_o: any, _c: any) => {
+          await tx.update(orders).set({
+            bunzReward: bunzToMint,
+            customerId: caller.id,
+          }).where(eq(orders.id, orderId));
+        },
+      );
+    });
 
     // 8. Enviar notificación Push al Rabbitter
     await sendEcosystemNotification({

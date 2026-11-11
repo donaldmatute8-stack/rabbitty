@@ -6,6 +6,7 @@ import { db } from '@/db';
 import { ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { callInternalPay } from '@/lib/internalPay';
+import { withOrderMutation } from "@rabbitty/api/services/orderIntegrity";
 
 export const runtime = 'nodejs';
 
@@ -120,10 +121,18 @@ export async function POST(
       .set({ status: 'CANCELLED', updatedAt: now })
       .where(and(eq(paymentIntents.orderId, orderId), eq(paymentIntents.status, 'PENDING_PAYMENT')));
 
-    await restaurantDb
-      .update(orders)
-      .set({ status: 'CANCELLED', voidReason: 'CANCELLED_BY_CUSTOMER', updatedAt: now })
-      .where(eq(orders.id, orderId));
+    await restaurantDb.transaction(async (tx: any) => {
+      await withOrderMutation(
+        tx,
+        { orderId, type: "CANCELLED_BY_CUSTOMER", actor: { staffId: null, terminalId: null } },
+        async (_o: any, _c: any) => {
+          await tx
+            .update(orders)
+            .set({ status: 'CANCELLED', voidReason: 'CANCELLED_BY_CUSTOMER', updatedAt: now })
+            .where(eq(orders.id, orderId));
+        },
+      );
+    });
 
     // Aviso al negocio (best-effort): que sepa que la comanda se cayó.
     try {

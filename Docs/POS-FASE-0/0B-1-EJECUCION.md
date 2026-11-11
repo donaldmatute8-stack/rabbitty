@@ -268,3 +268,36 @@ escrituras totales:         85
 ```
 
 Ambas listas viven en `order-write-baseline.json` y **solo pueden encoger**.
+
+
+---
+
+## 12. Lote 4 — caminos externos (11-nov-2026)
+
+**Archivos sin helper: 0.** Todos los caminos que no son de dinero ya están protegidos.
+
+| Archivo | Tratamiento |
+|---|---|
+| `routers/kds.ts` | bump de ítem bajo el helper |
+| `routers/customer.ts` | registro de CFDI |
+| `routers/invoices.ts` | cancelación de CFDI |
+| `services/tabsSweep.ts` | **excepción**: mantenimiento en bloque con `version = version + 1` |
+| `cron/expire-orders` | **excepción**: idem |
+| `webhooks/uber-direct` | ETA de entrega bajo el helper |
+| `aggregators/webhook` | alta con `withOrderCreate` |
+| `miniapp pos/claim-table` | vínculo de mesa |
+| `miniapp pos/claim-ticket` | canje de ticket |
+| `miniapp pos/request-cash` | pedir cuenta |
+| `miniapp track/cancel` | cancelación del cliente |
+| `miniapp chat/order` | alta con `withOrderCreate` |
+
+### Estado del trinquete
+
+```
+archivos sin helper:        0   ✅
+procedimientos en pos.ts:   5   (solo dinero)
+escrituras totales:        85
+```
+
+Quedan **solo** los 5 caminos de dinero, bloqueados a propósito hasta ejecutar
+[`PLAN-PRUEBAS-COBRO.md`](./PLAN-PRUEBAS-COBRO.md) en staging.

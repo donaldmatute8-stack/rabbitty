@@ -24,7 +24,7 @@ import baseline from "./order-write-baseline.json";
 const WRITE_PATTERN = /(insert|update|delete)\((orders|orderItems)\)/g;
 /** Copia sin flag global: `.test()` con /g es stateful y da falsos negativos. */
 const WRITE_TEST = /(insert|update|delete)\((orders|orderItems)\)/;
-const HELPER_IMPORT = /withOrderMutation/;
+const HELPER_IMPORT = /withOrder(Create|Mutation)/;
 const HELPER_CALL = /withOrder(Create|Mutation)\(/;
 const POS_ROUTER = "packages/api/src/routers/pos.ts";
 

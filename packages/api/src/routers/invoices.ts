@@ -2,6 +2,7 @@ import { z } from "zod";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { invoices, orders, branches } from "@rabbitty/database-restaurant";
+import { withOrderMutation } from "../services/orderIntegrity";
 
 export const invoicesRouter = router({
   list: protectedProcedure
@@ -112,10 +113,18 @@ export const invoicesRouter = router({
         .returning();
 
       // Also update the order's cfdiStatus back to NONE
-      await ctx.restaurantDb
-        .update(orders)
-        .set({ cfdiStatus: "NONE", cfdiUrl: null })
-        .where(eq(orders.id, invoice.orderId));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: invoice.orderId, type: "CFDI_CANCELLED", actor: { staffId: null, terminalId: null } },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({ cfdiStatus: "NONE", cfdiUrl: null })
+              .where(eq(orders.id, invoice.orderId));
+          },
+        );
+      });
 
       return updated;
     }),

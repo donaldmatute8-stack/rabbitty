@@ -4,6 +4,7 @@ import { getRestaurantDb } from "@rabbitty/api/db";
 import { miniappClient } from "@rabbitty/api/services/miniapp-client";
 import { mapUberStatus } from "@rabbitty/api/services/uberDirect";
 import { deliveries, orders } from "@rabbitty/database-restaurant/schema";
+import { withOrderMutation } from "@rabbitty/api/services/orderIntegrity";
 
 export const runtime = "nodejs";
 
@@ -78,10 +79,18 @@ export async function POST(req: Request) {
       const etaAt = new Date(rawEta);
       if (!Number.isNaN(etaAt.getTime())) {
         const etaMinutes = Math.max(1, Math.round((etaAt.getTime() - Date.now()) / 60000));
-        await db
-          .update(orders)
-          .set({ etaAt, etaMinutes, updatedAt: new Date() })
-          .where(eq(orders.id, delivery.orderId));
+        await db.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: delivery.orderId, type: "DELIVERY_ETA_UPDATED", actor: { staffId: null, terminalId: null } },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({ etaAt, etaMinutes, updatedAt: new Date() })
+                .where(eq(orders.id, delivery.orderId));
+            },
+          );
+        });
       }
     }
 

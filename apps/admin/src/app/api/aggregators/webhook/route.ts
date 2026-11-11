@@ -3,6 +3,7 @@ import { getRestaurantDb } from "../../../../../../../packages/api/src/db";
 import { orders, orderItems } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { z } from "zod";
+import { withOrderCreate } from "@rabbitty/api/services/orderIntegrity";
 
 const webhookSchema = z.object({
   id: z.string(),
@@ -40,7 +41,9 @@ export async function POST(req: Request) {
     
     // 2. Insertar en Rabbitty DB
     const provider = (new URL(req.url).searchParams.get("provider") || "UBER_EATS").toUpperCase();
-    const [newOrder] = await db.insert(orders).values({
+    const newOrder = await db.transaction(async (tx: any) =>
+      withOrderCreate(tx, { actor: { staffId: null, terminalId: null } }, async () => {
+        const [row] = await tx.insert(orders).values({
       branchId,
       orderType: "DELIVERY",
       status: "PENDING",
@@ -50,7 +53,10 @@ export async function POST(req: Request) {
       externalProvider: provider,
       externalId: uberOrder.id,
       notes: `Aggregator Order #${uberOrder.id}`,
-    }).returning();
+        }).returning();
+        return row;
+      }),
+    );
 
     // 3. Insertar Items
     if (uberOrder.items.length > 0) {

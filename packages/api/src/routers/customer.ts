@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { orders, invoices, branches } from "@rabbitty/database-restaurant";
 import { billingProfiles } from "@rabbitty/database-core/schema";
+import { withOrderMutation } from "../services/orderIntegrity";
 import { encryptText, decryptText } from "../services/crypto";
 
 export const customerRouter = router({
@@ -139,9 +140,17 @@ export const customerRouter = router({
       }).returning();
 
       // Actualizar status en la orden
-      await ctx.restaurantDb.update(orders)
-        .set({ cfdiStatus: "INVOICED", cfdiUrl: `https://rabbitty.mx/invoices/${order.id}.pdf` })
-        .where(eq(orders.id, input.orderId));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "CFDI_REGISTERED", actor: { staffId: null, terminalId: null } },
+          async (_o: any, _c: any) => {
+            await tx.update(orders)
+              .set({ cfdiStatus: "INVOICED", cfdiUrl: `https://rabbitty.mx/invoices/${order.id}.pdf` })
+              .where(eq(orders.id, input.orderId));
+          },
+        );
+      });
 
       return {
         success: true,

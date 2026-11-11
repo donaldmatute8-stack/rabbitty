@@ -6,6 +6,7 @@ import { branches, orders, restaurants } from '@rabbitty/database-restaurant/sch
 import { and, eq, or } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { resolveTelegramRecipient, notifyChatRecipient, isBusinessOpen } from '@/lib/chat';
+import { withOrderCreate } from "@rabbitty/api/services/orderIntegrity";
 
 export async function POST(req: Request) {
   try {
@@ -84,7 +85,9 @@ export async function POST(req: Request) {
       if (branch?.id) {
         const orderType =
           body.orderType === 'DINE_IN' || body.orderType === 'DELIVERY' ? body.orderType : 'TAKEAWAY';
-        const [created] = await restaurantDb
+        const created = await restaurantDb.transaction(async (tx: any) =>
+          withOrderCreate(tx, { actor: { staffId: null, terminalId: null } }, async () => {
+            const [row] = await tx
           .insert(orders)
           .values({
             branchId: branch.id,
@@ -101,6 +104,9 @@ export async function POST(req: Request) {
               orderType === 'DELIVERY' ? body.deliveryAddress?.trim().slice(0, 300) ?? null : null,
           })
           .returning({ id: orders.id });
+            return row;
+          }),
+        );
         posOrderId = created?.id ?? null;
       }
     } catch (posErr) {
