@@ -133,19 +133,16 @@
     "telegram-miniapp/src/app/api/track/[orderId]/cancel/route.ts"
   ],
   "pendingPosProcedures": [
-    "assignDelivery",
     "createPaymentIntent",
     "createStripeChargeIntent",
-    "createUberDelivery",
     "directCheckout",
     "payOrder",
-    "pollPaymentIntent",
-    "sendBillToCustomer"
+    "pollPaymentIntent"
   ],
   "totals": {
     "files": 21,
     "writes": 85,
     "pendingFiles": 12,
-    "pendingPosProcedures": 8
+    "pendingPosProcedures": 5
   }
 }

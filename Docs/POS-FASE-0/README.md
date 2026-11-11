@@ -32,6 +32,9 @@ El principio rector, dictado por dirección:
 | [`ROADMAP-Y-CHECKPOINTS.md`](./ROADMAP-Y-CHECKPOINTS.md) | Fases, dependencias y puntos de reanudación | Vivo |
 | [`RAMAS-Y-FLUJO.md`](./RAMAS-Y-FLUJO.md) | Modelo de ramas, PR, gates, handoff y rollback | **Vigente** |
 | [`0B-1-EJECUCION.md`](./0B-1-EJECUCION.md) | Qué se construyó en 0B-1 y qué falta para cerrarlo | **En curso** |
+| [`PLAN-PRUEBAS-COBRO.md`](./PLAN-PRUEBAS-COBRO.md) | 11 casos para validar los caminos de dinero en staging | Pendiente de ejecutar |
+| [`STAGING-ON-OFF.md`](./STAGING-ON-OFF.md) | Encender staging solo para probar (cuidar compute de Neon) | Vigente |
+| [`NEON-CONSUMO-Y-KDS.md`](./NEON-CONSUMO-Y-KDS.md) | Reposo del KDS para no agotar el cupo de Neon | En rama `fix/neon-idle` |
 
 ---
 

@@ -3534,19 +3534,27 @@ export const posRouter = router({
             .join(", ")
         : null;
 
-      await ctx.restaurantDb
-        .update(orders)
-        .set({
-          externalProvider: "UBER_DIRECT",
-          externalId: created.id,
-          ...(shouldCharge ? { deliveryFee: fee } : {}),
-          ...(etaAt ? { etaAt, etaMinutes } : {}),
-          ...(capturedAddress
-            ? { deliveryAddress: capturedText, deliveryAddressData: capturedAddress }
-            : {}),
-          updatedAt: now,
-        })
-        .where(eq(orders.id, c.order.id));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: c.order.id, type: "DELIVERY_CREATED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({
+                externalProvider: "UBER_DIRECT",
+                externalId: created.id,
+                ...(shouldCharge ? { deliveryFee: fee } : {}),
+                ...(etaAt ? { etaAt, etaMinutes } : {}),
+                ...(capturedAddress
+                  ? { deliveryAddress: capturedText, deliveryAddressData: capturedAddress }
+                  : {}),
+                updatedAt: now,
+              })
+              .where(eq(orders.id, c.order.id));
+          },
+        );
+      });
 
       if (c.order.customerId) {
         try {
@@ -3708,14 +3716,22 @@ export const posRouter = router({
       const alreadyCharged = Number(order.deliveryFee ?? 0) > 0;
       const shouldCharge =
         effectiveFeePaidBy === "CUSTOMER" && fee > 0 && !alreadyCharged && order.status === "PENDING";
-      await ctx.restaurantDb
-        .update(orders)
-        .set({
-          externalProvider: provider.id,
-          ...(shouldCharge ? { deliveryFee: fee, total: Number(order.total ?? 0) + fee } : {}),
-          updatedAt: now,
-        })
-        .where(eq(orders.id, order.id));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: order.id, type: "DELIVERY_ASSIGNED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx
+              .update(orders)
+              .set({
+                externalProvider: provider.id,
+                ...(shouldCharge ? { deliveryFee: fee, total: Number(order.total ?? 0) + fee } : {}),
+                updatedAt: now,
+              })
+              .where(eq(orders.id, order.id));
+          },
+        );
+      });
 
       if (order.customerId) {
         try {
@@ -3870,14 +3886,22 @@ export const posRouter = router({
 
       // 3. Vincular cliente a la orden si no estaba vinculado
       if (input.customerId || input.customerName || input.phone) {
-        await ctx.restaurantDb
-          .update(orders)
-          .set({
-            customerId: input.customerId || order.customerId,
-            customerName: input.customerName || order.customerName,
-            customerPhone: input.phone || order.customerPhone,
-          })
-          .where(eq(orders.id, order.id));
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: order.id, type: "BILL_CUSTOMER_LINKED", actor: posActor(ctx) },
+            async (_o: any, _c: any) => {
+              await tx
+                .update(orders)
+                .set({
+                  customerId: input.customerId || order.customerId,
+                  customerName: input.customerName || order.customerName,
+                  customerPhone: input.phone || order.customerPhone,
+                })
+                .where(eq(orders.id, order.id));
+            },
+          );
+        });
       }
 
       let pushSent = false;
