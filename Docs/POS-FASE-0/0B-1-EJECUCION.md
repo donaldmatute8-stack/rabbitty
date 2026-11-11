@@ -28,7 +28,40 @@
 - La migración **no se aplicó** porque **no existe una base aislada**.
 - Consecuencia: el código de esta rama **no puede ejecutarse** hasta aplicar `0038`.
 
-### 2.1 Bloqueo detectado (crítico)
+### 2.0 Base aislada y migración aplicada (11-nov-2026)
+
+Se creó un **branch de Neon** para staging (`ep-ancient-meadow-ap18nmme`) y ahí se aplicó `0038`:
+
+```
+version              | integer | default 1
+updatedByStaffId     | text
+updatedByTerminalId  | text
+order_events         | tabla creada
+151 órdenes         | version = 1
+```
+
+**Producción sigue con `orders.version = 0`** (sin migrar).
+
+### 2.0.1 Prueba de concurrencia ejecutada (staging)
+
+10 mutaciones concurrentes sobre la misma orden:
+
+```
+mutaciones ok:        10/10
+ítems en base:        10 (esperado 10)
+suma ítems:           550.00
+orders.total:         550.00
+version final:        11 (esperado 11)
+order_events:         10
+```
+
+Resultado: **sin pérdida de ítems, sin descuadre de total, una versión por mutación.**
+
+Bug encontrado y corregido en el camino: `ON CONFLICT ("idempotencyKey")` fallaba
+porque el índice único es **parcial**; Postgres exige el predicado. Se cambió a
+`ON CONFLICT DO NOTHING` sin target.
+
+### 2.1 Bloqueo histórico (ya resuelto)
 
 El ambiente `staging` de Railway fue clonado copiando las variables de entorno:
 `RESTAURANT_DATABASE_URL` y `CORE_DATABASE_URL` apuntan a **la misma base Neon de producción**

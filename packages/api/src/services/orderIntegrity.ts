@@ -185,7 +185,10 @@ export async function recordOrderEvent(
       idempotencyKey: input.idempotencyKey ?? null,
       payload: input.payload ?? null,
     })
-    .onConflictDoNothing({ target: orderEvents.idempotencyKey });
+    // `DO NOTHING` sin target: el índice único de idempotencia es PARCIAL
+    // (`WHERE "idempotencyKey" IS NOT NULL`) y Postgres no lo infiere con
+    // `ON CONFLICT ("idempotencyKey")` — exige el predicado.
+    .onConflictDoNothing();
 }
 
 /**
