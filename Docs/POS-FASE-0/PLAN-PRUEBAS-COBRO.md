@@ -273,3 +273,54 @@ Tras el refund total, la orden conserva `status = COMPLETED`. Los pagos quedan
 
 Scripts: `packages/api/scripts/staging-test-customer.ts` y `staging-test-access.ts`
 (ambos abortan si la base no es `ancient-meadow`).
+
+
+---
+
+## 13. C-03 ejecutado por API — **bug crítico encontrado**
+
+Como el split en la UI exige la aprobación del Rabbitter en su app (un usuario
+sintético no puede aprobar), C-03 se ejecutó por API con una aprobación
+`APPROVED` sembrada en staging.
+
+**Resultado de la operación:** `success: true`, orden `43a69373…`, total 120.
+
+**Pero al revisar los pagos:**
+
+| método | monto | estado |
+|---|---:|---|
+| `CREDIT_CARD` | 60 | COMPLETED |
+| `BUNZ` | 60 | COMPLETED |
+| `CASH` | 60 | COMPLETED |
+| **suma** | **180** | vs total **120** |
+
+### H-4 · El split duplica el pago (crítico)
+
+Una orden de $120 queda con **$180 en pagos**. Origen identificado:
+`packages/api/src/services/paymentCore.ts:525` registra el cobro del intento como
+
+```ts
+method: params.verifiedMethod === "CASH" ? "CASH" : "CREDIT_CARD"
+```
+
+es decir, **cualquier cobro que no sea efectivo se registra como `CREDIT_CARD`**.
+En el split eso convive además con el asiento `BUNZ` y con el `CASH` del POS,
+así que el mismo dinero se contabiliza dos veces.
+
+Consecuencias:
+
+- La caja cuadra mal (ventas por método infladas).
+- Los reportes de tarjeta vs Bunz mienten.
+- Un reembolso proporcional calcularía sobre una base equivocada.
+
+**Bloquea cablear `directCheckout` hasta corregirlo.** No es un problema del helper
+de concurrencia: es contabilidad de pagos.
+
+### Invariante nueva para el plan
+
+```
+Σ payments(COMPLETED) de la orden  ==  orders.total   (±0.01)
+```
+
+Estado en staging: 156 órdenes, **19 con descuadre**; 18 son órdenes sin pago
+(normal, `pagado = 0`) y **1 es la del split** (`pagado = 180`).
