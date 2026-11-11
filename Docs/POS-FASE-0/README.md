@@ -33,7 +33,8 @@ El principio rector, dictado por dirección:
 | [`RAMAS-Y-FLUJO.md`](./RAMAS-Y-FLUJO.md) | Modelo de ramas, PR, gates, handoff y rollback | **Vigente** |
 | [`0B-1-EJECUCION.md`](./0B-1-EJECUCION.md) | Qué se construyó en 0B-1 y qué falta para cerrarlo | **En curso** |
 | [`PLAN-PRUEBAS-COBRO.md`](./PLAN-PRUEBAS-COBRO.md) | Casos de cobro y resultados de la ventana (C-01, C-03, C-05) | Parcial: falta C-02 |
-| [`ADR-022-directCheckout.md`](./ADR-022-directCheckout.md) | Mapa de las 11 escrituras del cobro y plan de cableado | **Siguiente** |
+| [`ADR-022-directCheckout.md`](./ADR-022-directCheckout.md) | Mapa de las 11 escrituras del cobro y plan de cableado | ✅ Cableado completo |
+| [`PLAN-MERGE-A-MAIN.md`](./PLAN-MERGE-A-MAIN.md) | Migración `0038`, orden de merge, smoke tests y rollback | **Listo para ejecutar** |
 | [`STAGING-ON-OFF.md`](./STAGING-ON-OFF.md) | Encender staging solo para probar (cuidar compute de Neon) | Vigente |
 | [`NEON-CONSUMO-Y-KDS.md`](./NEON-CONSUMO-Y-KDS.md) | Reposo del KDS para no agotar el cupo de Neon | En rama `fix/neon-idle` |
 
