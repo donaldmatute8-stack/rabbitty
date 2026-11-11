@@ -1684,18 +1684,21 @@ export const posRouter = router({
 
           // Todo dentro de la MISMA transacción: si el intent falla, no queda
           // orden huérfana (antes orders/orderItems se escribían fuera de tx).
-          const [order] = await tx.insert(orders).values({
-            branchId: ctx.branchId,
-            tableId: input.tableId ?? null,
-            orderType: input.orderType,
-            customerName: input.customerName ?? null,
-            customerPhone: input.customerPhone ?? null,
-            customerId: input.customerId ?? null,
-            subtotal: calcSubtotal,
-            tax: calcTaxAmt,
-            total: calcTotal,
-            status: "PENDING",
-          }).returning();
+          const order = await withOrderCreate(tx, { actor: posActor(ctx) }, async () => {
+            const [row] = await tx.insert(orders).values({
+              branchId: ctx.branchId,
+              tableId: input.tableId ?? null,
+              orderType: input.orderType,
+              customerName: input.customerName ?? null,
+              customerPhone: input.customerPhone ?? null,
+              customerId: input.customerId ?? null,
+              subtotal: calcSubtotal,
+              tax: calcTaxAmt,
+              total: calcTotal,
+              status: "PENDING",
+            }).returning();
+            return row;
+          });
           if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
 
           for (const [i, row] of itemRows.entries()) {
@@ -1722,12 +1725,18 @@ export const posRouter = router({
             if (applied.discount > 0) {
               const adjusted = calcTax(applied.finalAmount);
               orderTotal = adjusted.total;
-              await tx.update(orders).set({
-                subtotal: adjusted.subtotal,
-                tax: adjusted.tax,
-                discount: applied.discount,
-                total: adjusted.total,
-              }).where(eq(orders.id, order.id));
+              await withOrderMutation(
+                tx,
+                { orderId: order.id, type: "INTENT_PRICED", actor: posActor(ctx) },
+                async (_o: any, _c: any) => {
+                  await tx.update(orders).set({
+                    subtotal: adjusted.subtotal,
+                    tax: adjusted.tax,
+                    discount: applied.discount,
+                    total: adjusted.total,
+                  }).where(eq(orders.id, order.id));
+                },
+              );
             }
           }
 
@@ -2921,19 +2930,24 @@ export const posRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       // 1. Create order
-      const [order] = await ctx.restaurantDb.insert(orders).values({
-        branchId: ctx.branchId,
-        tableId: input.tableId ?? null,
-        orderType: input.orderType,
-        customerName: input.customerName ?? null,
-        customerPhone: input.customerPhone ?? null,
-        subtotal: 0,
-        tax: 0,
-        discount: 0,
-        tip: 0,
-        total: 0,
-        status: "PENDING_PAYMENT",
-      }).returning();
+      const order = await ctx.restaurantDb.transaction(async (tx: any) =>
+        withOrderCreate(tx, { actor: posActor(ctx) }, async () => {
+          const [row] = await tx.insert(orders).values({
+            branchId: ctx.branchId,
+            tableId: input.tableId ?? null,
+            orderType: input.orderType,
+            customerName: input.customerName ?? null,
+            customerPhone: input.customerPhone ?? null,
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            tip: 0,
+            total: 0,
+            status: "PENDING_PAYMENT",
+          }).returning();
+          return row;
+        }),
+      );
 
       if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la orden" });
 
@@ -2966,12 +2980,20 @@ export const posRouter = router({
 
       const { total: intentTotal, subtotal: intentBase, tax: intentTax } = calcTax(finalAmount);
 
-      await ctx.restaurantDb.update(orders).set({
-        subtotal: intentBase,
-        tax: intentTax,
-        discount: calculatedDiscount,
-        total: intentTotal,
-      }).where(eq(orders.id, order.id));
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: order.id, type: "INTENT_PRICED", actor: posActor(ctx) },
+          async (_o: any, _c: any) => {
+            await tx.update(orders).set({
+              subtotal: intentBase,
+              tax: intentTax,
+              discount: calculatedDiscount,
+              total: intentTotal,
+            }).where(eq(orders.id, order.id));
+          },
+        );
+      });
 
       // 3. Create Payment Intent
       const expiresAt = new Date();
@@ -3061,11 +3083,19 @@ export const posRouter = router({
         await ctx.restaurantDb.update(dbSchema.paymentIntents).set({ status: "EXPIRED" })
           .where(eq(dbSchema.paymentIntents.id, intent.id));
         
-        if (intent.orderId) {
-          await ctx.restaurantDb.update(orders).set({ status: "EXPIRED" })
-            .where(eq(orders.id, intent.orderId));
+        const expiredOrderId = String(intent.orderId ?? "");
+        if (expiredOrderId) {
+          await ctx.restaurantDb.transaction(async (tx: any) => {
+            await withOrderMutation(
+              tx,
+              { orderId: expiredOrderId, type: "INTENT_EXPIRED", actor: posActor(ctx) },
+              async (_o: any, _c: any) => {
+                await tx.update(orders).set({ status: "EXPIRED" }).where(eq(orders.id, expiredOrderId));
+              },
+            );
+          });
           // Fase 1 Rabbitty Score: exclusión inmediata del rating (intent expirado)
-          await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, intent.orderId, "INTENT_EXPIRED");
+          await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, expiredOrderId, "INTENT_EXPIRED");
         }
 
         // Liberar el hold de Bunz reservado (sin esto el saldo queda bloqueado para siempre)

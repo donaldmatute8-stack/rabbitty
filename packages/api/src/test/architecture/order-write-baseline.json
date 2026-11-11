@@ -119,16 +119,12 @@
     }
   },
   "pendingFiles": [],
-  "pendingPosProcedures": [
-    "createPaymentIntent",
-    "createStripeChargeIntent",
-    "pollPaymentIntent"
-  ],
+  "pendingPosProcedures": [],
   "totals": {
     "files": 21,
     "writes": 85,
     "pendingFiles": 0,
-    "pendingPosProcedures": 3
+    "pendingPosProcedures": 0
   },
   "deprecatedProcedures": [
     "payOrder"

@@ -336,3 +336,28 @@ fix/split-doble-asiento  @28d9659
 Motivo: la rama de 0B-1 **no puede mergearse** a `main` porque incluye
 `orders.version` y `order_events`, y producción no tiene la migración `0038`.
 El hotfix permite corregir el dinero en producción sin arrastrar la fase.
+
+
+---
+
+## 15. Cierre del cableado — 0 escrituras fuera del helper (11-nov-2026)
+
+Se cablearon los tres procedimientos restantes:
+
+| Procedimiento | Escrituras | Tratamiento |
+|---|---|---|
+| `createStripeChargeIntent` | alta (W) + ítems + totales | `withOrderCreate` + `withOrderMutation` |
+| `createPaymentIntent` | alta + ítems + totales | `withOrderCreate` + `withOrderMutation` |
+| `pollPaymentIntent` | expiración de orden | `withOrderMutation` |
+
+### Trinquete final
+
+```
+procedimientos sin helper en pos.ts:  0   ✅
+archivos sin helper:                  0   ✅
+excepciones documentadas:             pagos (ADR-019), sandbox, seed, mantenimiento
+                                      en bloque con bump de version
+deprecados:                           payOrder
+```
+
+**Toda escritura a `orders` / `order_items` del repositorio pasa por el helper.**
