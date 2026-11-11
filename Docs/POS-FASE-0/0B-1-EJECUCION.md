@@ -12,20 +12,37 @@
 
 | Artefacto | Ruta | Estado |
 |---|---|---|
-| Migración (no aplicada) | `packages/database-restaurant/migrations/manual/0038_pos_order_integrity.sql` | Escrita |
+| Migración (no aplicada) | `packages/database-restaurant/migrations/manual/0038_pos_order_integrity.sql` | Escrita, **bloqueada** |
 | Esquema | `packages/database-restaurant/src/schema/index.ts` → `orders.version`, `updatedBy*`, `orderEvents` | Compila |
-| Helper | `packages/api/src/services/orderIntegrity.ts` | Escrito, **sin usar** |
-| Test de arquitectura | `packages/api/src/test/architecture/orderWriteBoundary.test.ts` | **Verde** |
+| Helper | `packages/api/src/services/orderIntegrity.ts` | Escrito |
+| Cableado | `addToCart`, `removeFromCart`, `clearCart`, `voidItem` | **Hecho, sin probar en base** |
+| Test de arquitectura | `packages/api/src/test/architecture/orderWriteBoundary.test.ts` | **Verde** (77 → 73 pendientes) |
 | Baseline (trinquete) | `packages/api/src/test/architecture/order-write-baseline.json` | Congelado |
 
 ---
 
-## 2. Por qué esto no cambia comportamiento
+## 2. Alcance real de esta entrega
 
-- El helper **no está importado por ningún procedimiento**.
-- No se modificó `pos.ts`, `paymentCore`, ni ninguna ruta.
-- La migración **no se aplicó**.
-- El único efecto verificable es el test de arquitectura, que hoy pasa con el baseline actual.
+- **Sí** se cablearon 4 procedimientos: `addToCart`, `removeFromCart`, `clearCart`, `voidItem`.
+- `removeFromCart` ahora es transaccional (antes borraba y recalculaba fuera de transacción).
+- La migración **no se aplicó** porque **no existe una base aislada**.
+- Consecuencia: el código de esta rama **no puede ejecutarse** hasta aplicar `0038`.
+
+### 2.1 Bloqueo detectado (crítico)
+
+El ambiente `staging` de Railway fue clonado copiando las variables de entorno:
+`RESTAURANT_DATABASE_URL` y `CORE_DATABASE_URL` apuntan a **la misma base Neon de producción**
+(`ep-delicate-violet-ap6izh0k-pooler.c-7.us-east-1.aws.neon.tech / neondb`).
+
+Por eso **no se aplicó 0038**: habría modificado producción.
+
+Verificación de que producción sigue intacta:
+
+```sql
+SELECT count(*) FROM information_schema.columns
+WHERE table_name='orders' AND column_name='version';
+-- 0
+```
 
 ---
 
@@ -101,6 +118,18 @@ psql "$RESTAURANT_DATABASE_URL" -v ON_ERROR_STOP=1 -f \
 ```
 
 ---
+
+## 6.1 Cómo desbloquear (una sola vez)
+
+1. Neon → proyecto → **Branches → New branch** desde `main`, nombre `staging`.
+2. Copiar la cadena de conexión (pooled).
+3. Railway → ambiente **staging** → servicio `rabbitty-admin` (y los que usen base):
+   `RESTAURANT_DATABASE_URL` y `CORE_DATABASE_URL` = cadena del branch.
+4. Redesplegar staging.
+5. Aplicar `0038` en esa base.
+6. Recién entonces: probar el flujo y la concurrencia.
+
+> Mientras staging apunte a producción, **cualquier** clic en el admin de staging escribe en producción.
 
 ## 7. Rollback
 

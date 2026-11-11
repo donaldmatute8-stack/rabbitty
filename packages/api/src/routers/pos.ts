@@ -8,6 +8,7 @@ import { assertCardPaymentAllowed, isCardMethod } from "../services/cardGuard";
 import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayableStatus } from "../services/payments/contracts";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
+import { withOrderMutation } from "../services/orderIntegrity";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
@@ -105,6 +106,12 @@ const r2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 /** Calcula base (subtotal), IVA y total a partir de los items de una orden.
  *  Garantía: subtotal + tax === total (sin discrepancias de redondeo). */
+/** Identidad para la bitácora de órdenes: quién (empleado) y desde dónde (terminal). */
+const posActor = (ctx: { posOperator?: { staffId?: string } | null; posAuth?: { terminalId?: string } | null }) => ({
+  staffId: ctx.posOperator?.staffId ?? null,
+  terminalId: ctx.posAuth?.terminalId ?? null,
+});
+
 export function calcTax(itemsTotal: number): { total: number; subtotal: number; tax: number } {
   const total = r2(itemsTotal);
   const subtotal = r2(total / (1 + TAX_RATE));
@@ -1026,64 +1033,81 @@ export const posRouter = router({
         if (!menuItem) {
           throw new Error("Producto no encontrado");
         }
-        const unitPrice = menuItem.price;
-        const totalPrice = unitPrice * input.quantity;
-        const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-        const nextSortOrder = existingItems.length;
-        const [orderItem] = await tx.insert(orderItems).values({
-          orderId: input.orderId,
-          menuItemId: input.menuItemId,
-          quantity: input.quantity,
-          unitPrice,
-          totalPrice,
-          sortOrder: nextSortOrder,
-          modifiers: input.modifiers ?? null,
-          notes: input.notes ?? null,
-        }).returning();
-        const allItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-        const { total, subtotal, tax } = calcTax(allItems.reduce((s: number, i: any) => s + Number(i.totalPrice), 0));
-        await tx.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
-        return orderItem;
+
+        // Ítem + totales bajo el helper: bloqueo de orden, versión y bitácora.
+        const { result } = await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "ITEM_ADDED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+            const [orderItem] = await tx.insert(orderItems).values({
+              orderId: input.orderId,
+              menuItemId: input.menuItemId,
+              quantity: input.quantity,
+              unitPrice: menuItem.price,
+              totalPrice: menuItem.price * input.quantity,
+              sortOrder: existingItems.length,
+              modifiers: input.modifiers ?? null,
+              notes: input.notes ?? null,
+            }).returning();
+            await octx.recalcTotals();
+            return orderItem;
+          },
+        );
+        return result;
       });
     }),
 
   removeFromCart: posProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [item] = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.id, input.id));
-      if (!item) throw new Error("Item no encontrado");
-      const [parentOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, item.orderId)).limit(1);
-      if (!parentOrd || parentOrd.branchId !== ctx.branchId) throw new Error("Item no encontrado");
-      if (item.status !== "PENDING") {
-        throw new Error("No puedes eliminar un artículo que ya está en cocina. Usa la función de Cancelación (Void).");
-      }
+      // Transaccional: antes el borrado y el recálculo de totales iban sueltos y
+      // podían dejar la orden descuadrada si fallaba a la mitad (ADR-018).
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [item] = await tx.select().from(orderItems).where(eq(orderItems.id, input.id));
+        if (!item) throw new Error("Item no encontrado");
+        const [parentOrd] = await tx.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, item.orderId)).limit(1);
+        if (!parentOrd || parentOrd.branchId !== ctx.branchId) throw new Error("Item no encontrado");
+        if (item.status !== "PENDING") {
+          throw new Error("No puedes eliminar un artículo que ya está en cocina. Usa la función de Cancelación (Void).");
+        }
 
-      const [removed] = await ctx.restaurantDb.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
-      if (removed) {
-        const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, removed.orderId));
-        const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-        await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, removed.orderId));
-        return removed;
-      }
-      return null;
+        const { result } = await withOrderMutation(
+          tx,
+          { orderId: item.orderId, type: "ITEM_REMOVED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            const [removed] = await tx.delete(orderItems).where(eq(orderItems.id, input.id)).returning();
+            if (!removed) throw new Error("Item no encontrado");
+            await octx.recalcTotals();
+            return removed;
+          },
+        );
+        return result;
+      });
     }),
 
   clearCart: posProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [cartOrd] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
-      if (!cartOrd || cartOrd.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
-      // Only delete PENDING items
-      await ctx.restaurantDb.delete(orderItems).where(and(
-        eq(orderItems.orderId, input.orderId),
-        eq(orderItems.status, "PENDING")
-      )).returning();
-      
-      const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-      const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-      await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, input.orderId));
-      
-      return { success: true };
+      return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const [cartOrd] = await tx.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
+        if (!cartOrd || cartOrd.branchId !== ctx.branchId) throw new Error("Orden no encontrada");
+
+        await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "CART_CLEARED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            // Solo se borran los que aún no entraron a cocina.
+            await tx.delete(orderItems).where(and(
+              eq(orderItems.orderId, input.orderId),
+              eq(orderItems.status, "PENDING")
+            )).returning();
+            await octx.recalcTotals();
+          },
+        );
+
+        return { success: true };
+      });
     }),
 
   // Guard multi-tenant: la orden DEBE pertenecer a la branch del ctx (evita IDOR cross-tenant)
@@ -1131,19 +1155,25 @@ export const posRouter = router({
       const [parentOrder] = await ctx.restaurantDb.select({ branchId: orders.branchId }).from(orders).where(eq(orders.id, targetItem.orderId)).limit(1);
       if (!parentOrder || parentOrder.branchId !== ctx.branchId) throw new Error("Item no encontrado");
 
-      const [item] = await ctx.restaurantDb.update(orderItems).set({
-        status: "CANCELLED",
-        voidReason: input.reason,
-        authorizedById: authorizedStaffId,
-        voidedAt: new Date(),
-        totalPrice: 0, // Voided items cost 0
-      }).where(eq(orderItems.id, input.id)).returning();
-
-      if (item) {
-        const allItems = await ctx.restaurantDb.select().from(orderItems).where(eq(orderItems.orderId, item.orderId));
-        const { total, subtotal, tax } = calcTax(allItems.reduce((s, i) => s + Number(i.totalPrice), 0));
-        await ctx.restaurantDb.update(orders).set({ subtotal, tax, total }).where(eq(orders.id, item.orderId));
-      }
+      // Cancelación de ítem bajo el helper: bloqueo de orden, versión y bitácora
+      // (con el PIN de manager como autorizante queda registrado el actor).
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: targetItem.orderId, type: "ITEM_VOIDED", actor: posActor(ctx) },
+          async (_order, octx) => {
+            const [voided] = await tx.update(orderItems).set({
+              status: "CANCELLED",
+              voidReason: input.reason,
+              authorizedById: authorizedStaffId,
+              voidedAt: new Date(),
+              totalPrice: 0, // Un ítem anulado cuesta 0
+            }).where(eq(orderItems.id, input.id)).returning();
+            if (!voided) throw new Error("Item no encontrado");
+            await octx.recalcTotals();
+          },
+        );
+      });
 
       return { success: true };
     }),

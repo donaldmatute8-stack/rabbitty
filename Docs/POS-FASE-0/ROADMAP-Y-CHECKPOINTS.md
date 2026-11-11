@@ -84,10 +84,9 @@ RAMA DE INTEGRACIÓN:      feat/pos-phase0 (C0)
 RAMA DE TRABAJO:          feat/pos-0b1-integridad-ordenes
 MAIN:                     30952b0 (intacto)
 HECHO:                    helper withOrderMutation · migración 0038 (NO aplicada)
-                          · order_events · test de arquitectura con trinquete (77 pendientes)
-SIGUIENTE ACCIÓN:         Aplicar 0038 en staging y cablear los primeros 4 procedimientos
-                          (addToCart, removeFromCart, clearCart, voidItem)
-BLOQUEADO POR:            Base de staging disponible
+                          · order_events · trinquete (77 → 73) · 4 procedimientos cableados
+SIGUIENTE ACCIÓN:         Aislar la base de staging (branch de Neon) y aplicar 0038
+BLOQUEADO POR:            staging comparte la base de producción (mismas URLs)
 PREGUNTAS ABIERTAS:
   - Autorizar corrección de mensajes CFDI (M-01 … M-04)
   - Autorizar PAC sandbox Facturama
