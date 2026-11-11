@@ -169,3 +169,54 @@ C-01 a C-08, C-10 y C-11 necesitan credenciales de cajero en staging.
 Duración estimada: 20-25 minutos.
 
 Al terminar, registrar aquí el resultado por caso y **apagar staging**.
+
+
+---
+
+## 9. Acceso de prueba (staging)
+
+Creado por `packages/api/scripts/staging-test-access.ts` (aborta si la base no es
+`ancient-meadow`).
+
+| Dato | Valor |
+|---|---|
+| URL del POS | `https://rabbitty-admin-staging.up.railway.app/pos` |
+| Empleado | `Cajero Prueba` · email `prueba.staging@rabbitty.me` |
+| PIN | `1234` · rol **MANAGER** (abre caja y autoriza retiros) |
+| Terminal | `Terminal Staging` |
+| Sucursal | `Sucursal Única Ka13` |
+| Token | **se entrega por canal privado**, expira en 24 h |
+
+### Cómo entrar
+
+1. Abrir la URL del POS.
+2. En la consola del navegador:
+
+```js
+localStorage.setItem("rabbitty_pos_terminal_token", "<TOKEN>");
+localStorage.setItem("rabbitty_pos_terminal_info", JSON.stringify({
+  terminalId: "<TERMINAL_ID>",
+  name: "Terminal Staging",
+  branchId: "br_ka13_3cf73c14828d",
+}));
+location.reload();
+```
+
+3. El POS debe cargar mesas sin pedir login de admin.
+4. Abrir caja con el PIN `1234`.
+
+### Verificación rápida (sin UI)
+
+```bash
+curl -sG ".../api/trpc/pos.getTables" \
+  --data-urlencode 'input={"json":null}' \
+  -H "x-pos-terminal-token: <TOKEN>"
+# → 6 mesas
+```
+
+### Para volver a crearlo
+
+```bash
+RESTAURANT_DATABASE_URL=<staging> CORE_DATABASE_URL=<staging> \
+  npx tsx packages/api/scripts/staging-test-access.ts
+```
