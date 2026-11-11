@@ -376,3 +376,46 @@ pagado: 120   ✅
 | C-03 split | ✅ (tras corregir H-4) |
 | C-05 refund | ✅ |
 | C-02 tarjeta | omitido (llaves live en staging) |
+
+
+---
+
+## 15. Re-validación con `directCheckout` cableado (11-nov-2026)
+
+Código: rama `feat/pos-0b1-integridad-ordenes` @ `c0f38eb` (fases A, C, D, E).
+Entorno: `rabbitty-admin-staging` + branch de Neon.
+
+### C-01 · efectivo (re-ejecutado)
+
+```
+orden 62b52107  status COMPLETED  total 120  version 2
+pagos: CASH 120
+eventos: CHECKOUT_PAID
+Σ pagos = total → delta 0
+```
+
+### C-03 · split efectivo + Bunz (re-ejecutado)
+
+```
+orden 43e8722d  status COMPLETED  total 120  bunzPaid 60  bunzReward 24  version 4
+pagos: BUNZ 60 + CASH 60
+eventos: CHECKOUT_PRICED, CHECKOUT_PAID, BUNZ_REWARD_RECORDED
+Σ pagos = total → delta 0
+```
+
+**La versión subió exactamente una vez por mutación** (1 → 4 con tres eventos),
+que es la garantía que buscaba el ADR-018.
+
+### Invariantes globales tras la ventana
+
+| Invariante | Resultado |
+|---|---|
+| Deriva de totales | **0** |
+| Órdenes sobrepagadas | **0 de 159** |
+| Eventos huérfanos (`order_events` sin orden) | **0** |
+| Concurrencia (10 mutaciones) | 10/10 |
+
+### Conclusión
+
+`directCheckout` cableado **no cambió el comportamiento esperado**: cobra igual y
+además deja rastro, versión y bloqueo. La ventana se cerró con staging apagado.
