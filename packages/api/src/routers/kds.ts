@@ -6,6 +6,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { orders, tables, orderItems, menuItems, stations } from "@rabbitty/database-restaurant/schema";
 import { withOrderMutation } from "../services/orderIntegrity";
+import { enqueueRealtimeEvent, stationChannel } from "../services/realtimeOutbox";
 
 /**
  * Carga la cola del KDS.
@@ -211,6 +212,28 @@ export const kdsRouter = router({
             await tx.update(orderItems).set({
               status: input.status,
             }).where(eq(orderItems.id, input.orderItemId));
+
+            // Aviso en vivo al canal de la estación del ítem (0C-5).
+            const [row] = await tx
+              .select({ stationId: orderItems.stationId })
+              .from(orderItems)
+              .where(eq(orderItems.id, input.orderItemId))
+              .limit(1);
+            if (row?.stationId) {
+              await enqueueRealtimeEvent(tx, {
+                businessId: ctx.posAuth?.businessId ?? null,
+                branchId: ctx.branchId,
+                channel: stationChannel(ctx.posAuth?.businessId ?? null, ctx.branchId, row.stationId),
+                eventType: "order.item.updated",
+                payload: {
+                  orderId: kdsItem.orderId,
+                  itemId: input.orderItemId,
+                  stationId: row.stationId,
+                  status: input.status,
+                },
+                eventId: `item-status-${input.orderItemId}-${input.status}`,
+              });
+            }
           },
         );
       });
