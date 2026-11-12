@@ -11,6 +11,8 @@ import { bus, EventTypes } from "@rabbitty/events";
 import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
 import { resolveStationsForItems } from "../services/stationRouting";
 import { enqueueRealtimeEvent, stationChannel } from "../services/realtimeOutbox";
+import { resolveBusinessIdFromBranch } from "../services/businessContext";
+export { resolveBusinessIdFromBranch };
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
@@ -233,24 +235,6 @@ async function loadDeliveryContext(
   };
 }
 
-async function resolveBusinessIdFromBranch(restaurantDb: any, branchId: string): Promise<string | null> {
-  try {
-    const [br] = await restaurantDb
-      .select({ restaurantId: dbSchema.branches.restaurantId })
-      .from(dbSchema.branches)
-      .where(eq(dbSchema.branches.id, branchId))
-      .limit(1);
-    if (!br?.restaurantId) return null;
-    const [rest] = await restaurantDb
-      .select({ businessId: dbSchema.restaurants.businessId })
-      .from(dbSchema.restaurants)
-      .where(eq(dbSchema.restaurants.id, br.restaurantId))
-      .limit(1);
-    return rest?.businessId || null;
-  } catch {
-    return null;
-  }
-}
 
 export const posRouter = router({
   /**
@@ -1105,10 +1089,12 @@ export const posRouter = router({
 
             // Aviso en vivo al KDS de esa estación (0C-5). Sin estación no se emite.
             if (dest?.stationId) {
+              // Mismo businessId que calcula el cliente (kds.realtimeChannel).
+              const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
               await enqueueRealtimeEvent(tx, {
-                businessId: ctx.posAuth?.businessId ?? null,
+                businessId: bizId,
                 branchId: ctx.branchId,
-                channel: stationChannel(ctx.posAuth?.businessId ?? null, ctx.branchId, dest.stationId),
+                channel: stationChannel(bizId, ctx.branchId, dest.stationId),
                 eventType: "order.item.added",
                 payload: {
                   orderId: input.orderId,

@@ -5,6 +5,7 @@ import { cn, useWakeLock } from "@rabbitty/ui";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ChefHat, Timer, CheckCircle2, UtensilsCrossed, Bell } from "lucide-react";
 import { useSound } from "../hooks/useSound";
+import { useKdsRealtime } from "../hooks/useKdsRealtime";
 import { OrderTimer } from "../components/OrderTimer";
 import { CompletedOrders } from "../components/CompletedOrders";
 
@@ -45,6 +46,18 @@ export default function KdsPage() {
   });
   const orders = stationId ? stationQueue.data : allQueue.data;
 
+  // Aviso en vivo (0C-5). El canal y los tokens los emite el servidor a partir
+  // de la estación elegida; sin estación no hay canal y queda el polling.
+  const realtime = useKdsRealtime({
+    stationId,
+    paused: resting,
+    onEvent: () => {
+      // Un push solo adelanta el refresco: la cola la sigue sirviendo tRPC.
+      if (stationId) void utils.kds.getStationQueue.invalidate({ stationId });
+      else void utils.kds.getOrders.invalidate();
+    },
+  });
+
   const pickStation = (id: string) => {
     setStationId(id);
     if (id) window.localStorage.setItem("rabbitty_kds_station", id);
@@ -64,7 +77,11 @@ export default function KdsPage() {
 
   useEffect(() => {
     const es = new EventSource("/api/sse");
-    const refresh = () => utils.kds.getOrders.invalidate();
+    // El SSE sigue como red de seguridad si Centrifugo no está disponible.
+    const refresh = () => {
+      void utils.kds.getOrders.invalidate();
+      void utils.kds.getStationQueue.invalidate();
+    };
     es.addEventListener("kds.item.updated", refresh);
     es.addEventListener("order.created", refresh);
     es.addEventListener("order.paid", refresh);
@@ -109,6 +126,7 @@ export default function KdsPage() {
     lastActiveRef.current = Date.now();
     setResting(false);
     void utils.kds.getOrders.invalidate();
+    void utils.kds.getStationQueue.invalidate();
   }, [utils]);
 
   const handleStatus = useCallback(
@@ -178,6 +196,23 @@ export default function KdsPage() {
           <div className="text-right">
             <p className="text-sm text-gray-400">{new Date().toLocaleDateString("es-MX")}</p>
             <p className="text-xs text-gray-500">{orders?.length ?? 0} órdenes activas</p>
+            {stationId && (
+              <p
+                className={cn(
+                  "mt-0.5 text-[10px] font-semibold",
+                  realtime === "live" && "text-green-400",
+                  realtime === "connecting" && "text-yellow-400",
+                  realtime === "error" && "text-red-400",
+                  realtime === "off" && "text-gray-500",
+                )}
+                title="Estado del aviso en vivo (el polling sigue como respaldo)"
+              >
+                {realtime === "live" && "● En vivo"}
+                {realtime === "connecting" && "○ Conectando"}
+                {realtime === "error" && "○ Solo polling"}
+                {realtime === "off" && "○ Polling"}
+              </p>
+            )}
           </div>
         </div>
       </header>

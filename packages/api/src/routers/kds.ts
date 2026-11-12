@@ -7,6 +7,7 @@ import { bus, EventTypes } from "@rabbitty/events";
 import { orders, tables, orderItems, menuItems, stations } from "@rabbitty/database-restaurant/schema";
 import { withOrderMutation } from "../services/orderIntegrity";
 import { enqueueRealtimeEvent, stationChannel } from "../services/realtimeOutbox";
+import { resolveBusinessIdFromBranch as resolveBusinessIdForBranch } from "../services/businessContext";
 
 /**
  * Carga la cola del KDS.
@@ -189,6 +190,25 @@ export const kdsRouter = router({
       return loadKdsQueue(ctx, { stationId: bound ?? input.stationId, status: input.status });
     }),
 
+  /**
+   * Canal de tiempo real de una estación (0C-5). Lo calcula el servidor para
+   * que cliente y publisher usen exactamente el mismo nombre.
+   */
+  realtimeChannel: posProcedure
+    .input(z.object({ stationId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [station] = await ctx.restaurantDb
+        .select({ id: stations.id })
+        .from(stations)
+        .where(and(eq(stations.id, input.stationId), eq(stations.branchId, ctx.branchId)))
+        .limit(1);
+      if (!station) throw new TRPCError({ code: "FORBIDDEN", message: "La estación no pertenece a esta sucursal" });
+
+      // businessId determinista desde la sucursal (mismo que usa el publisher).
+      const businessId = await resolveBusinessIdForBranch(ctx.restaurantDb, ctx.branchId);
+      return { channel: stationChannel(businessId, ctx.branchId, input.stationId) };
+    }),
+
   updateOrderItemStatus: posProcedure
     .input(
       z.object({
@@ -220,10 +240,11 @@ export const kdsRouter = router({
               .where(eq(orderItems.id, input.orderItemId))
               .limit(1);
             if (row?.stationId) {
+              const bizId = await resolveBusinessIdForBranch(ctx.restaurantDb, ctx.branchId);
               await enqueueRealtimeEvent(tx, {
-                businessId: ctx.posAuth?.businessId ?? null,
+                businessId: bizId,
                 branchId: ctx.branchId,
-                channel: stationChannel(ctx.posAuth?.businessId ?? null, ctx.branchId, row.stationId),
+                channel: stationChannel(bizId, ctx.branchId, row.stationId),
                 eventType: "order.item.updated",
                 payload: {
                   orderId: kdsItem.orderId,

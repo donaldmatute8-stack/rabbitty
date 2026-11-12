@@ -13,6 +13,8 @@
   "dependencies": {
     "@rabbitty/api": "workspace:*",
     "@rabbitty/auth": "workspace:*",
+    "@rabbitty/database-core": "workspace:^",
+    "@rabbitty/database-restaurant": "workspace:^",
     "@rabbitty/design": "workspace:*",
     "@rabbitty/events": "workspace:*",
     "@rabbitty/ui": "workspace:*",
@@ -21,6 +23,7 @@
     "@trpc/next": "^11.17.0",
     "@trpc/react-query": "^11.17.0",
     "@trpc/server": "^11.17.0",
+    "centrifuge": "^5.8.0",
     "lucide-react": "^1.16.0",
     "next": "16.3.3",
     "react": "19.2.4",
