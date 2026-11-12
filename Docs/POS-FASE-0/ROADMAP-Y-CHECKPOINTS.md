@@ -78,24 +78,27 @@ Cuando el trabajo se pause por otro frente, retomar es:
 ### §7 · Estado actual
 
 ```
-FASE:                     0C COMPLETA — estaciones, KDS y tiempo real en producción
+FASE:                     0C COMPLETA · CFDI paso 1 en producción
 EN PRODUCCIÓN:            0C-1 modelo · 0C-2 ruteo+snapshot · 0C-3 cola por estación
                           0C-4 UI · 0C-4b terminal atada · 0C-5 outbox+Centrifugo
-                          0C-5b cliente del KDS suscrito (push + polling de respaldo)
-MIGRACIONES APLICADAS:    0038 · 0039 · 0040 · 0054 (todas aditivas)
-EXTRA EN PRODUCCIÓN:      KDS en reposo por inactividad (ahorro de compute Neon)
-                          Contexto del KDS sin BRANCH_ID (sesión o token de terminal)
+                          0C-5b cliente del KDS (KDS apagado: sin cocina activa)
+                          CFDI: PacProvider + Facturama + UI admin + XML/PDF
+MIGRACIONES APLICADAS:    0038 · 0039 · 0040 · 0054 · 0055 (todas aditivas)
+EXTRA EN PRODUCCIÓN:      KDS en reposo por inactividad
+                          Contexto del KDS sin BRANCH_ID
+                          Outbox realtime con publicación inmediata + cron
 TRINQUETE:                0 procedimientos y 0 archivos sin helper
 
-SIGUIENTE:                CFDI multi-tenant (PacProvider + credenciales por tenant)
-                          Decidir PAC: Facturama vs Finkok/MrFactura/FiscalAPI
-BLOQUEADO POR:            PAC sin contratar (sandbox pendiente)
+SIGUIENTE:                P-01 credenciales sandbox de Facturama (bloqueante)
+                          Ver Docs/POS-FASE-0/PENDIENTES-CFDI.md
+BLOQUEADO POR:            cuenta de PAC del tenant (no hay credenciales aún)
 
 PREGUNTAS ABIERTAS:
-  - ¿Cuándo se retira el polling del KDS? (hoy es red de seguridad; 30 días)
-  - ¿El tenant integra su propio PAC desde el admin o se le guía?
-  - Corregir mensajes CFDI (M-01 … M-04) y retirar la promesa comercial
+  - ¿Cuándo se retira el polling del KDS? (hoy es red de seguridad)
+  - ¿Cuándo se encienden los servicios apagados? (KDS)
+  - Dictamen fiscal de Bunz (D-12, requiere contador)
 ```
+
 
 
 > **Instrucción:** al cerrar cada checkpoint, actualizar este bloque. Es el contrato de reanudación.

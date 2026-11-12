@@ -136,16 +136,33 @@ export const cfdiRouter = router({
       return { ok: test.ok, message: test.message };
     }),
 
-  /** Timbra una orden con el PAC del tenant. */
+  /**
+   * Timbra una orden con el PAC del tenant. El receptor puede venir de un
+   * perfil guardado o capturarse a mano (cliente de mostrador).
+   */
   issueOrder: protectedProcedure
     .input(
-      z.object({
-        orderId: z.string(),
-        billingProfileId: z.string(),
-        environment: z.enum(["sandbox", "production"]).optional(),
-        paymentForm: z.string().optional(),
-        serie: z.string().max(25).optional(),
-      }),
+      z
+        .object({
+          orderId: z.string(),
+          billingProfileId: z.string().optional(),
+          receiver: z
+            .object({
+              rfc: z.string().min(12).max(13),
+              name: z.string().min(1),
+              taxRegime: z.string().min(3),
+              cfdiUse: z.string().min(2),
+              zipCode: z.string().length(5),
+              email: z.string().email().optional().or(z.literal("")),
+            })
+            .optional(),
+          environment: z.enum(["sandbox", "production"]).optional(),
+          paymentForm: z.string().optional(),
+          serie: z.string().max(25).optional(),
+        })
+        .refine((v) => Boolean(v.billingProfileId || v.receiver), {
+          message: "Indica un perfil de facturación o los datos del receptor",
+        }),
     )
     .mutation(async ({ ctx, input }) => {
       assertAdmin(ctx);
@@ -158,30 +175,43 @@ export const cfdiRouter = router({
         .limit(1);
       if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
 
-      const [profile] = await ctx.coreDb
-        .select()
-        .from(billingProfiles)
-        .where(eq(billingProfiles.id, input.billingProfileId))
-        .limit(1);
-      if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Perfil de facturación no encontrado" });
+      let receiver;
+      if (input.billingProfileId) {
+        const [profile] = await ctx.coreDb
+          .select()
+          .from(billingProfiles)
+          .where(eq(billingProfiles.id, input.billingProfileId))
+          .limit(1);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Perfil de facturación no encontrado" });
+        receiver = {
+          rfc: decryptText(profile.rfc),
+          name: decryptText(profile.legalName),
+          cfdiUse: profile.cfdiUse,
+          taxRegime: profile.taxRegime,
+          zipCode: profile.zipCode,
+          email: profile.email,
+        };
+      } else {
+        receiver = {
+          rfc: input.receiver!.rfc.toUpperCase(),
+          name: input.receiver!.name,
+          cfdiUse: input.receiver!.cfdiUse,
+          taxRegime: input.receiver!.taxRegime,
+          zipCode: input.receiver!.zipCode,
+          email: input.receiver!.email || null,
+        };
+      }
 
       try {
         return await issueInvoiceForOrder({
           db: ctx.restaurantDb,
           orderId: order.id,
           businessId,
-          billingProfileId: profile.id,
+          billingProfileId: input.billingProfileId ?? null,
           environment: input.environment,
           paymentForm: input.paymentForm,
           serie: input.serie,
-          receiver: {
-            rfc: decryptText(profile.rfc),
-            name: decryptText(profile.legalName),
-            cfdiUse: profile.cfdiUse,
-            taxRegime: profile.taxRegime,
-            zipCode: profile.zipCode,
-            email: profile.email,
-          },
+          receiver,
           actor: {
             staffId: ctx.posOperator?.staffId ?? null,
             terminalId: ctx.posAuth?.terminalId ?? null,

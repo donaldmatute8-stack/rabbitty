@@ -97,3 +97,5 @@ Para saber **en qué rama trabajar y cómo integrar**, leer [`RAMAS-Y-FLUJO.md`]
 - Rama: `main`
 - No se modificó código fuente, esquema, configuración ni dependencias.
 - Solo se agregaron archivos dentro de `Docs/POS-FASE-0/`.
+
+- [`PENDIENTES-CFDI.md`](./PENDIENTES-CFDI.md) — qué falta para timbrar de verdad

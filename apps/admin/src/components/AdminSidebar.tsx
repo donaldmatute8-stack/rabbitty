@@ -213,6 +213,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/reports/audit", label: "Cuadre & Auditoría", icon: ReceiptText, badge: "PDF" },
       { href: "/cash-shifts", label: "Turnos de Caja", icon: Banknote },
       { href: "/settings/terminals", label: "Terminales POS", icon: TabletSmartphone },
+      { href: "/settings/billing", label: "Facturación CFDI", icon: Receipt },
       { href: "/refunds", label: "Reembolsos & Pagos", icon: Repeat },
     ],
   },
