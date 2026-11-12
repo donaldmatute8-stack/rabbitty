@@ -130,7 +130,8 @@ Sin estaciones configuradas, la UI se comporta como hoy (una sola cola).
 | **0C-1** | Migración `0039` + `stations` + estación default + `stations.*` | ✅ **staging aplicado** · POS sin cambios · falta prod |
 | **0C-2** | Resolución de estación + snapshot al insertar el ítem | ✅ **hecho** · 4 puntos de inserción cubiertos |
 | **0C-3** | `kds.getStationQueue` + aislamiento por sucursal/estación | ✅ **hecho** · verificación en staging |
-| **0C-4** | UI de estaciones (admin + KDS) | ✅ **hecho** · selector por categoría/producto y por pantalla |
+| **0C-4** | UI de estaciones (admin + KDS) | ✅ **hecho** |
+| **0C-4b** | Terminal atada a estación (aislamiento duro) | ✅ **hecho** · validado en staging |
 | **0C-5** | Outbox realtime + Centrifugo | Reconexión <5 s sin perder comandas; polling se mantiene 30 días |
 
 **Nada de esto toca pagos, caja ni Bunz.**
@@ -298,3 +299,36 @@ barra si alguien conoce el id. Para cerrarlo hace falta:
 2. Incluir la estación en las claims del token de terminal.
 3. `kds.getStationQueue` usa la estación del token cuando el llamador es una
    terminal, ignorando la del cliente.
+
+
+---
+
+## 16. Registro 0C-4b (12-nov-2026)
+
+**Migración `0054`:** `pos_terminals.stationId` (nullable, aditiva).
+
+**Cadena de identidad:** el principal de la terminal expone `stationId` y el
+contexto tRPC lo propaga a `ctx.posAuth.stationId`.
+
+**Regla:** si la terminal tiene estación fija, **manda la del token**:
+
+- `kds.getStationQueue` con otra estación → `FORBIDDEN`.
+- `kds.getOrders` se restringe automáticamente a esa estación.
+
+**Cambio de auth:** `kds.*` pasa a `posProcedure` y se añade `kds.` a la
+allowlist de terminal. Así una tablet de cocina puede operar con su token (sin
+sesión de admin) y queda atada a su estación.
+
+**Admin:** selector "Estación fija" por terminal en Settings → Terminales.
+
+### Validación en staging
+
+```
+terminal atada a Barra
+  getStationQueue(Barra)  → 200, 1 orden
+  getStationQueue(Cocina) → 403 "Esta terminal está asignada a otra estación"
+  getOrders()             → 200, solo 1 ítem de Barra
+```
+
+**Pendiente:** aplicar `0054` en producción y mergear (misma ventana que el resto:
+migración → verificación → deploy).
