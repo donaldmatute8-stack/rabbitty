@@ -78,21 +78,25 @@ Cuando el trabajo se pause por otro frente, retomar es:
 ### §7 · Estado actual
 
 ```
-FASE:                     0C — estaciones y KDS (5 de 6 bloques en producción)
+FASE:                     0C COMPLETA — estaciones, KDS y tiempo real en producción
 EN PRODUCCIÓN:            0C-1 modelo · 0C-2 ruteo+snapshot · 0C-3 cola por estación
-                          0C-4 UI (menú, kitchen, KDS) · 0C-4b terminal atada
-MIGRACIONES APLICADAS:    0038 · 0039 · 0054 (todas aditivas)
+                          0C-4 UI · 0C-4b terminal atada · 0C-5 outbox+Centrifugo
+                          0C-5b cliente del KDS suscrito (push + polling de respaldo)
+MIGRACIONES APLICADAS:    0038 · 0039 · 0040 · 0054 (todas aditivas)
 EXTRA EN PRODUCCIÓN:      KDS en reposo por inactividad (ahorro de compute Neon)
+                          Contexto del KDS sin BRANCH_ID (sesión o token de terminal)
 TRINQUETE:                0 procedimientos y 0 archivos sin helper
 
-SIGUIENTE:                0C-5 · outbox realtime + Centrifugo (ADR-017)
-                          KDS: eventos en vivo con aislamiento por estación
-BLOQUEADO POR:            nada
+SIGUIENTE:                CFDI multi-tenant (PacProvider + credenciales por tenant)
+                          Decidir PAC: Facturama vs Finkok/MrFactura/FiscalAPI
+BLOQUEADO POR:            PAC sin contratar (sandbox pendiente)
 
 PREGUNTAS ABIERTAS:
-  - Autorizar PAC sandbox Facturama y corregir mensajes CFDI (M-01 … M-04)
-  - Definir si el KDS se queda con polling como red de seguridad tras 0C-5
+  - ¿Cuándo se retira el polling del KDS? (hoy es red de seguridad; 30 días)
+  - ¿El tenant integra su propio PAC desde el admin o se le guía?
+  - Corregir mensajes CFDI (M-01 … M-04) y retirar la promesa comercial
 ```
+
 
 > **Instrucción:** al cerrar cada checkpoint, actualizar este bloque. Es el contrato de reanudación.
 
