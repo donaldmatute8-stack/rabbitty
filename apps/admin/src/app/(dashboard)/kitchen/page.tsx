@@ -9,9 +9,35 @@ const STATUS_FLOW = ["PENDING", "IN_PROGRESS", "READY"] as const;
 
 export default function KitchenPage() {
   const utils = trpc.useUtils();
-  const { data: orders } = trpc.kds.getOrders.useQuery(undefined, { refetchInterval: 10000 });
+  // Estación de esta pantalla (ADR-023). Sin estación elegida: cola completa.
+  const [stationId, setStationId] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem("rabbitty_kds_station") ?? "";
+  });
+  const { data: stationsList } = trpc.stations.list.useQuery();
+  const stationQueue = trpc.kds.getStationQueue.useQuery(
+    { stationId },
+    { enabled: Boolean(stationId), refetchInterval: 10000 },
+  );
+  const allQueue = trpc.kds.getOrders.useQuery(undefined, {
+    enabled: !stationId,
+    refetchInterval: 10000,
+  });
+  const orders = stationId ? stationQueue.data : allQueue.data;
+
+  const pickStation = (id: string) => {
+    setStationId(id);
+    if (typeof window !== "undefined") {
+      if (id) window.localStorage.setItem("rabbitty_kds_station", id);
+      else window.localStorage.removeItem("rabbitty_kds_station");
+    }
+  };
+
   const updateStatus = trpc.kds.updateOrderItemStatus.useMutation({
-    onSuccess: () => { utils.kds.getOrders.invalidate(); }
+    onSuccess: () => {
+      utils.kds.getOrders.invalidate();
+      utils.kds.getStationQueue.invalidate();
+    }
   });
 
   const [viewMode, setViewMode] = useState<"kanban" | "grouped">("kanban");
@@ -73,6 +99,17 @@ export default function KitchenPage() {
             <div>
               <h1 className="text-4xl font-black tracking-tight text-white">Cocina KDS</h1>
               <p className="text-gray-400 mt-1 font-medium">Display térmico de órdenes en vivo</p>
+              <select
+                value={stationId}
+                onChange={(e) => pickStation(e.target.value)}
+                className="mt-2 rounded-lg border border-white/15 bg-black/50 px-2.5 py-1.5 text-xs font-bold text-white outline-none"
+                aria-label="Estación de esta pantalla"
+              >
+                <option value="">Todas las estaciones</option>
+                {(stationsList ?? []).map((st) => (
+                  <option key={st.id} value={st.id}>{st.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           

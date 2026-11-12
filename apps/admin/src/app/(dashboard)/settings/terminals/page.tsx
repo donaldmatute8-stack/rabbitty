@@ -50,6 +50,12 @@ export default function PosTerminalsPage() {
 
   const utils = trpc.useUtils();
 
+  const { data: stationsData } = trpc.stations.list.useQuery();
+  const setStation = trpc.posTerminals.setStation.useMutation({
+    onSuccess: () => { utils.posTerminals.list.invalidate(); toast.success("Estación de la terminal actualizada"); },
+    onError: (e: { message: string }) => toast.error(e.message),
+  });
+
   const revoke = trpc.posTerminals.revoke.useMutation({
     onSuccess: () => {
       toast.success("Terminal revocada. No podrá abrir nuevas sesiones.");
@@ -193,6 +199,22 @@ export default function PosTerminalsPage() {
                     <p className="m-0 font-bold uppercase text-gray-400">Autorización vence</p>
                     <p className="m-0 mt-0.5 font-bold">{fmt(t.expiresAt)}</p>
                   </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    Estación fija
+                  </label>
+                  <select
+                    value={(t as { stationId?: string | null }).stationId ?? ""}
+                    onChange={(e) => setStation.mutate({ terminalId: t.id, stationId: e.target.value || null })}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white outline-none"
+                  >
+                    <option value="">Sin estación (elige la pantalla)</option>
+                    {(stationsData ?? []).map((st) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {t.activeOperator ? (

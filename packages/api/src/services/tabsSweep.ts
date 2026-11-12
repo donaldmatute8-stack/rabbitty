@@ -35,7 +35,7 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
     // 2. Marcar EXPIRED + STALE_TAB (auditables, fuera de tabs/dashboard)
     await db
       .update(orders)
-      .set({ status: "EXPIRED", voidReason: "STALE_TAB" })
+      .set({ status: "EXPIRED", voidReason: "STALE_TAB", version: sql`${orders.version} + 1` })
       .where(and(inArray(orders.id, ids), inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"])));
 
     // 3. Payment intents ligados que sigan PENDING → cancelados
@@ -67,7 +67,7 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
     if (blankIds.length > 0) {
       await db
         .update(orders)
-        .set({ status: "EXPIRED", voidReason: "ZERO_TOTAL_DRAFT", updatedAt: new Date() })
+        .set({ status: "EXPIRED", voidReason: "ZERO_TOTAL_DRAFT", updatedAt: new Date(), version: sql`${orders.version} + 1` })
         .where(and(inArray(orders.id, blankIds), eq(orders.status, "PENDING")));
     }
   } catch (err) {

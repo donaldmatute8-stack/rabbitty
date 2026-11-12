@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     const staleIds = stale.map((s) => s.id);
     await restaurantDb
       .update(orders)
-      .set({ status: "EXPIRED", voidReason: "STALE_TAB" } as never)
+      .set({ status: "EXPIRED", voidReason: "STALE_TAB", version: sql`${orders.version} + 1` } as never)
       .where(inArray(orders.id, staleIds));
 
     // Cancelar intents vivos / liberar holds de Bunz ligados

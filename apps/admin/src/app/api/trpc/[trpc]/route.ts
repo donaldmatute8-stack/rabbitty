@@ -221,6 +221,7 @@ const handler = async (req: Request) => {
               terminalId: posTerminal.terminalId,
               sessionId: posTerminal.sessionId,
               branchId: posTerminal.branchId,
+              stationId: posTerminal.stationId,
               businessId: posTerminal.businessId,
               terminalName: posTerminal.terminalName,
             }

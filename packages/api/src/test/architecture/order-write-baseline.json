@@ -1,0 +1,132 @@
+{
+  "_meta": {
+    "description": "Trinquete de la frontera de escritura (ADR-018). Mide PROTECCI\u00d3N. Ambas listas solo pueden ENCOGER.",
+    "generatedAt": "2026-11-11",
+    "rules": {
+      "ALLOWED": "orderIntegrity.ts",
+      "ALLOWED_EXCEPTION": "pago (ADR-019) o mantenimiento en bloque con bump de version",
+      "PROTECTED": "usa withOrderMutation/withOrderCreate",
+      "SANDBOX": "sandbox",
+      "SEED": "seed",
+      "PENDING_MIGRATION": "escribe sin helper"
+    }
+  },
+  "files": {
+    "apps/admin/src/app/api/aggregators/webhook/route.ts": {
+      "count": 2,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "apps/admin/src/app/api/cron/expire-orders/route.ts": {
+      "count": 1,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "apps/admin/src/app/api/webhooks/uber-direct/route.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "packages/api/src/routers/customer.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "packages/api/src/routers/invoices.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "packages/api/src/routers/kds.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "packages/api/src/routers/payments.ts": {
+      "count": 3,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "packages/api/src/routers/pos.ts": {
+      "count": 42,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "packages/api/src/routers/sandbox.ts": {
+      "count": 8,
+      "category": "SANDBOX",
+      "importsHelper": false
+    },
+    "packages/api/src/services/orderIntegrity.ts": {
+      "count": 2,
+      "category": "ALLOWED",
+      "importsHelper": true
+    },
+    "packages/api/src/services/paymentCore.ts": {
+      "count": 5,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "packages/api/src/services/paymentIntentDomain.ts": {
+      "count": 1,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "packages/api/src/services/tabsSweep.ts": {
+      "count": 2,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "packages/database-restaurant/src/seed.ts": {
+      "count": 2,
+      "category": "SEED",
+      "importsHelper": false
+    },
+    "telegram-miniapp/src/app/api/bot/webhook/route.ts": {
+      "count": 1,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "telegram-miniapp/src/app/api/chat/order/route.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "telegram-miniapp/src/app/api/pos/checkout/route.ts": {
+      "count": 7,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "telegram-miniapp/src/app/api/pos/claim-table/route.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "telegram-miniapp/src/app/api/pos/claim-ticket/route.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "telegram-miniapp/src/app/api/pos/request-cash/route.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    },
+    "telegram-miniapp/src/app/api/track/[orderId]/cancel/route.ts": {
+      "count": 1,
+      "category": "PROTECTED",
+      "importsHelper": true
+    }
+  },
+  "pendingFiles": [],
+  "pendingPosProcedures": [],
+  "totals": {
+    "files": 21,
+    "writes": 85,
+    "pendingFiles": 0,
+    "pendingPosProcedures": 0
+  },
+  "deprecatedProcedures": [
+    "payOrder"
+  ]
+}

@@ -92,6 +92,27 @@ export const branches = pgTable("branches", {
   ...timestamps,
 });
 
+/**
+ * 🍳 Estaciones de preparación (ADR-023, migración 0039).
+ * Sin configuración, la sucursal tiene una estación "Cocina" por defecto y todo
+ * cae ahí: el POS se comporta igual que antes de existir estaciones.
+ */
+export const stations = pgTable("stations", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  branchId: text("branchId").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** KITCHEN | BAR | EXPO | COLD */
+  type: text("type").default("KITCHEN").notNull(),
+  printerId: text("printerId"),
+  isActive: boolean("isActive").default(true).notNull(),
+  isDefault: boolean("isDefault").default(false).notNull(),
+  sortOrder: integer("sortOrder").default(0).notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("stations_branch_name_uidx").on(t.branchId, sql`lower(${t.name})`),
+  uniqueIndex("stations_branch_default_uidx").on(t.branchId).where(sql`${t.isDefault} = true`),
+]);
+
 export const menuCategories = pgTable("menu_categories", {
   id: id(),
   branchId: fkId("branchId").references(() => branches.id),
@@ -99,6 +120,8 @@ export const menuCategories = pgTable("menu_categories", {
   description: text("description"),
   sortOrder: integer("sortOrder").default(0).notNull(),
   printerZone: text("printerZone").default("MAIN").notNull(),
+  /** Estación heredada por sus productos (ADR-023). */
+  stationId: text("stationId").references(() => stations.id, { onDelete: "set null" }),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });
@@ -113,6 +136,8 @@ export const menuItems = pgTable("menu_items", {
   cost: real("cost").default(0),
   imageUrl: text("imageUrl"),
   sku: text("sku"),
+  /** Override por producto; si es NULL hereda la estación de su categoría. */
+  stationId: text("stationId").references(() => stations.id, { onDelete: "set null" }),
   isActive: boolean("isActive").default(true).notNull(),
   isAvailable: boolean("isAvailable").default(true).notNull(),
   sortOrder: integer("sortOrder").default(0).notNull(),
@@ -219,8 +244,39 @@ export const orders = pgTable("orders", {
   cfdiUrl: text("cfdiUrl"),
   /** RP-2A: clave de idempotencia del cobro. Única cuando existe. */
   idempotencyKey: text("idempotencyKey"),
+  // ── Integridad de órdenes (ADR-018, migración 0038) ──
+  /** Versión optimista: toda mutación la incrementa. */
+  version: integer("version").default(1).notNull(),
+  updatedByStaffId: text("updatedByStaffId"),
+  updatedByTerminalId: text("updatedByTerminalId"),
   ...timestamps,
-}, (t) => [uniqueIndex("orders_idempotency_key_idx").on(t.idempotencyKey)]);
+}, (t) => [
+  uniqueIndex("orders_idempotency_key_idx").on(t.idempotencyKey),
+  index("orders_version_idx").on(t.version),
+]);
+
+/**
+ * Bitácora append-only de mutaciones de una orden (ADR-018 §6.2).
+ * `versionBefore/After` permiten reconstruir qué pasó y detectar escrituras
+ * fuera del helper `withOrderMutation`.
+ */
+export const orderEvents = pgTable("order_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text("orderId").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  versionBefore: integer("versionBefore").notNull(),
+  versionAfter: integer("versionAfter").notNull(),
+  staffId: text("staffId"),
+  terminalId: text("terminalId"),
+  idempotencyKey: text("idempotencyKey"),
+  payload: jsonb("payload"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("order_events_idempotency_uidx")
+    .on(t.idempotencyKey)
+    .where(sql`${t.idempotencyKey} IS NOT NULL`),
+  index("order_events_order_idx").on(t.orderId, t.createdAt),
+]);
 
 /**
  * 🛵 Entregas (última milla) — capa proveedor-agnóstica.
@@ -266,6 +322,10 @@ export const orderItems = pgTable("order_items", {
   notes: text("notes"),
   status: text("status").default("PENDING").notNull(),
   sortOrder: integer("sortOrder").default(0).notNull(),
+  /** Snapshot de destino al enviar la comanda; nunca se recalcula (ADR-023). */
+  stationId: text("stationId"),
+  printerId: text("printerId"),
+  sentToStationAt: timestamp("sentToStationAt"),
   voidReason: text("voidReason"),
   voidedAt: timestamp("voidedAt"),
   authorizedById: fkIdOpt("authorizedById").references(() => staff.id),

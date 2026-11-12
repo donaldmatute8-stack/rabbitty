@@ -4,6 +4,7 @@ import { orders } from '@rabbitty/database-restaurant/schema';
 import { eq, and } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { withOrderMutation } from "@rabbitty/api/services/orderIntegrity";
 
 export const runtime = 'nodejs';
 
@@ -50,10 +51,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, status: order.status, already: true });
     }
 
-    await restaurantDb
-      .update(orders)
-      .set({ status: 'CASH_PAYMENT_REQUESTED', updatedAt: new Date() })
-      .where(eq(orders.id, orderId));
+    await restaurantDb.transaction(async (tx: any) => {
+      await withOrderMutation(
+        tx,
+        { orderId, type: "CASH_REQUESTED", actor: { staffId: null, terminalId: null } },
+        async (_o: any, _c: any) => {
+          await tx
+            .update(orders)
+            .set({ status: 'CASH_PAYMENT_REQUESTED', updatedAt: new Date() })
+            .where(eq(orders.id, orderId));
+        },
+      );
+    });
 
     return NextResponse.json({ success: true, status: 'CASH_PAYMENT_REQUESTED', total: Number(order.total || 0) });
   } catch (err: any) {

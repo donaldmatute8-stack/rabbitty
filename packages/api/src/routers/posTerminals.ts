@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure, publicProcedure, posPermissionsOf, resolvePosRole } from "../trpc";
 import { TRPCError } from "@trpc/server";
+import { stations } from "@rabbitty/database-restaurant/schema";
 import { branches, restaurants, staff as staffTable } from "@rabbitty/database-restaurant/schema";
 import {
   posTerminals,
@@ -242,6 +243,7 @@ export const posTerminalsRouter = router({
         name: posTerminals.name,
         platform: posTerminals.platform,
         status: posTerminals.status,
+        stationId: posTerminals.stationId,
         authorizedAt: posTerminals.authorizedAt,
         expiresAt: posTerminals.expiresAt,
         lastSeenAt: posTerminals.lastSeenAt,
@@ -368,6 +370,37 @@ export const posTerminalsRouter = router({
     }),
 
   /** Revoca una terminal de mi sucursal (bloquea nuevas sesiones). */
+  /** Fija la estación de una terminal (0C-4b). null = elige el cliente. */
+  setStation: adminOnlyProcedure
+    .input(z.object({ terminalId: z.string(), stationId: z.string().nullable() }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(ctx);
+
+      const [terminal] = await ctx.coreDb
+        .select({ id: posTerminals.id, branchId: posTerminals.branchId })
+        .from(posTerminals)
+        .where(and(eq(posTerminals.id, input.terminalId), eq(posTerminals.branchId, scope.branchId)))
+        .limit(1);
+      if (!terminal) throw new TRPCError({ code: "NOT_FOUND", message: "Terminal no encontrada" });
+
+      if (input.stationId) {
+        const [station] = await ctx.restaurantDb
+          .select({ id: stations.id })
+          .from(stations)
+          .where(and(eq(stations.id, input.stationId), eq(stations.branchId, scope.branchId)))
+          .limit(1);
+        if (!station) throw new TRPCError({ code: "NOT_FOUND", message: "La estación no pertenece a esta sucursal" });
+      }
+
+      const [updated] = await ctx.coreDb
+        .update(posTerminals)
+        .set({ stationId: input.stationId })
+        .where(eq(posTerminals.id, input.terminalId))
+        .returning({ id: posTerminals.id, stationId: posTerminals.stationId });
+
+      return updated;
+    }),
+
   revoke: adminOnlyProcedure
     .input(z.object({ terminalId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -600,6 +633,7 @@ export const posTerminalsRouter = router({
         name: posTerminals.name,
         platform: posTerminals.platform,
         status: posTerminals.status,
+        stationId: posTerminals.stationId,
         authorizedAt: posTerminals.authorizedAt,
         expiresAt: posTerminals.expiresAt,
         lastSeenAt: posTerminals.lastSeenAt,

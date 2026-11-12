@@ -35,6 +35,8 @@ export interface Context {
     terminalId?: string;
     sessionId?: string;
     branchId?: string;
+    /** Estación fija de la terminal (0C-4b). */
+    stationId?: string | null;
     businessId?: string | null;
     terminalName?: string;
   };
@@ -124,6 +126,11 @@ const TERMINAL_ALLOWED_PREFIXES = [
   "cashDrops.",
   "cashShifts.",
   "printing.",
+  // El POS/KDS necesita leer la estación y el tenant configurarla.
+  // Las mutaciones siguen protegidas por posPermission("POS_SETTINGS").
+  "stations.",
+  // KDS puede correr en una tablet con token de terminal atada a su estación.
+  "kds.",
 ] as const;
 const TERMINAL_ALLOWED_EXACT = new Set(["staff.verifyAdminPin"]);
 
