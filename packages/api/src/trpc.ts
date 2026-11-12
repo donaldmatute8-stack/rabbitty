@@ -124,6 +124,9 @@ const TERMINAL_ALLOWED_PREFIXES = [
   "cashDrops.",
   "cashShifts.",
   "printing.",
+  // El POS/KDS necesita leer la estación y el tenant configurarla.
+  // Las mutaciones siguen protegidas por posPermission("POS_SETTINGS").
+  "stations.",
 ] as const;
 const TERMINAL_ALLOWED_EXACT = new Set(["staff.verifyAdminPin"]);
 
