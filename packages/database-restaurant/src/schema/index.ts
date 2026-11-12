@@ -646,8 +646,41 @@ export const invoices = pgTable("invoices", {
   pdfUrl: text("pdfUrl"),
   xmlUrl: text("xmlUrl"),
   cancelledAt: timestamp("cancelledAt"),
+  // CFDI multi-tenant (migración 0055): quién timbró y con qué.
+  businessId: text("businessId"),
+  provider: text("provider"),
+  environment: text("environment"),
+  pacInvoiceId: text("pacInvoiceId"),
+  errorMessage: text("errorMessage"),
+  issuedAt: timestamp("issuedAt"),
+  cancellationMotive: text("cancellationMotive"),
+  replacementUuid: text("replacementUuid"),
   ...timestamps,
 });
+
+/**
+ * 🔐 Credenciales del PAC de cada tenant (ADR-021, migración 0055).
+ * El tenant paga sus timbres; Rabbitty solo guarda (cifrado) y llama al PAC.
+ */
+export const cfdiCredentials = pgTable("cfdi_credentials", {
+  id: id(),
+  businessId: text("businessId").notNull(),
+  provider: text("provider").notNull(),
+  environment: text("environment").default("sandbox").notNull(),
+  issuerRfc: text("issuerRfc").notNull(),
+  issuerName: text("issuerName").notNull(),
+  issuerTaxRegime: text("issuerTaxRegime").notNull(),
+  issuerZipCode: text("issuerZipCode").notNull(),
+  credentials: text("credentials").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  lastTestedAt: timestamp("lastTestedAt"),
+  lastTestStatus: text("lastTestStatus"),
+  lastTestMessage: text("lastTestMessage"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("cfdi_credentials_business_provider_env_uq").on(t.businessId, t.provider, t.environment),
+  index("cfdi_credentials_business_idx").on(t.businessId, t.isActive),
+]);
 
 export const waitlistEntries = pgTable("waitlist_entries", {
   id: id(),

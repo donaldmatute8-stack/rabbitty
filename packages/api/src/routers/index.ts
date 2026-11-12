@@ -22,6 +22,7 @@ import { waitlistRouter } from "./waitlist";
 import { suppliersRouter } from "./suppliers";
 import { expensesRouter } from "./expenses";
 import { invoicesRouter } from "./invoices";
+import { cfdiRouter } from "./cfdi";
 import { cateringRouter } from "./catering";
 import { pricingRouter } from "./pricing";
 import { campaignsRouter } from "./campaigns";
@@ -70,6 +71,7 @@ export const appRouter = router({
   suppliers: suppliersRouter,
   expenses: expensesRouter,
   invoices: invoicesRouter,
+  cfdi: cfdiRouter,
   catering: cateringRouter,
   pricing: pricingRouter,
   campaigns: campaignsRouter,

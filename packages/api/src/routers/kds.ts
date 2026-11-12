@@ -6,7 +6,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { orders, tables, orderItems, menuItems, stations } from "@rabbitty/database-restaurant/schema";
 import { withOrderMutation } from "../services/orderIntegrity";
-import { enqueueRealtimeEvent, stationChannel } from "../services/realtimeOutbox";
+import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch as resolveBusinessIdForBranch } from "../services/businessContext";
 
 /**
@@ -258,6 +258,8 @@ export const kdsRouter = router({
           },
         );
       });
+      // Push casi inmediato a las demás pantallas de la estación.
+      drainRealtimeInBackground(ctx.restaurantDb);
       bus.emit(EventTypes.KDS_ITEM_UPDATED, { orderItemId: input.orderItemId, status: input.status });
       return { success: true };
     }),

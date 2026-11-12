@@ -5,6 +5,8 @@ import { orders, invoices, branches } from "@rabbitty/database-restaurant";
 import { billingProfiles } from "@rabbitty/database-core/schema";
 import { withOrderMutation } from "../services/orderIntegrity";
 import { encryptText, decryptText } from "../services/crypto";
+import { resolveBusinessIdFromBranch } from "../services/businessContext";
+import { issueInvoiceForOrder } from "../services/cfdi";
 
 export const customerRouter = router({
   lookupCustomer: protectedProcedure
@@ -81,6 +83,11 @@ export const customerRouter = router({
       };
     }),
 
+  /**
+   * Solicita la factura de una orden. El timbrado lo hace el PAC **del
+   * negocio** (ADR-021): si el negocio no conectó su PAC, se rechaza con un
+   * mensaje claro en vez de simular una factura.
+   */
   requestInvoice: protectedProcedure
     .input(z.object({
       orderId: z.string(),
@@ -91,12 +98,13 @@ export const customerRouter = router({
       const [profile] = await ctx.coreDb.select().from(billingProfiles).where(eq(billingProfiles.id, input.billingProfileId));
       if (!profile) throw new Error("Perfil de facturación no encontrado");
 
-      const decryptedProfile = {
+      const receiver = {
         rfc: decryptText(profile.rfc),
         legalName: decryptText(profile.legalName),
         taxRegime: profile.taxRegime,
         cfdiUse: profile.cfdiUse,
         zipCode: profile.zipCode,
+        email: profile.email,
       };
 
       // Verificar orden
@@ -113,53 +121,42 @@ export const customerRouter = router({
       if (!order) throw new Error("Orden no encontrada");
       if (order.cfdiStatus === "INVOICED") throw new Error("Esta orden ya fue facturada");
 
-      // Validar monto facturable (Dinero real, no Bunz)
-      const bunzPaid = order.bunzPaid || 0;
-      const billableAmount = order.total - bunzPaid;
-      const taxAmount = order.tax || 0;
-      
+      // Solo hay factura si hubo dinero real (los Bunz no generan CFDI).
+      const billableAmount = order.total - (order.bunzPaid || 0);
       if (billableAmount <= 0) {
-        throw new Error("El monto facturable debe ser mayor a 0. Las órdenes pagadas al 100% con Bunz no generan CFDI.");
+        throw new Error("La orden se pagó al 100% con Bunz; no genera CFDI.");
       }
 
-      // Crear registro de factura en la tabla invoices
-      const [invoice] = await ctx.restaurantDb.insert(invoices).values({
-        branchId: order.branchId || "",
-        orderId: order.id,
-        billingProfileId: input.billingProfileId,
-        rfc: decryptedProfile.rfc,
-        legalName: decryptedProfile.legalName,
-        taxRegime: decryptedProfile.taxRegime,
-        cfdiUse: decryptedProfile.cfdiUse,
-        zipCode: decryptedProfile.zipCode,
-        billableAmount,
-        tax: taxAmount,
-        total: billableAmount + taxAmount,
-        status: "INVOICED",
-        pdfUrl: `https://rabbitty.mx/invoices/${order.id}.pdf`,
-      }).returning();
+      const businessId = await resolveBusinessIdFromBranch(ctx.restaurantDb, order.branchId);
+      if (!businessId) throw new Error("La sucursal no tiene negocio asociado");
 
-      // Actualizar status en la orden
-      await ctx.restaurantDb.transaction(async (tx: any) => {
-        await withOrderMutation(
-          tx,
-          { orderId: input.orderId, type: "CFDI_REGISTERED", actor: { staffId: null, terminalId: null } },
-          async (_o: any, _c: any) => {
-            await tx.update(orders)
-              .set({ cfdiStatus: "INVOICED", cfdiUrl: `https://rabbitty.mx/invoices/${order.id}.pdf` })
-              .where(eq(orders.id, input.orderId));
-          },
-        );
+      const result = await issueInvoiceForOrder({
+        db: ctx.restaurantDb,
+        orderId: order.id,
+        businessId,
+        billingProfileId: profile.id,
+        receiver: {
+          rfc: receiver.rfc,
+          name: receiver.legalName,
+          taxRegime: receiver.taxRegime,
+          cfdiUse: receiver.cfdiUse,
+          zipCode: receiver.zipCode,
+          email: receiver.email,
+        },
+        actor: { staffId: null, terminalId: null },
       });
+
+      if (!result.success) throw new Error(result.error);
 
       return {
         success: true,
-        invoiceId: invoice?.id,
-        url: invoice?.pdfUrl,
+        invoiceId: result.invoiceId,
+        uuid: result.uuid,
+        url: `/facturas/${result.invoiceId}`,
         billableAmount,
-        tax: taxAmount,
-        total: billableAmount + taxAmount,
-        rfc: decryptedProfile.rfc,
+        tax: order.tax,
+        total: result.total,
+        rfc: receiver.rfc,
       };
     }),
 });

@@ -76,6 +76,21 @@ async function publish(channel: string, data: Record<string, unknown>): Promise<
 }
 
 /**
+ * Publica de inmediato lo que quedó pendiente, sin bloquear ni romper la
+ * mutación que lo originó. Si falla, el evento sigue QUEUED y lo recoge el
+ * cron: el llamador nunca ve el error (la orden ya está confirmada).
+ *
+ * Con esto el KDS recibe el aviso en el mismo request (~decenas de ms) en vez
+ * de esperar al worker periódico.
+ */
+export function drainRealtimeInBackground(db: any): void {
+  if (!isRealtimePublishConfigured()) return;
+  void processRealtimeOutboxBatch(db, 10).catch(() => {
+    /* queda en la cola para el cron */
+  });
+}
+
+/**
  * Drena hasta `limit` eventos pendientes. Reclama con SKIP LOCKED para que
  * varios workers no se pisen.
  */

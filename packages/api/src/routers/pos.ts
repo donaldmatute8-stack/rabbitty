@@ -10,7 +10,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
 import { resolveStationsForItems } from "../services/stationRouting";
-import { enqueueRealtimeEvent, stationChannel } from "../services/realtimeOutbox";
+import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch } from "../services/businessContext";
 export { resolveBusinessIdFromBranch };
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
@@ -1109,6 +1109,8 @@ export const posRouter = router({
             return orderItem;
           },
         );
+        // Push casi inmediato al KDS; si falla, el cron lo reintenta.
+        drainRealtimeInBackground(ctx.restaurantDb);
         return result;
       });
     }),

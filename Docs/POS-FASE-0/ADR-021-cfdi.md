@@ -136,3 +136,79 @@ Integración en sandbox detrás de flag. Apagada = comportamiento actual (regist
 - `packages/api/src/routers/customer.ts:125-145`
 - `packages/api/src/routers/invoices.ts` (`list`, `getByOrder`, `cancel`, `stats`)
 - `apps/admin/src/app/(dashboard)/invoices/page.tsx:40-42`
+
+---
+
+## 12. Implementación (12-nov-2026) — paso 1: contrato + Facturama
+
+### Decisión
+
+El tenant conecta **su propia cuenta** de PAC y paga sus timbres. Rabbitty no
+timbra con su CSD ni revende folios; guarda credenciales cifradas y llama al
+API del PAC del tenant.
+
+### Migración `0055`
+
+```sql
+cfdi_credentials (
+  id, businessId, provider, environment, issuerRfc, issuerName,
+  issuerTaxRegime, issuerZipCode, credentials (cifrado), isActive,
+  lastTestedAt, lastTestStatus, lastTestMessage
+)
+invoices += businessId, provider, environment, pacInvoiceId,
+            errorMessage, issuedAt, cancellationMotive, replacementUuid
+```
+
+`invoices` ya existía con `uuid`, `pdfUrl`, `xmlUrl`; se reutiliza en vez de
+crear otra tabla.
+
+### Capas
+
+```
+services/cfdi/types.ts       PacProvider (stamp, cancel, download, testConnection)
+services/cfdi/facturama.ts   adaptador Facturama (Basic auth, /3/cfdis, /cfdi/{id}/{fmt})
+services/cfdi/index.ts       credenciales cifradas + timbrado + cancelación
+routers/cfdi.ts              providers, getConnection, testConnection,
+                             saveConnection, issueOrder, cancel, download
+```
+
+Registro de proveedores: `PAC_PROVIDERS['facturama']`. Agregar Finkok es
+implementar la interfaz y sumar la entrada; nada más cambia.
+
+### Reglas implementadas
+
+- **Sin PAC conectado no hay factura.** `issueInvoiceForOrder` lanza
+  `CfdiNotConfiguredError` con un mensaje accionable. La orden **no** se marca
+  como facturada.
+- **Solo se marca INVOICED si el PAC devolvió UUID.** Un rechazo queda como
+  `invoices.status = 'FAILED'` con `errorMessage`, para reintentar y auditar.
+- **Cancelar primero en el PAC.** `invoices.cancel` ya no cambia el estado
+  local a ciegas: pide motivo SAT (01–04) y UUID sustituto cuando aplica.
+- **Los precios del POS son con IVA incluido**, así que el CFDI desglosa:
+  `base = total / 1.16` con `calcTax`, igual que el resto del sistema.
+- **El CFDI cubre la venta completa** (los Bunz son forma de pago, no
+  descuento). Si el negocio necesitara facturar solo la parte en dinero, se
+  ajusta con una regla explícita — hoy la puerta es "hubo dinero real".
+- **El secreto nunca sale**: `getConnectionSummary` no devuelve credenciales y
+  `savePacCredentials` cifra con `ENCRYPTION_KEY` (AES-256-CBC, el helper que
+  ya usaba el perfil fiscal).
+
+### Validado
+
+```
+proveedores registrados:        ['facturama']
+gate sin PAC:                   CfdiNotConfiguredError (no timbra, no marca)
+cifrado en reposo:              sí (el secreto no aparece en la fila)
+descifrado:                     credenciales recuperadas
+resumen de conexión:            no expone el secreto
+tests del adaptador (7):        payload, IVA, error SAT, timeout, cancelación, auth
+```
+
+### Pendiente (paso 2)
+
+- [ ] Credenciales sandbox reales para el caso feliz de timbrado.
+- [ ] UI: *Configuración → Facturación* (elegir PAC, pegar credenciales,
+      "Probar conexión", subir CSD).
+- [ ] Descarga de XML/PDF desde la UI (el router ya devuelve base64).
+- [ ] Factura global y notas de crédito.
+- [ ] Dictamen fiscal de Bunz (D-12).

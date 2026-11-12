@@ -2,7 +2,7 @@ import { z } from "zod";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
 import { invoices, orders, branches } from "@rabbitty/database-restaurant";
-import { withOrderMutation } from "../services/orderIntegrity";
+import { cancelInvoice } from "../services/cfdi";
 
 export const invoicesRouter = router({
   list: protectedProcedure
@@ -90,43 +90,39 @@ export const invoicesRouter = router({
       };
     }),
 
+  /**
+   * Cancela una factura. Si está timbrada, primero se cancela en el PAC del
+   * negocio (motivo SAT) y solo si el PAC confirma se marca aquí. Antes esto
+   * solo cambiaba el estado local y el CFDI seguía vigente ante el SAT.
+   */
   cancel: protectedProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({
+      id: z.string(),
+      motive: z.enum(["01", "02", "03", "04"]).default("02"),
+      replacementUuid: z.string().uuid().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const [invoice] = await ctx.restaurantDb
-        .select()
+        .select({ id: invoices.id })
         .from(invoices)
         .where(and(eq(invoices.id, input.id), eq(invoices.branchId, ctx.branchId)))
         .limit(1);
 
       if (!invoice) throw new Error("Factura no encontrada");
-      if (invoice.status === "CANCELLED") throw new Error("Esta factura ya está cancelada");
 
-      const [updated] = await ctx.restaurantDb
-        .update(invoices)
-        .set({
-          status: "CANCELLED",
-          cancelledAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(invoices.id, input.id))
-        .returning();
-
-      // Also update the order's cfdiStatus back to NONE
-      await ctx.restaurantDb.transaction(async (tx: any) => {
-        await withOrderMutation(
-          tx,
-          { orderId: invoice.orderId, type: "CFDI_CANCELLED", actor: { staffId: null, terminalId: null } },
-          async (_o: any, _c: any) => {
-            await tx
-              .update(orders)
-              .set({ cfdiStatus: "NONE", cfdiUrl: null })
-              .where(eq(orders.id, invoice.orderId));
-          },
-        );
+      const result = await cancelInvoice({
+        db: ctx.restaurantDb,
+        invoiceId: invoice.id,
+        motive: input.motive,
+        replacementUuid: input.replacementUuid,
+        actor: {
+          staffId: ctx.posOperator?.staffId ?? null,
+          terminalId: ctx.posAuth?.terminalId ?? null,
+        },
       });
 
-      return updated;
+      if (!result.success) throw new Error(result.error ?? "El PAC rechazó la cancelación");
+      return result;
     }),
 
   stats: protectedProcedure

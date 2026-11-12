@@ -1,0 +1,36 @@
+name: Rabbitty Realtime Outbox Cron
+
+on:
+  schedule:
+    # Piso de reintentos del outbox POS/KDS. El camino normal publica en el
+    # mismo request (drainRealtimeInBackground); esto recoge lo que falle.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  drain-realtime-outbox:
+    name: Drain POS/KDS Realtime Outbox
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Trigger Worker
+        run: |
+          APP_URL="https://admin.rabbitty.me"
+          SECRET="${{ secrets.RABBITTY_API_SECRET || secrets.CRON_SECRET }}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$APP_URL/api/cron/realtime-outbox" \
+            -H "Authorization: Bearer $SECRET")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Realtime outbox worker failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Drained OK."
