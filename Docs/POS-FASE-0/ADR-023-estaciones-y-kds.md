@@ -128,7 +128,7 @@ Sin estaciones configuradas, la UI se comporta como hoy (una sola cola).
 | Bloque | Alcance | Criterio de aceptación |
 |---|---|---|
 | **0C-1** | Migración `0039` + `stations` + estación default + `stations.*` | ✅ **staging aplicado** · POS sin cambios · falta prod |
-| **0C-2** | Resolución de estación + `sendToKitchen` con snapshot | Un pedido con 2 categorías distintas queda con 2 `stationId` congelados |
+| **0C-2** | Resolución de estación + snapshot al insertar el ítem | ✅ **hecho** · 4 puntos de inserción cubiertos |
 | **0C-3** | `kds.getStationQueue` + aislamiento por token | Cocina no ve ítems de barra (prueba automatizada) |
 | **0C-4** | UI de estaciones (admin + KDS) | Dos pantallas simultáneas, cada una con su cola |
 | **0C-5** | Outbox realtime + Centrifugo | Reconexión <5 s sin perder comandas; polling se mantiene 30 días |
@@ -198,3 +198,31 @@ que es exactamente lo que hacía el POS antes.
 
 **Pendiente para cerrar 0C-1:** aplicar `0039` en producción (misma ventana que
 `0038`) y mergear a `main`. Hasta entonces la rama no se despliega.
+
+
+---
+
+## 12. Registro 0C-2 (12-nov-2026)
+
+**Servicio** `services/stationRouting.ts`: resuelve el destino de N ítems en **3
+consultas** (productos, categorías, estación default) y devuelve también la
+impresora de la estación.
+
+**Snapshot en los 4 puntos donde nacen ítems:**
+
+| Punto | Cuándo |
+|---|---|
+| `addToCart` | al agregar a la comanda |
+| `directCheckout` | cobro directo con ítems |
+| `createPaymentIntent` | cobro por QR |
+| `createStripeChargeIntent` | cobro con tarjeta |
+
+Cada ítem guarda `stationId`, `printerId` y `sentToStationAt` **en el momento de
+crearse**. Si mañana cambia la categoría o se borra la estación, el ítem histórico
+conserva su destino.
+
+**Comportamiento actual:** todas las sucursales tienen una sola estación default
+("Cocina"), así que el resultado visible es idéntico.
+
+**Pendiente de 0C-2:** validar en staging que un carrito con categorías distintas
+produce `stationId` distintos una vez que el tenant cree la estación Barra.
