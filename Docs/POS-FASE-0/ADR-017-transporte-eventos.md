@@ -122,3 +122,49 @@ Apagar el publisher de POS. El KDS queda con polling 10 s (comportamiento actual
 - `apps/kds/src/app/page.tsx`, `apps/kds/src/app/api/sse/route.ts`
 - `telegram-miniapp/src/lib/realtime/chatOutbox.ts` (claim, lease, backoff, `MAX_ATTEMPTS = 8`)
 - `telegram-miniapp/src/app/api/cron/chat-outbox/route.ts`
+
+
+---
+
+## 10. Implementación 0C-5 (12-nov-2026) — parte servidor
+
+**Migración `0040`:** `realtime_outbox` (id, businessId, branchId, channel,
+eventType, eventId único, payload, seq, status, attempts, runAfter, lockedUntil).
+
+**Servicio `realtimeOutbox.ts`:**
+- `stationChannel(businessId, branchId, stationId)` → `biz:{tenant}:branch:{b}:station:{s}`.
+- `enqueueRealtimeEvent(tx, …)` — escribe en la MISMA transacción de la orden.
+- `processRealtimeOutboxBatch(db)` — claim con `SKIP LOCKED`, publica a la HTTP API
+  de Centrifugo, backoff exponencial, 8 intentos, `FAILED` al agotar.
+
+**Emisores conectados:** `pos.addToCart` (`order.item.added`) y
+`kds.updateOrderItemStatus` (`order.item.updated`), ambos al canal de la estación
+del ítem.
+
+**Worker:** `POST /api/cron/realtime-outbox` (auth `CRON_SECRET`/`RABBITTY_API_SECRET`).
+
+### Validado en staging
+
+```
+evento encolado → publicado → status SENT (seq 1)
+Centrifugo aceptó el publish
+```
+
+### Producción
+
+```
+deploy SUCCESS · / y /pos → 200
+/api/cron/realtime-outbox → { configured: true }
+outbox: 0 eventos (aún sin tráfico)
+```
+
+### Lo que falta para cerrar 0C-5
+
+El **cliente**: `apps/kds` todavía usa polling. Para consumir el push hace falta:
+
+1. Token de conexión por estación (`CENTRIFUGO_TOKEN_SECRET` en kds/admin).
+2. Cliente `centrifuge` en `apps/kds` suscrito a su canal.
+3. Mantener el polling 30 días como red de seguridad (decisión de dirección).
+
+Mientras eso no exista, el servidor ya no pierde eventos: quedan en el outbox y el
+KDS los recupera al refrescar (snapshot).
