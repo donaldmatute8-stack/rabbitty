@@ -30,7 +30,7 @@ export default function KdsPage() {
   useEffect(() => {
     setStationId(window.localStorage.getItem("rabbitty_kds_station") ?? "");
   }, []);
-  const { data: stationsList } = trpc.stations.list.useQuery();
+  const { data: stationsList, error: stationsError } = trpc.stations.list.useQuery();
 
   // El reposo por inactividad pausa el polling (neon) sin perder la estación.
   const refetch = resting ? false : 10_000;
@@ -45,6 +45,14 @@ export default function KdsPage() {
     refetchOnWindowFocus: false,
   });
   const orders = stationId ? stationQueue.data : allQueue.data;
+
+  // Sin sesión válida el servidor responde FORBIDDEN: se muestra el acceso en
+  // vez de una pantalla vacía (el contexto se resuelve por sesión o terminal).
+  const authCode =
+    (stationsError?.data as { code?: string } | undefined)?.code ??
+    ((allQueue.error?.data as { code?: string } | undefined)?.code ?? null);
+  const needsLogin = authCode === "FORBIDDEN" || authCode === "UNAUTHORIZED";
+
 
   // Aviso en vivo (0C-5). El canal y los tokens los emite el servidor a partir
   // de la estación elegida; sin estación no hay canal y queda el polling.
@@ -148,6 +156,25 @@ export default function KdsPage() {
   };
 
   const hasPending = counts.PENDING > 0 || counts.READY > 0;
+
+  if (needsLogin) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-600 text-2xl font-black">R</div>
+        <h1 className="text-xl font-bold">Kitchen Display</h1>
+        <p className="max-w-sm text-sm text-gray-400">
+          Esta pantalla no tiene una sesión activa o tu usuario no pertenece a la
+          sucursal. Ingresa con el correo del negocio para ver las comandas.
+        </p>
+        <a
+          href="/login"
+          className="rounded-xl bg-pink-600 px-6 py-3 text-sm font-semibold text-white hover:bg-pink-700"
+        >
+          Iniciar sesión
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] flex-col">
