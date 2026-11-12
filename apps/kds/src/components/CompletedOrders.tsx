@@ -4,7 +4,7 @@ import { trpc } from "../lib/trpc-client";
 import { useEffect, useState } from "react";
 import { CheckCircle2, X } from "lucide-react";
 
-export function CompletedOrders() {
+export function CompletedOrders({ paused = false }: { paused?: boolean } = {}) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   // Compute the cutoff outside render (effects are allowed to be impure),
   // refreshed every minute so completed orders age out correctly.
@@ -16,7 +16,9 @@ export function CompletedOrders() {
     return () => clearInterval(id);
   }, []);
   const { data: orders } = trpc.kds.getOrders.useQuery(undefined, {
-    refetchInterval: 30_000,
+    // Se pausa junto con la pantalla para no despertar la base en reposo.
+    refetchInterval: paused ? false : 30_000,
+    refetchOnWindowFocus: false,
   });
 
    const completed = (orders ?? []).filter((order) => {

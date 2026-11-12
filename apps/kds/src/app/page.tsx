@@ -15,8 +15,15 @@ const itemStatusConfig: Record<"PENDING" | "IN_PROGRESS" | "READY" | "SERVED", {
   SERVED: { label: "Servido", color: "border-gray-700/50 bg-gray-800/40", dot: "bg-gray-500", next: null },
 };
 
+/** Tras este tiempo sin comandas activas, el KDS deja de consultar la base.
+ *  Motivo: una pantalla encendida toda la noche polleando cada 10 s impide que
+ *  el compute de Neon se suspenda (y consume el cupo de horas). */
+const IDLE_TO_REST_MS = 10 * 60 * 1000;
+
 export default function KdsPage() {
   const utils = trpc.useUtils();
+  const [resting, setResting] = useState(false);
+
   // Estación de esta pantalla (ADR-023). Se recuerda en el dispositivo.
   const [stationId, setStationId] = useState<string>("");
   useEffect(() => {
@@ -24,13 +31,16 @@ export default function KdsPage() {
   }, []);
   const { data: stationsList } = trpc.stations.list.useQuery();
 
+  // El reposo por inactividad pausa el polling (neon) sin perder la estación.
+  const refetch = resting ? false : 10_000;
   const stationQueue = trpc.kds.getStationQueue.useQuery(
     { stationId },
-    { enabled: Boolean(stationId), refetchInterval: 10_000, refetchOnWindowFocus: false },
+    { enabled: Boolean(stationId), refetchInterval: refetch, refetchOnWindowFocus: false },
   );
   const allQueue = trpc.kds.getOrders.useQuery(undefined, {
     enabled: !stationId,
-    refetchInterval: 10_000,
+    refetchInterval: refetch,
+
     refetchOnWindowFocus: false,
   });
   const orders = stationId ? stationQueue.data : allQueue.data;
@@ -69,6 +79,38 @@ export default function KdsPage() {
     prevCountRef.current = current;
   }, [orders, play]);
 
+  // ── Reposo por inactividad ──────────────────────────────────────────────
+  // Con comandas activas se refresca cada 10 s. Sin comandas durante
+  // IDLE_TO_REST_MS, el KDS deja de pollear (permite suspender Neon) y queda
+  // un aviso para reanudar con un toque.
+  const activeItems = (orders ?? []).reduce(
+    (n, order) => n + (order.items ?? []).filter((i) => i.status !== "SERVED").length,
+    0,
+  );
+  const lastActiveRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    if (activeItems > 0) {
+      lastActiveRef.current = Date.now();
+      if (resting) setResting(false);
+    }
+  }, [activeItems, resting]);
+
+  useEffect(() => {
+    if (resting) return;
+    // Intervalo local: no toca la red ni la base.
+    const id = setInterval(() => {
+      if (Date.now() - lastActiveRef.current >= IDLE_TO_REST_MS) setResting(true);
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [resting]);
+
+  const wake = useCallback(() => {
+    lastActiveRef.current = Date.now();
+    setResting(false);
+    void utils.kds.getOrders.invalidate();
+  }, [utils]);
+
   const handleStatus = useCallback(
     (orderId: string, item: { id: string }, status: "PENDING" | "IN_PROGRESS" | "READY" | "SERVED") => {
       updateItemStatus.mutate({ orderItemId: item.id, status });
@@ -91,6 +133,20 @@ export default function KdsPage() {
 
   return (
     <div className="flex h-[100dvh] flex-col">
+      {resting && (
+        <button
+          type="button"
+          onClick={wake}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/92 text-white"
+        >
+          <span className="text-4xl">🌙</span>
+          <span className="text-xl font-bold">Pantalla en reposo</span>
+          <span className="max-w-sm text-center text-sm text-gray-400">
+            Sin comandas activas. El KDS dejó de consultar el servidor para ahorrar
+            consumo. Toca la pantalla para reanudar.
+          </span>
+        </button>
+      )}
       <header className="flex items-center justify-between border-b border-white/10 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-600 text-lg font-black">
@@ -249,7 +305,7 @@ export default function KdsPage() {
         )}
 
         <div className="mt-8">
-          <CompletedOrders />
+          <CompletedOrders paused={resting} />
         </div>
       </main>
     </div>
