@@ -168,3 +168,96 @@ El **cliente**: `apps/kds` todavía usa polling. Para consumir el push hace falt
 
 Mientras eso no exista, el servidor ya no pierde eventos: quedan en el outbox y el
 KDS los recupera al refrescar (snapshot).
+
+---
+
+## 11. Implementación 0C-5 (12-nov-2026) — cliente y cierre
+
+### Lo que se validó en producción antes del cliente
+
+Con un cliente Node contra el Centrifugo real:
+
+```
+conectado → suscrito al canal de la estación
+publisher del outbox → published: 1
+publicación recibida: eventId coincide · seq 2 · status SENT
+```
+
+Eso confirmó que la firma, el canal y el worker funcionan. Faltaba el navegador.
+
+### Namespace `biz` (hallazgo)
+
+La primera suscripción real falló con `code 102 unknown channel`: Centrifugo
+interpreta el prefijo antes de `:` como *namespace* y solo existía `chat`.
+Se agregó al servicio `rabbitty-realtime`:
+
+```json
+{ "name": "biz", "presence": false, "join_leave": false,
+  "history_size": 0, "history_ttl": "0s", "allow_subscribe_for_client": false }
+```
+
+Con `allow_subscribe_for_client: false` el cliente **debe** mandar token de
+suscripción, que es justo lo que emite el servidor.
+
+### Cliente del KDS
+
+`apps/kds/src/hooks/useKdsRealtime.ts`:
+
+- pide `/api/realtime/token?stationId=…` (el servidor decide el canal);
+- abre `Centrifuge` con token de conexión y `getToken` para renovarlo;
+- `newSubscription(channel, { token, getToken })` y `on("publication")`;
+- agrupa ráfagas con un debounce de 250 ms y solo invalida la cola activa;
+- al volver del segundo plano refresca y reconecta;
+- sin estación elegida no se conecta (modo "todas" sigue con polling).
+
+El polling de 10 s y el SSE se mantienen: el push adelanta el refresco, nunca
+sustituye a la base. El estado se muestra en la cabecera
+(*En vivo · Conectando · Solo polling*).
+
+### Seguridad del canal (corregido)
+
+La primera versión de `/api/realtime/token` firmaba **cualquier** canal que
+empezara por `biz:`; con eso, adivinar un id ajeno bastaba para escuchar otro
+negocio. Ahora:
+
+1. el cliente manda `stationId`, nunca el canal;
+2. `resolveKdsCaller` autentica por **token de terminal** o por **sesión**
+   (misma pieza para tRPC y para el token);
+3. la estación debe pertenecer a la sucursal del llamante;
+4. una terminal atada a Barra no puede pedir el canal de Cocina.
+
+### Contexto del KDS (bug de producción encontrado)
+
+El handler tRPC del KDS exigía `BRANCH_ID` y no leía el token de terminal: en
+producción devolvía **500** en *todas* las llamadas (`BRANCH_ID env var is
+required`), así que la pantalla estaba caída. Se sustituyó por
+`services/kdsContext.ts`, que replica el criterio del admin:
+
+```
+terminal POS (x-pos-terminal-token)  →  sucursal y estación del dispositivo
+sesión NextAuth                      →  staff → sucursal, o negocio del dueño
+BRANCH_ID                            →  solo si está configurado (staging)
+nada                                 →  403 "Sin sucursal asignada"
+```
+
+### Validación en staging
+
+```
+sin token                 → 403 (antes: 500)
+token de terminal         → 200 · estaciones correctas
+getStationQueue(Barra)    → 200
+getStationQueue(Cocina)   → 403 (terminal atada a Barra)
+token realtime Barra      → 200 · canal biz:…:station:Barra
+token realtime Cocina     → 403
+suscripción con esos JWT  → aceptada por Centrifugo
+```
+
+### Producción
+
+`POS_TERMINAL_SESSIONS=1` y `POS_OPERATOR_SESSIONS=1` también en el KDS, para
+que una tablet pueda operar con su token sin sesión de admin.
+
+### Pendiente
+
+- Retirar el polling cuando se cumplan 30 días de estabilidad (decisión de
+  dirección; hoy es la red de seguridad).
