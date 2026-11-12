@@ -84,7 +84,7 @@ describe("facturamaProvider.stamp", () => {
       expect(result.total).toBe(136);
     }
 
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://apisandbox.facturama.mx/3/cfdis");
     expect(init?.method).toBe("POST");
     expect((init?.headers as Record<string, string>).Authorization).toBe(
@@ -122,7 +122,7 @@ describe("facturamaProvider.cancel", () => {
     });
 
     expect(result).toEqual({ success: true, status: "cancelled" });
-    const [url] = fetchMock.mock.calls[0];
+    const [url] = fetchMock.mock.calls[0]!;
     expect(String(url)).toContain("/3/cfdis/abc?");
     expect(String(url)).toContain("motive=01");
     expect(String(url)).toContain("uuidReplacement=11111111-2222-3333-4444-555555555555");

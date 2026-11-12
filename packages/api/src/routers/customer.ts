@@ -152,7 +152,8 @@ export const customerRouter = router({
         success: true,
         invoiceId: result.invoiceId,
         uuid: result.uuid,
-        url: `/facturas/${result.invoiceId}`,
+        // La descarga se pide a `cfdi.download`; no hay URL pública aún.
+        url: null,
         billableAmount,
         tax: order.tax,
         total: result.total,

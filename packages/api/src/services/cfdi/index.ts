@@ -323,7 +323,9 @@ export async function issueInvoiceForOrder(params: {
       async (_o: any, _c: any) => {
         await tx
           .update(orders)
-          .set({ cfdiStatus: "INVOICED", cfdiUrl: `/facturas/${invoice.id}` })
+          // Sin URL pública todavía: el XML/PDF se descarga por el router
+          // (`cfdi.download`). Un enlace inventado sería otra promesa falsa.
+          .set({ cfdiStatus: "INVOICED", cfdiUrl: null })
           .where(eq(orders.id, orderId));
       },
     );
