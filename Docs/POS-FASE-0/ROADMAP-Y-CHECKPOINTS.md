@@ -78,25 +78,20 @@ Cuando el trabajo se pause por otro frente, retomar es:
 ### §7 · Estado actual
 
 ```
-FASE:                     0B-1 — CERRADA Y EN MAIN (producción)
-ÚLTIMO CHECKPOINT CERRADO: C1 · integridad de órdenes
-MIGRACIÓN 0038:           APLICADA en producción (11-nov-2026)
-MERGE:                    76f8175 · deploy SUCCESS · / y /pos → 200
+FASE:                     0C — estaciones y KDS (5 de 6 bloques en producción)
+EN PRODUCCIÓN:            0C-1 modelo · 0C-2 ruteo+snapshot · 0C-3 cola por estación
+                          0C-4 UI (menú, kitchen, KDS) · 0C-4b terminal atada
+MIGRACIONES APLICADAS:    0038 · 0039 · 0054 (todas aditivas)
+EXTRA EN PRODUCCIÓN:      KDS en reposo por inactividad (ahorro de compute Neon)
 TRINQUETE:                0 procedimientos y 0 archivos sin helper
 
-SIGUIENTE FASE:           0C · estaciones y KDS (diseño listo)
-DOCUMENTO DE ARRANQUE:    ADR-023-estaciones-y-kds.md
-PRIMER PASO EXACTO:       git checkout -b feat/pos-0c1-estaciones
-                          · migración 0039_pos_stations.sql
-                          · tabla stations + columnas nullable
-                          · router stations.*
-                          · aplicar SOLO en staging y verificar que el POS no cambia
+SIGUIENTE:                0C-5 · outbox realtime + Centrifugo (ADR-017)
+                          KDS: eventos en vivo con aislamiento por estación
 BLOQUEADO POR:            nada
 
 PREGUNTAS ABIERTAS:
-  - Actualizar la rama `staging` a main (al hacerlo, despliega staging)
-  - Autorizar corrección de mensajes CFDI (M-01 … M-04)
-  - Autorizar PAC sandbox Facturama
+  - Autorizar PAC sandbox Facturama y corregir mensajes CFDI (M-01 … M-04)
+  - Definir si el KDS se queda con polling como red de seguridad tras 0C-5
 ```
 
 > **Instrucción:** al cerrar cada checkpoint, actualizar este bloque. Es el contrato de reanudación.

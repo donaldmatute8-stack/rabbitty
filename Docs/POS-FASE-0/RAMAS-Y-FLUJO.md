@@ -26,7 +26,12 @@ Consecuencias operativas:
 |---|---|---|---|
 | `main` | Producción | Permanente | **Sí** (Railway / Vercel) |
 | `feat/pos-phase0` | **Integración** de la fase: aquí llegan las ramas hijas y aquí se prueba el conjunto | Mientras dure la fase | **No** |
-| `feat/pos-0b1-integridad-ordenes` | **mergeada a main** (`76f8175`) | `feat/pos-phase0` | 0B-1 | — | Helper + 0038 en staging y producción · trinquete en 0 |
+| `feat/pos-0b1-integridad-ordenes` | mergeada a main | `feat/pos-phase0` | 0B-1 | — | Trinquete en 0 |
+| `feat/pos-0c1-estaciones` | mergeada a main | `feat/pos-phase0` | 0C-1 | — | Migración 0039 |
+| `feat/pos-0c3-kds-estacion` | mergeada a main | `feat/pos-phase0` | 0C-3 | — | Cola por estación |
+| `feat/pos-0c4-ui-estaciones` | mergeada a main | `feat/pos-phase0` | 0C-4 | — | UI de estaciones |
+| `feat/pos-0c4b-terminal-estacion` | mergeada a main | `feat/pos-phase0` | 0C-4b | — | Migración 0054 |
+| `fix/neon-idle` | mergeada a main | `main` | KDS reposo | — | Ahorro de compute |
 | `feat/pos-0b2-rutas-miniapp` | 13 rutas de miniapp + 3 crons al helper | Corta | No |
 | `feat/pos-0b3-saga-pagos` | Estados, `payment_transitions`, `SETTLED_AFTER_EXPIRY` | Corta | No |
 | `feat/pos-0b4-eventos-impresion` | Outbox realtime + cola de impresión | Corta | No |
@@ -175,7 +180,12 @@ Todo rollback se escribe **antes** del merge, no después.
 
 | Orden | Rama | Depende de | Toca `pos.ts` |
 |---|---|---|---|
-| 1 | `feat/pos-0b1-integridad-ordenes` | **mergeada a main** (`76f8175`) | `feat/pos-phase0` | 0B-1 | — | Helper + 0038 en staging y producción · trinquete en 0 |
+| 1 | `feat/pos-0b1-integridad-ordenes` | mergeada a main | `feat/pos-phase0` | 0B-1 | — | Trinquete en 0 |
+| `feat/pos-0c1-estaciones` | mergeada a main | `feat/pos-phase0` | 0C-1 | — | Migración 0039 |
+| `feat/pos-0c3-kds-estacion` | mergeada a main | `feat/pos-phase0` | 0C-3 | — | Cola por estación |
+| `feat/pos-0c4-ui-estaciones` | mergeada a main | `feat/pos-phase0` | 0C-4 | — | UI de estaciones |
+| `feat/pos-0c4b-terminal-estacion` | mergeada a main | `feat/pos-phase0` | 0C-4b | — | Migración 0054 |
+| `fix/neon-idle` | mergeada a main | `main` | KDS reposo | — | Ahorro de compute |
 | 2 | `feat/pos-0b2-rutas-miniapp` | 0B-1 | No |
 | 3 | `feat/pos-0b3-saga-pagos` | 0B-1 | Sí (parcial) |
 | 4 | `feat/pos-0b4-eventos-impresion` | 0B-1 | No |
@@ -192,7 +202,12 @@ Actualizar al crear/mergear/borrar.
 | Rama | Estado | Base | Último commit | PR | Notas |
 |---|---|---|---|---|---|
 | `feat/pos-phase0` | **abierta** | `main@30952b0` | docs 0A | — | Solo documentación (0A). No despliega |
-| `feat/pos-0b1-integridad-ordenes` | **mergeada a main** (`76f8175`) | `feat/pos-phase0` | 0B-1 | — | Helper + 0038 en staging y producción · trinquete en 0 |
+| `feat/pos-0b1-integridad-ordenes` | mergeada a main | `feat/pos-phase0` | 0B-1 | — | Trinquete en 0 |
+| `feat/pos-0c1-estaciones` | mergeada a main | `feat/pos-phase0` | 0C-1 | — | Migración 0039 |
+| `feat/pos-0c3-kds-estacion` | mergeada a main | `feat/pos-phase0` | 0C-3 | — | Cola por estación |
+| `feat/pos-0c4-ui-estaciones` | mergeada a main | `feat/pos-phase0` | 0C-4 | — | UI de estaciones |
+| `feat/pos-0c4b-terminal-estacion` | mergeada a main | `feat/pos-phase0` | 0C-4b | — | Migración 0054 |
+| `fix/neon-idle` | mergeada a main | `main` | KDS reposo | — | Ahorro de compute |
 | `feat/pos-0b2-rutas-miniapp` | no creada | `feat/pos-phase0` | — | — | Requiere 0B-1 |
 | `feat/pos-0b3-saga-pagos` | no creada | `feat/pos-phase0` | — | — | Requiere autorización |
 | `feat/pos-0b4-eventos-impresion` | no creada | `feat/pos-phase0` | — | — | Requiere autorización |
