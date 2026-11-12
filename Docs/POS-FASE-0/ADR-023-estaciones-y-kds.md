@@ -240,3 +240,31 @@ produce `stationId` distintos una vez que el tenant cree la estación Barra.
 **Nota:** el binding duro *terminal → estación* (para que la tablet de cocina no
 pueda pedir la barra aunque sepa el id) llega con la UI de 0C-4, donde se asigna
 la estación a cada terminal.
+
+---
+
+## 14. Validación end-to-end en staging (12-nov-2026)
+
+Con el código de 0C-2 + 0C-3 desplegado en staging:
+
+```
+stations.list (terminal)  → Cocina (default) · Barra
+orden creada + 2 addToCart por API
+
+CAFÉ AMERICANO      → Cocina   (sentToStationAt = sí)
+CAFÉ FRIO MINERAL   → Barra    (sentToStationAt = sí)
+```
+
+**0C-2 validado en la app real**, no solo en el servicio: el snapshot ocurre al
+insertar el ítem y respeta el override de categoría.
+
+### Bloqueo resuelto en el camino
+
+El deploy de staging falló por un error de TypeScript en `next build`:
+`loadKdsQueue` devolvía `any` y el cliente perdía tipos (implicit any en
+`kitchen/page.tsx`). Se tipó la cola con `KdsQueueItem` / `KdsQueueOrder`.
+
+También se detectó que el deploy por CLI usa **NIXPACKS** (por `railway.json`)
+mientras los deploys de GitHub usan **RAILPACK**; y que tras varios fallos
+Railway dejó de disparar deploys al pushear a `staging`. El deploy por CLI sí
+funciona.
