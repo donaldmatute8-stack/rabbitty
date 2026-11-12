@@ -17,12 +17,32 @@ const itemStatusConfig: Record<"PENDING" | "IN_PROGRESS" | "READY" | "SERVED", {
 
 export default function KdsPage() {
   const utils = trpc.useUtils();
-  const { data: orders } = trpc.kds.getOrders.useQuery(undefined, {
+  // Estación de esta pantalla (ADR-023). Se recuerda en el dispositivo.
+  const [stationId, setStationId] = useState<string>("");
+  useEffect(() => {
+    setStationId(window.localStorage.getItem("rabbitty_kds_station") ?? "");
+  }, []);
+  const { data: stationsList } = trpc.stations.list.useQuery();
+
+  const stationQueue = trpc.kds.getStationQueue.useQuery(
+    { stationId },
+    { enabled: Boolean(stationId), refetchInterval: 10_000, refetchOnWindowFocus: false },
+  );
+  const allQueue = trpc.kds.getOrders.useQuery(undefined, {
+    enabled: !stationId,
     refetchInterval: 10_000,
+    refetchOnWindowFocus: false,
   });
+  const orders = stationId ? stationQueue.data : allQueue.data;
+
+  const pickStation = (id: string) => {
+    setStationId(id);
+    if (id) window.localStorage.setItem("rabbitty_kds_station", id);
+    else window.localStorage.removeItem("rabbitty_kds_station");
+  };
 
   const updateItemStatus = trpc.kds.updateOrderItemStatus.useMutation({
-    onSuccess: () => utils.kds.getOrders.invalidate(),
+    onSuccess: () => { utils.kds.getOrders.invalidate(); utils.kds.getStationQueue.invalidate(); },
   });
 
   const [activeTab, setActiveTab] = useState<"all" | "PENDING" | "IN_PROGRESS" | "READY">("all");
@@ -79,6 +99,17 @@ export default function KdsPage() {
           <div>
             <h1 className="text-xl font-bold">Kitchen Display</h1>
             <p className="text-sm text-gray-400">Sistema de cocina</p>
+            <select
+              value={stationId}
+              onChange={(e) => pickStation(e.target.value)}
+              className="mt-1 rounded-lg border border-white/15 bg-black/50 px-2 py-1 text-[11px] font-bold text-white outline-none"
+              aria-label="Estación de esta pantalla"
+            >
+              <option value="">Todas las estaciones</option>
+              {(stationsList ?? []).map((st) => (
+                <option key={st.id} value={st.id}>{st.name}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="flex items-center gap-4">
