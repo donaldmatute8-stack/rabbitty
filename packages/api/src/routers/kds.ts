@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, eq, sql, inArray, or, isNotNull } from "drizzle-orm";
-import { router, protectedProcedure } from "../trpc";
+import { router, posProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { orders, tables, orderItems, menuItems, stations } from "@rabbitty/database-restaurant/schema";
@@ -155,10 +155,12 @@ async function loadKdsQueue(
 }
 
 export const kdsRouter = router({
-  getOrders: protectedProcedure
+  getOrders: posProcedure
     .input(z.object({ status: z.string().optional() }).optional())
     .query(async ({ ctx, input }) => {
-      return loadKdsQueue(ctx, { status: input?.status });
+      // Terminal atada a una estación: no puede pedir la cola completa (0C-4b).
+      const bound = ctx.posAuth?.method === "terminal" ? ctx.posAuth.stationId ?? null : null;
+      return loadKdsQueue(ctx, { status: input?.status, stationId: bound ?? undefined });
     }),
 
   /**
@@ -166,7 +168,7 @@ export const kdsRouter = router({
    * El filtro por estación es server-side: el cliente no puede pedir otra
    * sucursal ni una estación ajena (ADR-023 §5).
    */
-  getStationQueue: protectedProcedure
+  getStationQueue: posProcedure
     .input(
       z.object({
         stationId: z.string(),
@@ -174,10 +176,19 @@ export const kdsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      return loadKdsQueue(ctx, { stationId: input.stationId, status: input.status });
+      // Si la terminal tiene estación fija, MANDA la del token: el cliente no
+      // puede pedir otra (aislamiento cocina/barra).
+      const bound = ctx.posAuth?.method === "terminal" ? ctx.posAuth.stationId ?? null : null;
+      if (bound && input.stationId && input.stationId !== bound) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Esta terminal está asignada a otra estación.",
+        });
+      }
+      return loadKdsQueue(ctx, { stationId: bound ?? input.stationId, status: input.status });
     }),
 
-  updateOrderItemStatus: protectedProcedure
+  updateOrderItemStatus: posProcedure
     .input(
       z.object({
         orderItemId: z.string(),
@@ -207,7 +218,7 @@ export const kdsRouter = router({
       return { success: true };
     }),
 
-  getTable: protectedProcedure
+  getTable: posProcedure
     .input(z.object({ tableId: z.string() }))
     .query(async ({ ctx, input }) => {
       const [table] = await ctx.restaurantDb.select().from(tables).where(and(eq(tables.id, input.tableId), eq(tables.branchId, ctx.branchId)));

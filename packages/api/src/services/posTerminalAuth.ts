@@ -22,6 +22,8 @@ export interface PosTerminalPrincipal {
   terminalId: string;
   sessionId: string;
   branchId: string;
+  /** Estación fija de la terminal (null = elige el cliente). */
+  stationId: string | null;
   businessId: string | null;
   terminalName: string;
   sessionExpiresAt: Date;
@@ -63,6 +65,7 @@ export async function resolvePosTerminalSession(
       terminalStatus: posTerminals.status,
       terminalExpiresAt: posTerminals.expiresAt,
       branchId: posTerminals.branchId,
+      stationId: posTerminals.stationId,
       businessId: posTerminals.businessId,
     })
     .from(posTerminalSessions)
@@ -82,6 +85,7 @@ export async function resolvePosTerminalSession(
     terminalId: row.terminalId,
     sessionId: row.sessionId,
     branchId: row.branchId,
+    stationId: row.stationId ?? null,
     businessId: row.businessId ?? null,
     terminalName: row.terminalName,
     sessionExpiresAt: new Date(row.sessionExpiresAt),
