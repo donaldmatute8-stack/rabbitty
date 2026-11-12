@@ -9,6 +9,7 @@ import { ORDER_STATUS, isCashPaymentRequested, isOrderPaidStatus, isOrderPayable
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
+import { resolveStationsForItems } from "../services/stationRouting";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
@@ -1081,6 +1082,11 @@ export const posRouter = router({
           { orderId: input.orderId, type: "ITEM_ADDED", actor: posActor(ctx) },
           async (_order, octx) => {
             const existingItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
+            // Destino de preparación (ADR-023): se congela al agregar el ítem.
+            const stationMap = await resolveStationsForItems(tx, ctx.branchId, [
+              { menuItemId: input.menuItemId },
+            ]);
+            const dest = stationMap.get(input.menuItemId);
             const [orderItem] = await tx.insert(orderItems).values({
               orderId: input.orderId,
               menuItemId: input.menuItemId,
@@ -1090,6 +1096,9 @@ export const posRouter = router({
               sortOrder: existingItems.length,
               modifiers: input.modifiers ?? null,
               notes: input.notes ?? null,
+              stationId: dest?.stationId ?? null,
+              printerId: dest?.printerId ?? null,
+              sentToStationAt: dest?.stationId ? new Date() : null,
             }).returning();
             await octx.recalcTotals();
             return orderItem;
@@ -1701,8 +1710,21 @@ export const posRouter = router({
           });
           if (!order) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo crear la orden" });
 
+          const stationDest = await resolveStationsForItems(
+            tx,
+            ctx.branchId,
+            itemRows.map((r) => ({ menuItemId: r.menuItemId })),
+          );
           for (const [i, row] of itemRows.entries()) {
-            await tx.insert(orderItems).values({ ...row, sortOrder: i, orderId: order.id });
+            const dest = stationDest.get(row.menuItemId);
+            await tx.insert(orderItems).values({
+              ...row,
+              sortOrder: i,
+              orderId: order.id,
+              stationId: dest?.stationId ?? null,
+              printerId: dest?.printerId ?? null,
+              sentToStationAt: dest?.stationId ? new Date() : null,
+            });
           }
 
           // ── Beneficios de membresía (mismas reglas que el cobro directo) ──
@@ -2252,9 +2274,12 @@ export const posRouter = router({
 
       // 2. Insert items and sum subtotal
       let calculatedSubtotal = 0;
+      // Destino de preparación por ítem (ADR-023), resuelto en 3 consultas.
+      const checkoutDest = await resolveStationsForItems(ctx.restaurantDb, ctx.branchId, input.items);
       for (const [i, item] of input.items.entries()) {
         const totalPrice = item.price * item.quantity;
         calculatedSubtotal += totalPrice;
+        const dest = checkoutDest.get(item.menuItemId);
 
         await ctx.restaurantDb.insert(orderItems).values({
           orderId: order.id,
@@ -2264,6 +2289,9 @@ export const posRouter = router({
           totalPrice,
           sortOrder: i,
           notes: item.notes ?? null,
+          stationId: dest?.stationId ?? null,
+          printerId: dest?.printerId ?? null,
+          sentToStationAt: dest?.stationId ? new Date() : null,
         });
       }
 
@@ -2953,9 +2981,11 @@ export const posRouter = router({
 
       // 2. Insert items and sum subtotal
       let calculatedSubtotal = 0;
+      const intentDest = await resolveStationsForItems(ctx.restaurantDb, ctx.branchId, input.items);
       for (const [i, item] of input.items.entries()) {
         const totalPrice = item.price * item.quantity;
         calculatedSubtotal += totalPrice;
+        const dest = intentDest.get(item.menuItemId);
 
         await ctx.restaurantDb.insert(orderItems).values({
           orderId: order.id,
@@ -2965,6 +2995,9 @@ export const posRouter = router({
           totalPrice,
           sortOrder: i,
           notes: item.notes ?? null,
+          stationId: dest?.stationId ?? null,
+          printerId: dest?.printerId ?? null,
+          sentToStationAt: dest?.stationId ? new Date() : null,
         });
       }
 
