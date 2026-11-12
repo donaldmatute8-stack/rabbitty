@@ -127,7 +127,7 @@ Sin estaciones configuradas, la UI se comporta como hoy (una sola cola).
 
 | Bloque | Alcance | Criterio de aceptación |
 |---|---|---|
-| **0C-1** | Migración `0039` + `stations` + estación default + `stations.*` | Aplicar en staging y prod; el POS se comporta **igual** |
+| **0C-1** | Migración `0039` + `stations` + estación default + `stations.*` | ✅ **staging aplicado** · POS sin cambios · falta prod |
 | **0C-2** | Resolución de estación + `sendToKitchen` con snapshot | Un pedido con 2 categorías distintas queda con 2 `stationId` congelados |
 | **0C-3** | `kds.getStationQueue` + aislamiento por token | Cocina no ve ítems de barra (prueba automatizada) |
 | **0C-4** | UI de estaciones (admin + KDS) | Dos pantallas simultáneas, cada una con su cola |
@@ -173,3 +173,28 @@ git checkout -b feat/pos-0c1-estaciones
 - Impresión por estación real (ADR-020; 0C solo guarda `printerId` en el snapshot).
 - Expediter (Fase 1).
 - Offline (fuera de alcance, evaluación aparte).
+
+
+---
+
+## 11. Registro 0C-1 (12-nov-2026)
+
+**Implementado:** migración `0039_pos_stations.sql`, tabla `stations`, columnas
+`menu_categories.stationId`, `menu_items.stationId` y snapshot en `order_items`,
+más el router `stations.*` (`list`, `upsert`, `setDefault`, `assignCategory`,
+`assignItem`).
+
+**Aplicado en staging:**
+
+```
+estaciones creadas:      6 (una "Cocina" default por sucursal)
+columnas nuevas:         5
+items con estación:      0 de 245   ← nada cambió
+órdenes:                 159 intactas
+```
+
+**Comportamiento:** idéntico. Sin estaciones configuradas todo cae en "Cocina",
+que es exactamente lo que hacía el POS antes.
+
+**Pendiente para cerrar 0C-1:** aplicar `0039` en producción (misma ventana que
+`0038`) y mergear a `main`. Hasta entonces la rama no se despliega.
