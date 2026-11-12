@@ -17,10 +17,53 @@ import { withOrderMutation } from "../services/orderIntegrity";
  * La estación debe pertenecer a la sucursal del contexto: es la barrera que
  * impide que una cocina vea la barra de otra sucursal (ADR-023 §5).
  */
+/** Ítem tal como lo consume el KDS (con su destino de preparación). */
+export interface KdsQueueItem {
+  id: string;
+  menuItemId: string;
+  quantity: number;
+  status: string;
+  notes: string | null;
+  unitPrice: number;
+  totalPrice: number;
+  modifiers: unknown;
+  sortOrder: number;
+  stationId: string | null;
+  printerId: string | null;
+  sentToStationAt: Date | null;
+  name: string;
+}
+
+/** Comanda en la cola del KDS. */
+export interface KdsQueueOrder {
+  id: string;
+  branchId: string;
+  tableId: string | null;
+  tableNumber: number | null;
+  staffId: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  orderType: string;
+  status: string;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  tip: number;
+  total: number;
+  bunzReward: number | null;
+  bunzPaid: number | null;
+  notes: string | null;
+  voidReason: string | null;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  items: KdsQueueItem[];
+}
+
 async function loadKdsQueue(
   ctx: any,
   opts: { status?: string; stationId?: string },
-) {
+): Promise<KdsQueueOrder[]> {
   if (opts.stationId) {
     const [station] = await ctx.restaurantDb
       .select({ id: stations.id })
@@ -107,7 +150,7 @@ async function loadKdsQueue(
 
   // Con estación: las comandas sin ítems para ella no se muestran.
   return opts.stationId
-    ? ordersWithItems.filter((o: any) => o.items.length > 0)
+    ? ordersWithItems.filter((o) => o.items.length > 0)
     : ordersWithItems;
 }
 
