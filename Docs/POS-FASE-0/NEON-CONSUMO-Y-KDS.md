@@ -83,3 +83,46 @@ No hay cambios de datos ni de esquema.
 tsc    apps/kds        → 0 errores
 build  apps/kds        → OK
 ```
+
+---
+
+## Servicios apagados (12-nov-2026)
+
+### KDS independiente
+
+El único tenant real todavía no tiene cocina activa, así que la pantalla KDS
+dedicada no se usa. Un contenedor encendido sin tráfico se cobra igual, así que:
+
+```bash
+railway down -s rabbitty-kds -e production -y
+railway down -s rabbitty-kds -e staging -y
+railway service source disconnect -s rabbitty-kds
+```
+
+Se desconectó el origen de Git para que un push a `main` no la reviva. El
+servicio, el dominio y el código siguen ahí.
+
+**Para volver a encenderla:**
+
+```bash
+railway service source connect --repo donaldmatute8-stack/rabbitty --branch main --service rabbitty-kds
+railway up -d -s rabbitty-kds -e production     # o un push a main
+```
+
+La cocina del admin (`/kitchen`) sigue funcionando sin el KDS independiente.
+
+### Qué sigue encendido y por qué
+
+| Servicio | Uso | Evidencia |
+|---|---|---|
+| `rabbitty-admin` | plataforma | tráfico real |
+| `rabbitty-pos` | POS | en uso |
+| `rabbitty-realtime` | Centrifugo (chat + KDS futuro) | requerido por el outbox |
+| `rabbitty-bot` | Telegram | en uso |
+| `rabbitty-landing` | sitio público | en uso |
+| `rabbitty-oracle` | `api.rabbitty.me` | responde 200 · **sin referencias en este repo** |
+| `rabbitty-ipfs` / `-ipfs-api` | nodo IPFS | último request 10-nov (prueba manual) |
+| `rabbitty-ollama` | LLM propio | **sin modelos cargados**; `OLLAMA_BASE_URL` del admin apunta a `ollama.com` |
+
+Los cuatro últimos son candidatos a apagarse; falta confirmar que ningún otro
+producto (fuera de este repo) los consuma antes de hacerlo.
