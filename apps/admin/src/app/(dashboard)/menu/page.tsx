@@ -49,6 +49,15 @@ export default function MenuPage() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const { data: categories } = trpc.pos.getCategories.useQuery();
+  const { data: stationsList } = trpc.stations.list.useQuery();
+  const assignCategoryStation = trpc.stations.assignCategory.useMutation({
+    onSuccess: () => { utils.pos.getCategories.invalidate(); toast.success("Estación de la categoría actualizada"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const assignItemStation = trpc.stations.assignItem.useMutation({
+    onSuccess: () => { utils.pos.getMenuItems.invalidate(); toast.success("Estación del producto actualizada"); },
+    onError: (e) => toast.error(e.message),
+  });
   const { data: items } = trpc.pos.getMenuItems.useQuery(activeCategory ? { categoryId: activeCategory } : {});
 
   const createItem = trpc.admin.createMenuItem.useMutation({ onSuccess: () => { utils.pos.getMenuItems.invalidate(); utils.pos.getCategories.invalidate(); toast.success("Platillo creado"); setItemDialog(null); }, onError: (e) => toast.error(e.message) });
@@ -184,6 +193,29 @@ export default function MenuPage() {
         />
       </div>
 
+      {activeCategory && stationsList && stationsList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            Estación de esta categoría
+          </span>
+          <select
+            value={categories?.find((c) => c.id === activeCategory)?.stationId ?? ""}
+            onChange={(e) =>
+              assignCategoryStation.mutate({ categoryId: activeCategory, stationId: e.target.value || null })
+            }
+            className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-pink-500/60"
+          >
+            <option value="">Heredar (Cocina por defecto)</option>
+            {stationsList.map((st) => (
+              <option key={st.id} value={st.id}>{st.name}</option>
+            ))}
+          </select>
+          <span className="text-[11px] text-gray-500">
+            Sus productos usan esta estación salvo que tengan una propia.
+          </span>
+        </div>
+      )}
+
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {items
           ?.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
@@ -213,6 +245,26 @@ export default function MenuPage() {
                 </div>
                 <p className="mt-2 text-sm text-gray-400 line-clamp-2">{item.description}</p>
               </div>
+              {stationsList && stationsList.length > 0 && (
+                <div className="mt-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    Estación
+                  </label>
+                  <select
+                    value={(item as { stationId?: string | null }).stationId ?? ""}
+                    onChange={(e) =>
+                      assignItemStation.mutate({ menuItemId: item.id, stationId: e.target.value || null })
+                    }
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-white outline-none focus:border-pink-500/60"
+                  >
+                    <option value="">Heredar de la categoría</option>
+                    {stationsList.map((st) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
                 <span className="text-xl font-black text-white">${item.price}</span>
                 <div className="flex gap-2">

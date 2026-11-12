@@ -130,7 +130,7 @@ Sin estaciones configuradas, la UI se comporta como hoy (una sola cola).
 | **0C-1** | Migración `0039` + `stations` + estación default + `stations.*` | ✅ **staging aplicado** · POS sin cambios · falta prod |
 | **0C-2** | Resolución de estación + snapshot al insertar el ítem | ✅ **hecho** · 4 puntos de inserción cubiertos |
 | **0C-3** | `kds.getStationQueue` + aislamiento por sucursal/estación | ✅ **hecho** · verificación en staging |
-| **0C-4** | UI de estaciones (admin + KDS) | Dos pantallas simultáneas, cada una con su cola |
+| **0C-4** | UI de estaciones (admin + KDS) | ✅ **hecho** · selector por categoría/producto y por pantalla |
 | **0C-5** | Outbox realtime + Centrifugo | Reconexión <5 s sin perder comandas; polling se mantiene 30 días |
 
 **Nada de esto toca pagos, caja ni Bunz.**
@@ -268,3 +268,33 @@ También se detectó que el deploy por CLI usa **NIXPACKS** (por `railway.json`)
 mientras los deploys de GitHub usan **RAILPACK**; y que tras varios fallos
 Railway dejó de disparar deploys al pushear a `staging`. El deploy por CLI sí
 funciona.
+
+
+---
+
+## 15. Registro 0C-4 (12-nov-2026)
+
+**Admin → Menú**
+- Barra "Estación de esta categoría" al seleccionar una categoría
+  (`stations.assignCategory`).
+- Selector por producto en cada tarjeta (`stations.assignItem`), con opción
+  "Heredar de la categoría".
+
+**Admin → Cocina (KDS)**
+- Selector de estación en el encabezado; se guarda en
+  `localStorage["rabbitty_kds_station"]`.
+- Sin estación: cola completa (comportamiento histórico).
+
+**apps/kds**
+- Mismo selector, misma clave de `localStorage`, usando `kds.getStationQueue`.
+
+### Pendiente de 0C-4 (bloque siguiente)
+
+Binding duro **terminal → estación**: hoy el filtro valida que la estación
+pertenezca a la sucursal, pero una tablet de cocina podría pedir la cola de
+barra si alguien conoce el id. Para cerrarlo hace falta:
+
+1. `pos_terminals.stationId` (migración `0040`).
+2. Incluir la estación en las claims del token de terminal.
+3. `kds.getStationQueue` usa la estación del token cuando el llamador es una
+   terminal, ignorando la del cliente.
