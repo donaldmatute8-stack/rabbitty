@@ -10,6 +10,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
 import { resolveStationsForItems } from "../services/stationRouting";
+import { enqueueRealtimeEvent, stationChannel } from "../services/realtimeOutbox";
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
 import { DELIVERY_PROVIDERS, canTransition, getProvider, type DeliveryStatus } from "../services/deliveryProviders";
@@ -1101,6 +1102,24 @@ export const posRouter = router({
               sentToStationAt: dest?.stationId ? new Date() : null,
             }).returning();
             await octx.recalcTotals();
+
+            // Aviso en vivo al KDS de esa estación (0C-5). Sin estación no se emite.
+            if (dest?.stationId) {
+              await enqueueRealtimeEvent(tx, {
+                businessId: ctx.posAuth?.businessId ?? null,
+                branchId: ctx.branchId,
+                channel: stationChannel(ctx.posAuth?.businessId ?? null, ctx.branchId, dest.stationId),
+                eventType: "order.item.added",
+                payload: {
+                  orderId: input.orderId,
+                  itemId: orderItem.id,
+                  stationId: dest.stationId,
+                  status: orderItem.status,
+                },
+                eventId: `item-added-${orderItem.id}`,
+              });
+            }
+
             return orderItem;
           },
         );

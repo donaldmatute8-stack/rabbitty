@@ -349,6 +349,30 @@ export const payments = pgTable("payments", {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Rating post-pago: 1 evaluación por orden (UNIQUE orderId), anónima al comercio. */
+/**
+ * 📡 Outbox de eventos POS/KDS (ADR-017, migración 0040).
+ * Se escribe en la misma transacción que la orden y lo publica un worker.
+ */
+export const realtimeOutbox = pgTable("realtime_outbox", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  businessId: text("businessId"),
+  branchId: text("branchId").notNull(),
+  channel: text("channel").notNull(),
+  eventType: text("eventType").notNull(),
+  eventId: text("eventId").notNull().unique(),
+  payload: jsonb("payload").notNull(),
+  seq: bigint("seq", { mode: "number" }),
+  status: text("status").default("QUEUED").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  runAfter: timestamp("runAfter").defaultNow().notNull(),
+  lockedUntil: timestamp("lockedUntil"),
+  sentAt: timestamp("sentAt"),
+  ...timestamps,
+}, (t) => [
+  index("realtime_outbox_pending_idx").on(t.status, t.runAfter),
+  index("realtime_outbox_channel_idx").on(t.channel, t.seq),
+]);
+
 export const orderRatings = pgTable("order_ratings", {
   id: id(),
   orderId: fkId("orderId").references(() => orders.id).notNull().unique(),
