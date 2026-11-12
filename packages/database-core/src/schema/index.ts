@@ -609,6 +609,8 @@ export const posTerminals = pgTable("pos_terminals", {
   id: id(),
   businessId: uuid("businessId"),
   branchId: text("branchId"),
+  /** Estación fija de esta terminal (0C-4b). Manda sobre la que pida el cliente. */
+  stationId: text("stationId"),
   name: text("name").notNull(),
   platform: text("platform"),
   deviceKeyHash: text("deviceKeyHash").notNull(),
