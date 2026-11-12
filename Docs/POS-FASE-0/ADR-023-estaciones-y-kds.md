@@ -129,7 +129,7 @@ Sin estaciones configuradas, la UI se comporta como hoy (una sola cola).
 |---|---|---|
 | **0C-1** | Migración `0039` + `stations` + estación default + `stations.*` | ✅ **staging aplicado** · POS sin cambios · falta prod |
 | **0C-2** | Resolución de estación + `sendToKitchen` con snapshot | Un pedido con 2 categorías distintas queda con 2 `stationId` congelados |
-| **0C-3** | `kds.getStationQueue` + aislamiento por token | Cocina no ve ítems de barra (prueba automatizada) |
+| **0C-3** | `kds.getStationQueue` + aislamiento por sucursal/estación | ✅ **hecho** · verificación en staging |
 | **0C-4** | UI de estaciones (admin + KDS) | Dos pantallas simultáneas, cada una con su cola |
 | **0C-5** | Outbox realtime + Centrifugo | Reconexión <5 s sin perder comandas; polling se mantiene 30 días |
 
@@ -198,3 +198,21 @@ que es exactamente lo que hacía el POS antes.
 
 **Pendiente para cerrar 0C-1:** aplicar `0039` en producción (misma ventana que
 `0038`) y mergear a `main`. Hasta entonces la rama no se despliega.
+
+
+---
+
+## 13. Registro 0C-3 (12-nov-2026)
+
+**Refactor:** la lógica de la cola salió a `loadKdsQueue(ctx, { status, stationId })`.
+
+- `kds.getOrders` → delega **sin** `stationId` (comportamiento histórico intacto).
+- `kds.getStationQueue({ stationId })` → filtra **ítems** de esa estación y descarta
+  comandas sin nada para ella.
+- Los ítems ahora exponen `stationId`, `printerId` y `sentToStationAt`.
+- **Aislamiento:** si la estación no pertenece a `ctx.branchId`, responde
+  `FORBIDDEN`. Un cliente no puede pedir la cola de otra sucursal.
+
+**Nota:** el binding duro *terminal → estación* (para que la tablet de cocina no
+pueda pedir la barra aunque sepa el id) llega con la UI de 0C-4, donde se asigna
+la estación a cada terminal.
