@@ -71,39 +71,50 @@ Cada bloque entrega: cambios propuestos, pruebas, resultados, riesgos y **rollba
 Cuando el trabajo se pause por otro frente, retomar es:
 
 1. Leer **este documento** (§7 Estado actual).
-2. Leer el ADR del bloque en curso.
-3. Ejecutar el comando de verificación del bloque.
-4. Continuar desde la **siguiente acción exacta**.
+2. Si el trabajo es de facturación, leer `PENDIENTES-CFDI.md` (empieza con el
+   punto de reanudación).
+3. Si hay que probar en staging, seguir `STAGING-ON-OFF.md` (encender, probar,
+   apagar con `railway down -y`).
+4. Ejecutar el comando de verificación del bloque.
+5. Continuar desde la **siguiente acción exacta**.
 
 ### §7 · Estado actual
 
 ```
-FASE:                     0C COMPLETA · CFDI paso 1 en producción
-EN PRODUCCIÓN:            0C-1 modelo · 0C-2 ruteo+snapshot · 0C-3 cola por estación
-                          0C-4 UI · 0C-4b terminal atada · 0C-5 outbox+Centrifugo
-                          0C-5b cliente del KDS (KDS apagado: sin cocina activa)
-                          CFDI: PacProvider + Facturama + UI admin + XML/PDF
-MIGRACIONES APLICADAS:    0038 · 0039 · 0040 · 0054 · 0055 (todas aditivas)
-EXTRA EN PRODUCCIÓN:      KDS en reposo por inactividad
-                          Contexto del KDS sin BRANCH_ID
-                          Outbox realtime con publicación inmediata + cron
+FECHA:                    13-nov-2026
+RAMA:                     main (limpia, sin cambios pendientes)
+
+CERRADO EN PRODUCCIÓN:
+  Fase 0C                 estaciones · ruteo · cola por estación · UI
+                          terminal atada · outbox+Centrifugo · cliente KDS
+  CFDI paso 1             PacProvider · Facturama · UI admin · XML/PDF
+  Cobro                   C-01 C-03 C-04 C-05 C-06 C-09 C-10 C-11 en verde
+  Hallazgos               H-1 llaves LIVE · H-3 estado de reembolso
+                          H-5 anular orden cobrada · H-4 split duplicado
+
+MIGRACIONES APLICADAS:    0038 · 0039 · 0040 · 0054 · 0055 (aditivas)
 TRINQUETE:                0 procedimientos y 0 archivos sin helper
 
-SIGUIENTE:                P-01 credenciales sandbox de Facturama (bloqueante)
-                          P-07 comunicacion: corregida (quedan M-04/M-07 fuera del repo)
-                          Ver Docs/POS-FASE-0/PENDIENTES-CFDI.md
-BLOQUEADO POR:            cuenta de PAC del tenant (no hay credenciales aún)
+APAGADO:                  KDS (sin cocina activa, servicio desenlazado de Git)
+                          staging (se enciende por ventana, ver STAGING-ON-OFF)
+SERVICIOS ENCENDIDOS:     admin · bot · landing · realtime · oracle · ipfs · ollama
+                          (dirección decidió no apagarlos: consumo bajo)
 
-PRUEBAS DE COBRO:         C-01 · C-03 · C-04 · C-05 · C-09 · C-10 · C-11 PASAN
-                          C-02/C-07/C-08 bloqueados (sin llaves sk_test_)
-                          C-06 reembolso parcial pendiente
+SIGUIENTE:                ajustes visuales/funcionales de admin y mobile
+                          (telegram-miniapp) antes de Fase 1
+DESPUÉS:                  Fase 1 — cocina+barra, expediter, split, mesas
+                          CFDI paso 2 cuando exista cuenta de Facturama (P-01)
+
+PENDIENTES EXTERNOS:
+  - P-01 credenciales sandbox Facturama (bloqueante de CFDI)
+  - C-02/C-07/C-08 requieren llaves sk_test_ en staging
+  - P-06 dictamen fiscal de Bunz (contador)
 
 PREGUNTAS ABIERTAS:
-  - H-3: ¿una orden 100 % reembolsada debe pasar a REFUNDED/VOIDED?
   - ¿Cuándo se retira el polling del KDS? (hoy es red de seguridad)
-  - ¿Cuándo se encienden los servicios apagados? (KDS)
-  - Dictamen fiscal de Bunz (D-12, requiere contador)
+  - ¿Se vuelve a encender el KDS cuando haya cocina activa?
 ```
+
 
 
 
