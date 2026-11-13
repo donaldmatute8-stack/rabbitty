@@ -455,7 +455,8 @@ el libro Bunz y las cuotas de membresía.
 | **C-10** anular cobrada | ✅ **PASA tras corregir H-5** | Antes: `VOIDED` con el pago CASH 185 intacto. Ahora: `412 PRECONDITION_FAILED` y la orden sigue `COMPLETED`. Orden sin cobro se anula sin problema (regresión verificada) |
 | **C-11** membresía + cobro | ✅ **PASA** | orden `ca5630ad`: 185 + 145 con producto incluido → total 145 · descuento 185 exacto · cuota 1/2 · **1** uso con idempotencyKey único |
 | **C-02 / C-07 / C-08** | ⛔ **BLOQUEADO** | Sin llaves `sk_test_` (H-1 las eliminó de staging, por diseño) |
-| **C-05 / C-06** | ✅ ya validado / no ejecutado | C-05 en la ventana anterior; C-06 parcial sigue pendiente |
+| **C-05** reembolso total | ✅ **PASA** (repetido) | tras el reembolso la orden queda `REFUNDED` y el neto es 0 |
+| **C-06** reembolso parcial | ✅ **PASA** | orden `14c1a249` 240: pago `PARTIALLY_REFUNDED` 240 + reverso −100 → neto 140 · orden `PARTIALLY_REFUNDED` · turno baja exactamente 100 |
 | **C-09** concurrencia | ✅ validado antes | 10/10 mutaciones, versión 11 |
 
 ### Invariante de totales (2 días, staging)
@@ -485,4 +486,36 @@ venta CASH 125            → 200
 voidOrder sobre cobrada   → 412 "Esta orden tiene un cobro registrado: reembólsalo…"
 estado final              → COMPLETED · CASH:COMPLETED=125 (sin cambios)
 voidOrder sobre orden sin cobro → 200 success (sin regresión)
+```
+
+### H-3 · Resuelto — el estado de la orden refleja el reembolso
+
+Antes: una orden reembolsada seguía `COMPLETED`, así que los reportes la
+contaban como venta viva y el turno la ignoraba por completo (el pago original
+pasaba a `PARTIALLY_REFUNDED`, que no entraba en los totales, y el reverso
+negativo tampoco).
+
+Ahora, en el mismo camino del reembolso (`fiat` y `Bunz`):
+
+```
+neto > 0 y hay reversos  → PARTIALLY_REFUNDED
+neto ≤ 0 (todo devuelto) → REFUNDED
+```
+
+Y los agregados de dinero usan los **estados liquidados con signo**
+(`COMPLETED`, `PARTIALLY_REFUNDED`, `REFUNDED`) en lugar de solo `COMPLETED`:
+turno de caja, analytics, centro God, cash drops y gastos. Una venta con
+reembolso parcial ya no se cuenta como 0.
+
+`voidOrder` usa el **neto**: bloquea si queda dinero vivo y permite anular una
+orden reembolsada al 100 %.
+
+### Backfill de datos históricos
+
+Las órdenes reembolsadas antes del fix se corrigieron con el mismo criterio:
+
+```
+staging: 2 filas → REFUNDED
+prod:    1 fila  → REFUNDED
+verificación: 0 órdenes COMPLETED con reversos
 ```
