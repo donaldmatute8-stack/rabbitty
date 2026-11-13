@@ -23,12 +23,11 @@ import {
   Sparkles,
   ShieldCheck,
   QrCode,
-  Download
-} from "lucide-react";
+  Download, Smartphone} from "lucide-react";
 import { Button, Card, Badge, cn } from "@rabbitty/ui";
 
 export default function OperationsManualPage() {
-  const [activeTab, setActiveTab] = useState<"all" | "cash" | "pos" | "kiosk" | "kds" | "faq">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "cash" | "pos" | "kiosk" | "comandero" | "kds" | "faq">("all");
 
   const handlePrint = () => {
     if (typeof window !== "undefined") {
@@ -145,6 +144,7 @@ export default function OperationsManualPage() {
             { id: "cash", label: "Caja y Cortes (Z / X)", icon: Banknote },
             { id: "pos", label: "Terminal POS y Pagos", icon: CreditCard },
             { id: "kiosk", label: "Kiosko Autoservicio", icon: Monitor },
+            { id: "comandero", label: "Comandero Digital", icon: Smartphone },
             { id: "kds", label: "Cocina & KDS", icon: Flame },
             { id: "faq", label: "Dudas y Descuadres", icon: HelpCircle },
           ].map((tab) => {
@@ -168,6 +168,69 @@ export default function OperationsManualPage() {
           })}
         </div>
       </div>
+
+      {/* SECCIÓN COMANDERO DIGITAL (ADR-025) */}
+      {(activeTab === "all" || activeTab === "comandero") && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center justify-center font-black">
+              <Smartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white print:text-black">Comandero Digital y Reloj Checador</h2>
+              <p className="text-xs text-gray-400 print:text-gray-600">
+                El mesero toma el pedido desde su celular; la caja cobra la misma cuenta
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                n: "1",
+                t: "Vincular el dispositivo",
+                d: "Ajustes → Terminales: crea la terminal con tipo **Comandero** y fija su estación. Abre /comandero en el celular y vincúlalo.",
+              },
+              {
+                n: "2",
+                t: "Checar el turno",
+                d: "En Ajustes → **Reloj checador** deja el QR visible. El mesero lo escanea y captura su PIN. Sin checar no opera.",
+              },
+              {
+                n: "3",
+                t: "Levantar el pedido",
+                d: "Elige mesa (o Para llevar). En cada platillo: extras, **alergias**, nota y **para quién es**.",
+              },
+              {
+                n: "4",
+                t: "Enviar la tanda",
+                d: "Botón **Enviar**: sale a cocina/barra. Se puede seguir agregando mientras la cuenta no se cierre.",
+              },
+            ].map((step) => (
+              <Card key={step.n} className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-3 print:border print:border-gray-300 print:bg-white">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300 bg-cyan-500/10 px-2.5 py-0.5 rounded-full border border-cyan-500/20">
+                    Paso {step.n}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white print:text-black">{step.t}</h3>
+                <p className="text-xs text-gray-400 print:text-gray-600 leading-relaxed">{step.d.replace(/\*\*/g, "")}</p>
+              </Card>
+            ))}
+          </div>
+
+          <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-3 print:border print:border-gray-300 print:bg-white">
+            <h3 className="text-base font-bold text-white print:text-black">Lo que conviene saber</h3>
+            <ul className="text-xs text-gray-400 print:text-gray-600 space-y-1.5 list-disc pl-5">
+              <li>El comandero <strong className="text-white print:text-black">no cobra</strong> ni maneja propina: la cuenta se cierra en caja.</li>
+              <li>Cuando cocina marca un ítem listo, al mesero le llega el aviso con producto, estación, mesa y comensal.</li>
+              <li><strong className="text-white print:text-black">Pedir la cuenta</strong> marca la cuenta y la caja la ve como “Cuenta pedida”.</li>
+              <li>Sin señal abre igual y guarda lo capturado; se reenvía al volver el Wi-Fi.</li>
+              <li>Para bloquear el equipo: Acceso Guiado (iOS) o Fijación de pantalla (Android).</li>
+            </ul>
+          </Card>
+        </div>
+      )}
 
       {/* SECCIÓN 1: EL CICLO DIARIO DE CAJA (CORTE, APERTURA Y RETIROS) */}
       {(activeTab === "all" || activeTab === "cash") && (

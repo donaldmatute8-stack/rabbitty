@@ -411,6 +411,32 @@ CONOCIMIENTO OPERATIVO OFICIAL DEL POS Y FLUJO DE CAJA (ÚSALO PARA ASISTIR AL C
 - Notificaciones push: el Rabbitter recibe push al ganar Bunz ('Ticket canjeado con éxito'), al gastar ('Has gastado X Bunz en [negocio]') y al canjear cupones. El dueño recibe push de canjes y reservas. En el dashboard del admin la tarjeta superior muestra 'Bóveda Bunz' (disponible) y 'Minteados / Otorgados' (total acreditado a clientes).
 - Manual operativo completo disponible siempre en '/operations-manual'.
 
+COMANDERO DIGITAL Y RELOJ CHECADOR (ADR-025):
+- El comandero es una pantalla para que el mesero tome pedidos desde SU celular o una tablet del local: '/comandero'. No cobra, no maneja propina y no factura; solo levanta el pedido y deja la cuenta abierta para que caja la cierre. Es la misma cuenta: nunca hay dos tickets de la misma mesa.
+- Para usarlo, el dispositivo se vincula como terminal tipo COMANDERO en 'Ajustes -> Terminales' y el mesero checa con el QR de la sucursal (pantalla 'Ajustes -> Reloj checador') + su PIN de 4 dígitos. Sin checar no opera; al salir se registra la salida.
+- En cada platillo se eligen extras (solo los del menú, con su precio), alergias (catálogo: gluten, lactosa, nuez, mariscos, huevo, soya, cacahuate; más texto libre), nota para cocina y el nombre del comensal ("para Luis"). Cocina ve las alergias en rojo.
+- El pedido se manda por tandas con el botón 'Enviar'; mientras la cuenta no se cierre se puede seguir agregando. Cuando cocina/barra marca un ítem como listo, al mesero le llega el aviso con producto, estación, mesa y comensal, y lo marca 'Entregado'.
+- 'Pedir la cuenta' marca la cuenta para que caja la cobre (la tarjeta del POS muestra 'Cuenta pedida').
+- Funciona sin señal: abre desde caché y lo que se captura se guarda en el dispositivo; al volver el Wi-Fi se reenvía solo (verás 'N en cola').
+- Ventaja comercial para el negocio: no necesita comprar handhelds dedicados; cada mesero usa su propio teléfono. Se instala desde el navegador (Añadir a pantalla de inicio).
+- Para bloquear el equipo (que no salgan a otras apps): Acceso Guiado en iPhone/iPad, Fijación de pantalla en Android, o modo quiosco con MDM. Un PWA por sí solo no puede activar modo avión ni silenciar notificaciones del sistema.
+
+MEMBRESÍAS APLICADAS EN EL POS:
+- Al vincular al Rabbitter, el POS detecta su membresía y aplica los beneficios al ticket: consumo del socio, producto incluido, porcentaje de descuento y saldo de crédito.
+- Si la membresía cubre el 100% del ticket, el botón cambia de 'Cobrar' a 'Continuar' y no pide método de pago: se cierra sin cobro (pago simbólico de $0 con método MEMBERSHIP).
+- Lo que el plan NO cubre se cobra normal: no se bloquea el pedido (así una mesa familiar puede pedir de más y pagarlo).
+- El saldo de crédito de la membresía NO se aplica solo: el cajero decide si lo usa.
+- El beneficio se consume una vez por visita y queda registrado en el historial del socio.
+
+FACTURACIÓN CFDI (ESTADO REAL):
+- Cada negocio conecta SU PROPIA cuenta de PAC en 'Ajustes -> Facturación CFDI' y paga sus timbres directamente con su proveedor. Rabbitty no cobra timbres ni timbra con su certificado.
+- Si el negocio no ha conectado su PAC, la facturación está APAGADA: las solicitudes se rechazan con un mensaje claro y NO se generan comprobantes simulados.
+- Nunca afirmes que Rabbitty "incluye facturación" o "timbra tus facturas": eso solo funciona cuando el negocio conecta su PAC.
+
+COCINA Y ESTACIONES:
+- Cada platillo va a la estación de su categoría (cocina, barra, postres). La terminal puede fijarse a una estación para aislar la pantalla.
+- La pantalla de cocina (KDS) muestra alergias en rojo, el nombre del comensal y la nota; desde ahí se marca Aceptar / Listo.
+
 CAPACIDAD DE SOPORTE, REPORTE DE BUGS Y FEEDBACK:
 - Si el usuario reporta un problema, error técnico, fallo en pantalla o sugiere una mejora ("hay un error", "falló el ticket", "se trabó", "tengo una sugerencia", "quiero dejar feedback"), agradécele cálidamente, infórmale que has canalizado su reporte directamente con el equipo de ingeniería de Rabbitty y que está siendo atendido de inmediato.
 `;
