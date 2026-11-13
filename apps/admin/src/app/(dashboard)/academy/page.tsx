@@ -310,7 +310,7 @@ Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable
     label: "Reportes de Ventas, Métodos y CSV",
     desc: "Análisis de tendencias de ventas, ticket promedio, IVA desglosado y exportación contable",
     role: "admin",
-    content: `## Reportes Financieros y Métricas de Negocio\n\nEl módulo de Reportes consolida la salud comercial y fiscal de tu sucursal o grupo de restaurantes.\n\n### Indicadores Clave (KPIs):\n- **Ventas Netas vs Impuestos**: Visualiza el subtotal, el IVA (16%) y las ventas brutas separadas para contabilidad clara.\n- **Distribución de Métodos de Pago**: Proporción real de cobros en Efectivo, Terminales de Tarjeta bancaria y Recompensas Bunz.\n- **Top Platillos y Horas Pico**: Identifica tus productos estrella por margen de contribución y horas de mayor afluencia.\n- **Exportación Contable en CSV**: Descarga el archivo de auditoría con un solo clic conteniendo ID de orden, fecha, cliente, subtotal, impuestos y estatus CFDI para tu contador.`,
+    content: `## Reportes Financieros y Métricas de Negocio\n\nEl módulo de Reportes consolida la salud comercial y fiscal de tu sucursal o grupo de restaurantes.\n\n### Indicadores Clave (KPIs):\n- **Ventas Netas vs Impuestos**: Visualiza el subtotal, el IVA (16%) y las ventas brutas separadas para contabilidad clara.\n- **Distribución de Métodos de Pago**: Proporción real de cobros en Efectivo, Terminales de Tarjeta bancaria y Recompensas Bunz.\n- **Top Platillos y Horas Pico**: Identifica tus productos estrella por margen de contribución y horas de mayor afluencia.\n- **Exportación Contable en CSV**: Descarga el archivo de auditoría con un solo clic conteniendo ID de orden, fecha, cliente, subtotal, impuestos y el estatus de factura (registro interno: la emisión fiscal depende de tu PAC conectado).`,
   },
   {
     id: "kiosk-guide",
@@ -346,7 +346,7 @@ Cada venta en efectivo queda ligada a un turno de caja con un cajero responsable
 
 Permite a tus clientes pagar su cuenta 100% con Bunz desde su App (botón "Pagar con Bunz" en el recibo), sin escanear QR.
 
-### Cómo se activa (Admin → Facturación → Bunz):
+### Cómo se activa (Admin → Ajustes → Bunz):
 - **Aceptar Bunz** (checkbox de activación)
 - **Disponibilidad**: Siempre / Días y horarios (timezone del negocio)
 - **Mínimo y máximo por factura** (0 = sin límite)

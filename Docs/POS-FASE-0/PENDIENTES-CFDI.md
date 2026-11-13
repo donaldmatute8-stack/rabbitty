@@ -10,6 +10,52 @@ real.
 
 ---
 
+## Punto de reanudación (pausa del 12-nov-2026)
+
+**Rama:** `main` · **Últimos commits:** `7613b42` (UI) y el de P-07.
+**Migración aplicada:** `0055` en staging y producción.
+**Estado:** infraestructura y UI completas y desplegadas. **Sin timbrado real**
+porque no hay cuenta de PAC todavía.
+
+### Qué está hecho
+
+| Pieza | Dónde |
+|---|---|
+| Contrato `PacProvider` | `packages/api/src/services/cfdi/types.ts` |
+| Adaptador Facturama | `packages/api/src/services/cfdi/facturama.ts` |
+| Credenciales cifradas + timbrado | `packages/api/src/services/cfdi/index.ts` |
+| Router (7 procedimientos) | `packages/api/src/routers/cfdi.ts` |
+| UI de conexión | `apps/admin/.../settings/billing/page.tsx` |
+| Emitir / cancelar / descargar | `apps/admin/.../invoices/page.tsx` |
+| Tablas | `cfdi_credentials` + columnas en `invoices` |
+
+### Cómo retomarlo (en orden)
+
+1. **P-01:** crear cuenta Facturama, cargar CSD de prueba `EKU9003173C9`,
+   copiar usuario/password de API.
+2. En el admin: `/settings/billing` → ambiente *Pruebas* → **Probar conexión**.
+   Debe responder `Conectado a Facturama (sandbox)`.
+3. **P-02:** correr los 8 casos de la tabla.
+4. Solo entonces: pasar a *Producción*, con el CSD real del tenant.
+
+### Verificación rápida sin credenciales
+
+```bash
+# La UI existe y el gate funciona
+curl -s -o /dev/null -w "%{http_code}\n" https://admin.rabbitty.me/settings/billing   # 200
+curl -s -o /dev/null -w "%{http_code}\n" https://admin.rabbitty.me/api/trpc/cfdi.providers  # 403 (existe, sin sesión)
+
+# Tests del adaptador (sin red)
+cd packages/api && npx vitest run src/services/cfdi
+```
+
+### Qué NO hacer al retomar
+
+- No conectar el PAC en producción para "probar": cada timbre se cobra.
+- No declarar facturación disponible hasta que P-02 pase completo.
+
+---
+
 ## P-01 · Credenciales sandbox de Facturama — **bloqueante**
 
 **Qué falta:** usuario y contraseña de API de una cuenta Facturama (sandbox).

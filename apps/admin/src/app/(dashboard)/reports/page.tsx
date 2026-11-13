@@ -394,7 +394,7 @@ export default function ReportsPage() {
       }
 
     // CSV format with Taxes separated
-    const headers = ["ID Orden", "Fecha", "Segmento/Cliente", "Subtotal", "Impuesto (IVA)", "Descuento", "Bunz Pagados", "Total", "Status CFDI"];
+    const headers = ["ID Orden", "Fecha", "Segmento/Cliente", "Subtotal", "Impuesto (IVA)", "Descuento", "Bunz Pagados", "Total", "Estatus de factura"];
     
     const rows = data.map((order: any) => [
       order.orderId ? String(order.orderId).slice(0, 8) : "N/A",

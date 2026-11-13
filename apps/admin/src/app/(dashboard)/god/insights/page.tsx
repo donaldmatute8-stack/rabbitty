@@ -702,7 +702,7 @@ export default function GodInsightsPage() {
             <h2 className="text-sm font-black text-white uppercase tracking-wider">Aprovisionamiento — Plan Analíticas Pro</h2>
           </div>
           <p className="text-[11px] text-gray-500 mb-4">
-            Concede o retira el plan por comercio. El afiliado lo verá activo en su Ajustes → Facturación y su /reports dejará de mostrar el candado. (Cuando existan paquetes de membresía, aquí se cobra automáticamente — hoy es manual.)
+            Concede o retira el plan por comercio. El afiliado lo verá activo en su Ajustes → Membresías y su /reports dejará de mostrar el candado. (Cuando existan paquetes de membresía, aquí se cobra automáticamente — hoy es manual.)
           </p>
           <div className="space-y-2">
             {(tenants ?? []).map((t) => (

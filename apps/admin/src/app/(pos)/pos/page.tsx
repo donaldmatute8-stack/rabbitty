@@ -1709,7 +1709,7 @@ export default function PosPage() {
       cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
       change: changeAmount,
       currency: rest?.currency || "MXN",
-      // USD SOLO por opt-in (Configuración → Facturación): en pequeño, valuación de referencia
+      // USD SOLO por opt-in (Configuración → Moneda): en pequeño, valuación de referencia
       usdAmount: (rest as any)?.showUsdTicket && Number((rest as any)?.usdRate > 0)
         ? Math.round((total / Number((rest as any).usdRate)) * 100) / 100
         : undefined,
@@ -3505,7 +3505,7 @@ export default function PosPage() {
                       Consumo ${total.toFixed(2)} · Gratificación voluntaria +${Number(posTip).toFixed(2)} · Total con gratificación ${(total + Number(posTip)).toFixed(2)}
                     </p>
                   )}
-                  {/* USD opt-in (Configuración → Facturación): pequeño, bajo el total */}
+                  {/* USD opt-in (Configuración → Moneda): pequeño, bajo el total */}
                   {(ticketContext?.restaurant as any)?.showUsdTicket && Number((ticketContext?.restaurant as any)?.usdRate > 0) && (
                     <p className="text-[10px] font-semibold text-gray-500">
                       ≈ ${(total / Number((ticketContext?.restaurant as any).usdRate)).toFixed(2)} USD @ TC {Number((ticketContext?.restaurant as any).usdRate).toFixed(2)}

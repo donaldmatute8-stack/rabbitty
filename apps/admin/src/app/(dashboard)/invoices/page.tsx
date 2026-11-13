@@ -75,6 +75,8 @@ export default function InvoicesPage() {
     status: statusFilter || undefined,
   });
   const { data: stats } = trpc.invoices.stats.useQuery({});
+  const connection = trpc.cfdi.getConnection.useQuery({});
+  const noPac = connection.isFetched && !connection.data?.active;
 
   const cancelInvoice = trpc.invoices.cancel.useMutation({
     onSuccess: (data) => {
@@ -149,7 +151,7 @@ export default function InvoicesPage() {
               Facturación CFDI
             </h1>
             <p className="text-gray-400 mt-2 text-sm font-medium">
-              Facturas timbradas con el PAC de tu negocio
+              Se timbra con el PAC que conectes. Sin PAC configurado no se emite ningún comprobante.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -173,6 +175,21 @@ export default function InvoicesPage() {
           </div>
         </div>
       </div>
+
+      {noPac && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <p className="m-0 flex items-center gap-2 text-sm text-amber-300">
+            <AlertTriangle className="h-4 w-4" />
+            No hay PAC conectado: las facturas no se pueden timbrar todavía.
+          </p>
+          <a
+            href="/settings/billing"
+            className="rounded-xl bg-amber-500/20 px-4 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/30"
+          >
+            Conectar mi PAC
+          </a>
+        </div>
+      )}
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <Card className="p-5 border border-white/5 bg-white/5 backdrop-blur-md">

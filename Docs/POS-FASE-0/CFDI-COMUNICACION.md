@@ -79,3 +79,22 @@ Se puede decir, con precisión:
 ## 6. Rollback
 
 Al ser cambios de contenido, el rollback es revertir el texto. Se recomienda corregir **antes** de cualquier campaña.
+
+---
+
+## 7. Estado al 12-nov-2026
+
+| # | Estado | Nota |
+|---|---|---|
+| M-01 | **Resuelto** | `customer.requestInvoice` va por el PAC; sin PAC conectado responde con error claro y no marca la orden como facturada. Se eliminó la URL falsa. |
+| M-02 | **Resuelto** | Encabezado: "Se timbra con el PAC que conectes. Sin PAC configurado no se emite ningún comprobante", más banner con enlace a `/settings/billing` cuando no hay conexión. |
+| M-03 | **Resuelto** | El CSV y la guía dicen "estatus de factura (registro interno; la emisión fiscal depende de tu PAC)". |
+| M-04 | **Pendiente (otro repo)** | `telegram-miniapp/src/lib/support-content.ts` → "Admin → Pagos con Bunz". No está en este repositorio. |
+| M-05 | **Sin acción** | El landing no menciona CFDI. |
+| M-06 | **Verificado** | `APP_STORE_POS_SUBMISSION_GUIDE.md` y `APP_STORE_SUBMISSION_GUIDE.md` no mencionan CFDI. |
+| M-07 | **Fuera del repo** | Material comercial: revisión manual de dirección. |
+| M-08 | **Pendiente** | Confirmar en conversación con Bunzy que no prometa timbrado. |
+
+También se renombraron rutas ambiguas que ahora chocaban con la pantalla de
+facturación fiscal: "Admin → Facturación → Bunz" pasó a "Admin → Ajustes → Bunz"
+y "Configuración → Facturación" (tipo de cambio USD) a "Configuración → Moneda".

@@ -90,6 +90,7 @@ EXTRA EN PRODUCCIÓN:      KDS en reposo por inactividad
 TRINQUETE:                0 procedimientos y 0 archivos sin helper
 
 SIGUIENTE:                P-01 credenciales sandbox de Facturama (bloqueante)
+                          P-07 comunicacion: corregida (quedan M-04/M-07 fuera del repo)
                           Ver Docs/POS-FASE-0/PENDIENTES-CFDI.md
 BLOQUEADO POR:            cuenta de PAC del tenant (no hay credenciales aún)
 

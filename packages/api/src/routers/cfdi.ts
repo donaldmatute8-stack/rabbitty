@@ -72,7 +72,10 @@ export const cfdiRouter = router({
       return {
         businessId,
         connections: rows,
-        active: rows.find((r: any) => r.isActive && r.environment === (input?.environment ?? "sandbox")) ?? null,
+        active:
+          rows.find((r: any) => r.isActive && r.environment === (input?.environment ?? "sandbox")) ??
+          rows.find((r: any) => r.isActive) ??
+          null,
       };
     }),
 
