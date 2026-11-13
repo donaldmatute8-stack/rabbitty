@@ -99,3 +99,4 @@ Para saber **en qué rama trabajar y cómo integrar**, leer [`RAMAS-Y-FLUJO.md`]
 - Solo se agregaron archivos dentro de `Docs/POS-FASE-0/`.
 
 - [`PENDIENTES-CFDI.md`](./PENDIENTES-CFDI.md) — qué falta para timbrar de verdad
+- [`ADR-024-membresias-en-pos.md`](./ADR-024-membresias-en-pos.md) — membresías aplicadas al ticket y cierre sin cobro

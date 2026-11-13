@@ -39,7 +39,7 @@ describe("computeBenefitPlan", () => {
     });
     expect(plan.finalAmount).toBe(55);
     expect(plan.discount).toBe(185);
-    expect(plan.lines[0].applied).toBe(185);
+    expect(plan.lines[0]!.applied).toBe(185);
   });
 
   it("el producto incluido cubre una unidad, no la cantidad entera", () => {
@@ -83,8 +83,8 @@ describe("computeBenefitPlan", () => {
       baseAmount: 240,
       memberMenuItemIds: ["carajillo"],
     });
-    expect(plan.lines[0].exhausted).toBe(true);
-    expect(plan.lines[0].applied).toBe(0);
+    expect(plan.lines[0]!.exhausted).toBe(true);
+    expect(plan.lines[0]!.applied).toBe(0);
     expect(plan.finalAmount).toBe(240);
   });
 

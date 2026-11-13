@@ -983,7 +983,8 @@ export default function PosPage() {
     // Se aplican solos todos los beneficios que tocan el ticket. El saldo de
     // crédito NO: es dinero del socio y el cajero decide si lo usa.
     const autoIds = rows
-      .filter((r: any) => r.benefitType !== "CREDIT_BALANCE")
+      // Sin usos en el ciclo no se manda: el servidor lo rechazaría.
+      .filter((r: any) => r.benefitType !== "CREDIT_BALANCE" && (r.remaining ?? 1) > 0)
       .map((r: any) => r.entitlementId);
     if (autoIds.length > 0) setSelectedBenefitIds(autoIds);
     const ids = cart.map((i: any) => i.menuItemId);

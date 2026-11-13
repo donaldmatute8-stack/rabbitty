@@ -2406,12 +2406,10 @@ export const posRouter = router({
         if (input.splitCash || input.splitBunz) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Una orden cubierta por membresía no se divide." });
         }
-      } else if (calcTotal <= 0.005) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "ZERO_TOTAL: esta orden no tiene monto a cobrar; ciérrala como MEMBERSHIP.",
-        });
       }
+      // Un ticket en cero con otro método se sigue permitiendo (descuento manual
+      // al 100 %): ese camino ya existía y registra un pago de 0. El POS usa
+      // MEMBERSHIP cuando lo cubre la membresía, por trazabilidad.
 
       // ── Gratificaciones voluntarias (H10) — server guard INDEPENDIENTE del
       // medio de pago. Sin opt-in: legacy cap 15% (no rompe lo existente).
