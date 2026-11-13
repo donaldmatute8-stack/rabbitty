@@ -23,6 +23,7 @@ import { suppliersRouter } from "./suppliers";
 import { expensesRouter } from "./expenses";
 import { invoicesRouter } from "./invoices";
 import { cfdiRouter } from "./cfdi";
+import { comanderoRouter } from "./comandero";
 import { cateringRouter } from "./catering";
 import { pricingRouter } from "./pricing";
 import { campaignsRouter } from "./campaigns";
@@ -72,6 +73,7 @@ export const appRouter = router({
   expenses: expensesRouter,
   invoices: invoicesRouter,
   cfdi: cfdiRouter,
+  comandero: comanderoRouter,
   catering: cateringRouter,
   pricing: pricingRouter,
   campaigns: campaignsRouter,

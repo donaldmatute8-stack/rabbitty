@@ -17,6 +17,49 @@ interface Guide {
 
 const guides: Guide[] = [
   {
+    id: "comandero",
+    icon: Monitor,
+    label: "Comandero digital y reloj checador",
+    desc: "Toma pedidos desde el celular o tablet, sin comprar hardware nuevo",
+    role: "pos",
+    content: `## Comandero digital
+
+El comandero convierte **cualquier celular o tablet** en una terminal para tomar pedidos. No necesitas comprar equipos dedicados: el mesero usa su propio teléfono.
+
+### Cómo se enciende (una sola vez)
+
+1. **Ajustes → Terminales**: crea una terminal con tipo **COMANDERO** y asígnale estación (Barra, Cocina…).
+2. **Ajustes → Reloj checador**: deja esa pantalla abierta en la caja o en una tablet de la entrada. Muestra un QR que rota cada minuto.
+3. En el celular del mesero abre **/comandero**, escanea el QR y captura su PIN.
+
+### Cómo se usa
+
+- **Mesas**: toca la mesa (o Para llevar / Mostrador). Si ya tiene cuenta abierta, se reutiliza: nunca se abren dos.
+- **Platillos**: toca uno, elige cantidad, **extras** (solo los del menú, con su precio), **alergias** (catálogo + nota libre), **nota para cocina** y **para quién es** (nombre del comensal).
+- **Tanda**: todo queda *en captura* hasta que tocas **Enviar**. Ahí sale a la estación que corresponde.
+- **Editar**: mientras la cuenta no se cierre puedes seguir agregando y enviando tandas.
+
+### Qué gana el comercio
+
+| Antes | Con comandero |
+|---|---|
+| Comprar handhelds dedicados | El celular del mesero |
+| Papel y captura posterior | Pedido directo a cocina/barra |
+| Comandas que se pierden | Cola por estación con aviso en vivo |
+| Errores de nombre | "Para Luis" impreso en la comanda |
+| Alergias verbales | Alergias en rojo en la pantalla de cocina |
+
+### Lo que NO hace
+
+- No cobra: la cuenta se cierra en caja.
+- No maneja propina.
+- No emite factura.
+
+### El chequeo
+
+Sin checar no hay comandero. El QR prueba que el dispositivo está en la sucursal; el PIN prueba quién es. Al cerrar sesión se registra la salida y el admin puede ver el historial y cerrar turnos huérfanos.`,
+  },
+  {
     id: "poa",
     icon: Activity,
     label: "Proof of Atmosphere (PoA)",

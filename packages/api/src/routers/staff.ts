@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure, adminOnlyProcedure, resolveBranchId, posProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
@@ -161,6 +161,59 @@ export const staffRouter = router({
         return { success: true };
       }
       return { success: false };
+    }),
+
+  /**
+   * ── Reloj checador: administración desde el admin (ADR-025 D7) ──
+   * Cierra el turno de un empleado que se fue sin checar (o con el celular
+   * descargado). Queda registrada la hora real de salida.
+   */
+  forceClockOut: adminOnlyProcedure
+    .input(z.object({ shiftId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [shift] = await ctx.restaurantDb
+        .select()
+        .from(staffShifts)
+        .where(and(eq(staffShifts.id, input.shiftId), eq(staffShifts.branchId, ctx.branchId)))
+        .limit(1);
+      if (!shift) throw new Error("Turno no encontrado");
+      if (shift.status !== "ACTIVE") return { success: true, alreadyClosed: true };
+
+      await ctx.restaurantDb
+        .update(staffShifts)
+        .set({ status: "FINISHED", checkOut: new Date() })
+        .where(eq(staffShifts.id, shift.id));
+
+      bus.emit(EventTypes.STAFF_SHIFT_END, { shiftId: shift.id, staffId: shift.staffId });
+      return { success: true, alreadyClosed: false };
+    }),
+
+  /** Historial de checadas (más reciente primero). */
+  shiftHistory: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200).default(50), staffId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const limit = input?.limit ?? 50;
+      const where = input?.staffId
+        ? and(eq(staffShifts.branchId, ctx.branchId), eq(staffShifts.staffId, input.staffId))
+        : eq(staffShifts.branchId, ctx.branchId);
+
+      const rows = await ctx.restaurantDb
+        .select({
+          id: staffShifts.id,
+          staffId: staffShifts.staffId,
+          name: staffTable.name,
+          role: staffTable.role,
+          checkIn: staffShifts.checkIn,
+          checkOut: staffShifts.checkOut,
+          status: staffShifts.status,
+        })
+        .from(staffShifts)
+        .leftJoin(staffTable, eq(staffTable.id, staffShifts.staffId))
+        .where(where)
+        .orderBy(desc(staffShifts.checkIn))
+        .limit(limit);
+
+      return rows;
     }),
 
   getActiveShifts: protectedProcedure.query(async ({ ctx }) => {

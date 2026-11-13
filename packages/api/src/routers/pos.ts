@@ -1052,6 +1052,8 @@ export const posRouter = router({
         allergies: z.string().trim().max(300).optional(),
         /** Nombre con el que se entrega el platillo. */
         guestName: z.string().trim().max(60).optional(),
+        /** Comandero: deja el ítem en captura hasta `comandero.sendRound`. */
+        hold: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1122,8 +1124,9 @@ export const posRouter = router({
             }).returning();
             await octx.recalcTotals();
 
-            // Aviso en vivo al KDS de esa estación (0C-5). Sin estación no se emite.
-            if (dest?.stationId) {
+            // Aviso en vivo al KDS de esa estación (0C-5). Sin estación no se
+            // emite, y con `hold` se espera a que el comandero mande la tanda.
+            if (dest?.stationId && !input.hold) {
               // Mismo businessId que calcula el cliente (kds.realtimeChannel).
               const bizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
               await enqueueRealtimeEvent(tx, {

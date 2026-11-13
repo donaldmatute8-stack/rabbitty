@@ -273,8 +273,8 @@ bloqueada, la notificación del sistema solo donde el navegador lo permita.
 | Fase | Contenido | Estado |
 |---|---|---|
 | **1** | Alergias, nombre del comensal, extras con precio, `pos_terminals.kind`, KDS muestra alergias | **en curso** |
-| **2** | Comandero: mesas → menú → ítem (extras/notas/alergias/nombre) → tanda → enviar | siguiente |
-| **3** | Chequeo con QR + PIN, candado de Wi-Fi, bloqueo de salida | después |
+| **2** | Comandero: mesas → menú → ítem (extras/notas/alergias/nombre) → tanda → enviar | **hecho (v1)** |
+| **3** | Chequeo con QR + PIN + admin del reloj | **hecho** · candado de Wi-Fi pendiente |
 | **4** | Notificador de "listo" al mesero (canal + push nativo) | después |
 | **5** | Pedir la cuenta desde el comandero (avisa a caja) | otra fase |
 | **6** | Cola local sin conexión | al final |
@@ -294,3 +294,37 @@ KDS (app)                      alergias en rojo y "Para <nombre>"
 ```
 
 Migración `0056` (aditiva).
+
+---
+
+## 14. Fase 2 y 3 (implementado 13-nov-2026)
+
+**Comandero (`/comandero`)**
+
+- tablero de mesas con cuenta abierta + Para llevar / Mostrador
+- `comandero.openOrder` reutiliza la cuenta abierta de la mesa (nunca dos)
+- hoja del platillo: cantidad, extras del menú con precio, alergias (catálogo +
+  libre), nota, nombre del comensal
+- `hold: true` en `addToCart`: el ítem queda **en captura**
+- `comandero.sendRound`: marca los ítems, publica a cada estación y refresca
+- total en MXN, sin propina, sin cobro
+
+**Chequeo**
+
+- `services/presenceCode.ts`: código HMAC por sucursal, ventana de 60 s
+  (se acepta la anterior por reloj/escaneo)
+- `comandero.checkIn`: valida código + PIN (con bloqueo por intentos), abre
+  `staff_shifts` y la sesión de operador
+- `comandero.checkOut`: cierra turno y sesión
+- Admin **Ajustes → Reloj checador**: QR rotativo, quién está en turno,
+  cerrar turno huérfano e historial (`staff.forceClockOut`, `staff.shiftHistory`)
+- El layout del POS no pinta su candado sobre `/comandero` (tiene el suyo)
+
+**Guías**
+
+- `/academy` → *Comandero digital y reloj checador*
+- `Docs/POS-FASE-0/GUIA-COMANDERO.md`
+
+**Pendiente**: notificador de "listo" al mesero (fase 4), pedir la cuenta desde
+el comandero (5), cola local sin conexión (6) y el candado de Wi-Fi (depende del
+navegador).

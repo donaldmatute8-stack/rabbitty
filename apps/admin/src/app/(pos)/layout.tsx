@@ -58,7 +58,10 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   // ── Fase 3: turno del empleado (solo terminal, nunca kiosk ni /pos/link) ──
   const isKiosk = pathname.startsWith("/kiosk");
-  const operatorGate = terminalMode && !isLinkPage && !isKiosk;
+  // El comandero trae su propio chequeo (QR de sucursal + PIN), así que no se
+  // le pinta encima el candado de turno del POS.
+  const isComandero = pathname.startsWith("/comandero");
+  const operatorGate = terminalMode && !isLinkPage && !isKiosk && !isComandero;
   const { data: operatorStatus, refetch: refetchOperator } = trpc.posOperators.status.useQuery(undefined, {
     enabled: operatorGate,
     retry: false,
