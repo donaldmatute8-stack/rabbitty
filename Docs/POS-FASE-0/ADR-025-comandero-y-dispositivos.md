@@ -456,3 +456,41 @@ El servidor lo rechazaba con "Item de menú no válido". Ahora manda
 +$15" y "Extra Shot +$10" fijos, sin relación con el menú ni con el cobro. Se
 retiraron. Si se quieren extras reales en el kiosko, falta pasar
 `priceAdjust` al intent y sumarlo al total.
+
+---
+
+## 20. Kiosko al 100% y ruteo por nicho (13-nov-2026)
+
+**Extras reales en el kiosko**
+
+- La hoja del platillo carga `pos.getModifiers` y muestra cada extra con su
+  precio del menú.
+- El precio de la línea es **base + extras** (el botón dice el total antes de
+  agregar).
+- El carrito separa líneas cuando cambian extras, notas o alergias.
+- `pos.createStripeChargeIntent` valida los extras contra el menú del platillo,
+  suma su `priceAdjust` y los guarda en `order_items.modifiers`.
+
+**Ruteo por nicho**
+
+- El kiosko lee `restaurants.businessType`:
+  - `restaurant` / `bar` → por defecto **En el local**, con selector de mesa
+    (opcional) desde `pos.getTables`.
+  - `cafe` / `food_truck` / `dark_kitchen` → por defecto **Para llevar**, sin
+    mesa.
+- El cliente puede cambiar la elección; se manda `orderType` + `tableId` al
+  intent.
+- `createStripeChargeIntent` ya resolvía la **estación** de cada ítem
+  (`resolveStationsForItems`), así que la comanda cae en cocina/barra correcta.
+
+**Cableado de acceso**
+
+- El kiosko se agregó al menú lateral (*Kiosko de autoservicio*), antes solo era
+  accesible por URL.
+- **Bug crítico corregido**: `comandero.` no estaba en la allowlist de
+  terminales (`TERMINAL_ALLOWED_PREFIXES`), así que un celular enlazado como
+  terminal recibía `UNAUTHORIZED` en todo el comandero. Se agregó.
+- `createStripeChargeIntent` también rechaza cobrar desde un `COMANDERO`.
+
+**Pendiente menor**: el kiosko no publica al outbox de tiempo real al crear la
+orden; la cocina lo ve por el sondeo de 10 s del KDS.

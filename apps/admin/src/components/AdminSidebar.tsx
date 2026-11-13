@@ -206,6 +206,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/strategy", label: "Estrategia Bunzy", icon: Brain, badge: "IA" },
       { href: "/kitchen", label: "Cocina / KDS", icon: ChefHat },
       { href: "/comandero", label: "Comandero digital", icon: ClipboardList },
+      { href: "/kiosk", label: "Kiosko de autoservicio", icon: Monitor },
       { href: "/staff/shifts", label: "Turnos y Reloj", icon: Clock },
       { href: "/table-layout", label: "Mapa de Mesas", icon: Table2 },
       { href: "/reservations", label: "Reservaciones", icon: BookUser },

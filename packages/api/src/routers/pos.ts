@@ -1703,6 +1703,8 @@ export const posRouter = router({
         notes: z.string().optional(),
         /** Alergias del comensal (kiosko y comandero). */
         allergies: z.string().trim().max(300).optional(),
+        /** Extras del menú (solo ids; el precio lo decide el servidor). */
+        modifiers: z.array(z.object({ id: z.string(), name: z.string() })).max(20).optional(),
       })).min(1),
       orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("DINE_IN"),
       tableId: z.string().optional(),
@@ -1716,6 +1718,13 @@ export const posRouter = router({
       memberMenuItemIds: z.array(z.string()).max(50).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Un COMANDERO no cobra (ni con Stripe): la cuenta se cierra en caja.
+      if (ctx.posAuth?.method === "terminal" && String(ctx.posAuth.kind ?? "CASHIER") === "COMANDERO" && !ctx.userId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Este dispositivo es un comandero: la cuenta se cobra en caja.",
+        });
+      }
       // Compensaciones si la tx de la orden falla después de consumir beneficios
       // (las tablas de membresía viven en la DB core, fuera de esta transacción).
       const membershipCompensations: Array<() => Promise<unknown>> = [];
@@ -1730,13 +1739,50 @@ export const posRouter = router({
           const priceMap = new Map(prices.map((p: any) => [p.id, Number(p.price)]));
 
           let itemsTotal = 0;
-          const itemRows = input.items.map((it) => {
-            const unit = Number(priceMap.get(it.menuItemId) ?? 0);
-            if (!unit) throw new TRPCError({ code: "BAD_REQUEST", message: "Item de menú no válido para esta sucursal" });
+          const itemRows: any[] = [];
+          for (const it of input.items) {
+            const base = Number(priceMap.get(it.menuItemId) ?? 0);
+            if (!base) throw new TRPCError({ code: "BAD_REQUEST", message: "Item de menú no válido para esta sucursal" });
+
+            // Extras: SOLO los del menú de este platillo; el monto lo decide el
+            // servidor (el cliente manda ids, nunca precios).
+            let extraPrice = 0;
+            let validatedModifiers: Array<{ id: string; name: string; priceAdjust: number }> | null = null;
+            if (it.modifiers?.length) {
+              const ids = it.modifiers.map((m) => m.id);
+              const rows = await tx
+                .select({
+                  id: menuItemModifiers.id,
+                  name: menuItemModifiers.name,
+                  priceAdjust: menuItemModifiers.priceAdjust,
+                })
+                .from(menuItemModifiers)
+                .where(and(eq(menuItemModifiers.itemId, it.menuItemId), inArray(menuItemModifiers.id, ids)));
+              if (rows.length !== new Set(ids).size) {
+                throw new TRPCError({ code: "BAD_REQUEST", message: "Uno de los extras no pertenece a este platillo." });
+              }
+              validatedModifiers = rows.map((r: any) => ({
+                id: r.id,
+                name: r.name,
+                priceAdjust: Number(r.priceAdjust) || 0,
+              }));
+              extraPrice = (validatedModifiers ?? []).reduce((sum, m) => sum + m.priceAdjust, 0);
+            }
+
+            const unit = r2(base + extraPrice);
             const lineTotal = r2(unit * it.quantity);
             itemsTotal += lineTotal;
-            return { menuItemId: it.menuItemId, quantity: it.quantity, unitPrice: unit, totalPrice: lineTotal, notes: it.notes ?? null, allergies: it.allergies ?? null, sortOrder: 0 };
-          });
+            itemRows.push({
+              menuItemId: it.menuItemId,
+              quantity: it.quantity,
+              unitPrice: unit,
+              totalPrice: lineTotal,
+              notes: it.notes ?? null,
+              allergies: it.allergies ?? null,
+              modifiers: validatedModifiers,
+              sortOrder: 0,
+            });
+          }
           itemsTotal = r2(itemsTotal);
           const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);
 

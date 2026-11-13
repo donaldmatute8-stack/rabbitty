@@ -21,6 +21,9 @@ export default function KioskPage() {
   const [itemNotes, setItemNotes] = useState("");
   const [itemAllergens, setItemAllergens] = useState<string[]>([]);
   const [itemAllergyNote, setItemAllergyNote] = useState("");
+  // Extras reales del menú para el platillo abierto.
+  const [itemMods, setItemMods] = useState<string[]>([]);
+
   const [adminPinModal, setAdminPinModal] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [pinError, setPinError] = useState(false);
@@ -31,6 +34,17 @@ export default function KioskPage() {
 
   // Query restaurant/branch info for the QR
   const { data: ticketContext } = trpc.printing.getTicketData.useQuery(undefined, { retry: false });
+
+  // Ruteo por nicho: restaurante/bar piden mesa; café/food truck van a mostrador.
+  const niche = (ticketContext?.restaurant as { businessType?: string } | null)?.businessType ?? "restaurant";
+  const isTableNiche = niche === "restaurant" || niche === "bar";
+  const [orderTypeChoice, setOrderTypeChoice] = useState<"DINE_IN" | "TO_GO" | null>(null);
+  const effectiveOrderType = orderTypeChoice ?? (isTableNiche ? "DINE_IN" : "TO_GO");
+  const [kioskTableId, setKioskTableId] = useState<string>("");
+  const kioskTables = trpc.pos.getTables.useQuery(undefined, {
+    enabled: isTableNiche,
+    staleTime: 60_000,
+  });
 
   // Idle Timer (90 seconds auto-reset to welcome screen if abandoned)
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -100,6 +114,11 @@ export default function KioskPage() {
   }, [view, pairToken, pairCustomer]);
 
   const kioskIntentMutation = trpc.pos.createStripeChargeIntent.useMutation();
+
+  const itemModifiers = trpc.pos.getModifiers.useQuery(
+    { itemId: selectedItem?.id ?? "" },
+    { enabled: Boolean(selectedItem?.id), staleTime: 60_000 },
+  );
   const kioskIntentCancel = trpc.payments.cancelPaymentIntent.useMutation();
   const { data: categories } = trpc.pos.getCategories.useQuery(undefined, { retry: false });
   const { data: kioskCheckIns } = trpc.pos.getActiveCheckIns.useQuery(undefined, { refetchInterval: 30000, retry: false });
@@ -141,10 +160,21 @@ export default function KioskPage() {
     const notes = itemNotes.trim() || undefined;
     const allergies = [...itemAllergens, itemAllergyNote.trim()].filter(Boolean).join(", ") || undefined;
 
+    // Extras elegidos: el precio sale del menú, nunca del cliente.
+    const chosen = (itemModifiers.data ?? []).filter((m: any) => itemMods.includes(m.id));
+    const extra = chosen.reduce((sum: number, m: any) => sum + Number(m.priceAdjust || 0), 0);
+    const unitPrice = Math.round((Number(item.price) + extra) * 100) / 100;
+    const modifiers = chosen.map((m: any) => ({ id: m.id, name: m.name, priceAdjust: Number(m.priceAdjust || 0) }));
+    const modKey = modifiers.map((m: any) => m.id).sort().join("+");
+
     setCart((prev) => {
-      // Misma línea solo si coincide el platillo Y sus notas/alergias.
+      // Misma línea solo si coinciden platillo, notas, alergias y extras.
       const existing = prev.find(
-        (i) => i.menuItemId === item.id && (i.notes ?? "") === (notes ?? "") && (i.allergies ?? "") === (allergies ?? ""),
+        (i) =>
+          i.menuItemId === item.id &&
+          (i.notes ?? "") === (notes ?? "") &&
+          (i.allergies ?? "") === (allergies ?? "") &&
+          (i.modKey ?? "") === modKey,
       );
       if (existing) {
         return prev.map((i) => (i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i));
@@ -155,10 +185,13 @@ export default function KioskPage() {
           id: Math.random().toString(36).substr(2, 9),
           menuItemId: item.id,
           name: item.name,
-          price: item.price,
+          price: unitPrice,
+          basePrice: item.price,
           quantity: 1,
           notes,
           allergies,
+          modifiers,
+          modKey,
         },
       ];
     });
@@ -167,9 +200,17 @@ export default function KioskPage() {
     setItemNotes("");
     setItemAllergens([]);
     setItemAllergyNote("");
+    setItemMods([]);
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // Extras seleccionados en la hoja abierta (precio del menú).
+  const sheetMods = (itemModifiers.data ?? []) as Array<{ id: string; name: string; priceAdjust: number }>;
+  const sheetExtra = sheetMods
+    .filter((m) => itemMods.includes(m.id))
+    .reduce((sum, m) => sum + Number(m.priceAdjust || 0), 0);
+  const sheetUnitPrice = Number(selectedItem?.price ?? 0) + sheetExtra;
 
   // 1. WELCOME SCREEN
   if (view === "welcome") {
@@ -429,7 +470,7 @@ export default function KioskPage() {
               {filteredItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => { setSelectedItem(item); setItemNotes(""); setItemAllergens([]); setItemAllergyNote(""); }} // Opens Item Modal
+                  onClick={() => { setSelectedItem(item); setItemNotes(""); setItemAllergens([]); setItemAllergyNote(""); setItemMods([]); }} // Opens Item Modal
                   className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-gray-900/90 backdrop-blur-md text-left transition-all active:scale-95 active:border-purple-500/50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)] hover:-translate-y-2 hover:border-white/20"
                 >
                   <div className="relative aspect-4/3 w-full overflow-hidden bg-black/60 flex items-center justify-center">
@@ -496,6 +537,37 @@ export default function KioskPage() {
               <p className="text-2xl text-emerald-400 font-black mb-8">${selectedItem.price.toFixed(2)}</p>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 space-y-6">
+                {sheetMods.length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold mb-3">Extras</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {sheetMods.map((m) => {
+                        const on = itemMods.includes(m.id);
+                        const price = Number(m.priceAdjust || 0);
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() =>
+                              setItemMods((prev) => (on ? prev.filter((x) => x !== m.id) : [...prev, m.id]))
+                            }
+                            className={
+                              "flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-bold transition-all active:scale-95 " +
+                              (on
+                                ? "border-purple-400/60 bg-purple-500/20 text-purple-200"
+                                : "border-white/10 bg-white/5 text-gray-300")
+                            }
+                          >
+                            <span>{on ? "✓ " : ""}{m.name}</span>
+                            <span className="text-xs text-gray-400">
+                              {price > 0 ? `+${price.toFixed(2)}` : "incluido"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <h3 className="text-xl font-bold mb-3">¿Tienes alguna alergia?</h3>
                   <div className="flex flex-wrap gap-2">
@@ -542,7 +614,7 @@ export default function KioskPage() {
                 onClick={() => addToCart(selectedItem)}
                 className="mt-8 w-full rounded-4xl bg-purple-500 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] hover:bg-purple-400 active:scale-95 transition-all"
               >
-                AGREGAR A LA ORDEN
+                AGREGAR · ${sheetUnitPrice.toFixed(2)}
               </button>
             </div>
           </div>
@@ -575,6 +647,11 @@ export default function KioskPage() {
                   <div className="flex-1 pr-4">
                     <h3 className="text-xl lg:text-2xl font-bold text-white leading-tight">{item.name}</h3>
                     <p className="text-purple-400 text-lg font-black mt-1">${item.price.toFixed(2)} c/u</p>
+                    {item.modifiers?.length > 0 && (
+                      <p className="m-0 mt-1 text-sm font-bold text-purple-300">
+                        + {item.modifiers.map((m: any) => m.name).join(", ")}
+                      </p>
+                    )}
                     {item.allergies && (
                       <p className="m-0 mt-1 text-sm font-bold text-rose-300">⚠ Alergias: {item.allergies}</p>
                     )}
@@ -704,6 +781,47 @@ export default function KioskPage() {
             </div>
 
             <div className="space-y-4 pt-6">
+              {/* Ruteo por nicho: dónde se consume y, si aplica, qué mesa */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="m-0 mb-2 text-sm font-black uppercase tracking-wider text-gray-300">
+                  ¿Dónde lo vas a consumir?
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: "DINE_IN" as const, label: isTableNiche ? "En el local" : "Aquí mismo" },
+                    { key: "TO_GO" as const, label: "Para llevar" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setOrderTypeChoice(opt.key)}
+                      className={
+                        "rounded-xl border px-4 py-3 text-sm font-black transition-all active:scale-95 " +
+                        (effectiveOrderType === opt.key
+                          ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-200"
+                          : "border-white/10 bg-black/30 text-gray-300")
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {effectiveOrderType === "DINE_IN" && isTableNiche && (
+                  <select
+                    value={kioskTableId}
+                    onChange={(e) => setKioskTableId(e.target.value)}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none"
+                  >
+                    <option value="">¿En qué mesa? (opcional)</option>
+                    {(kioskTables.data ?? []).map((t: any) => (
+                      <option key={t.id} value={t.id}>
+                        Mesa {t.number}
+                        {t.location ? ` · ${t.location}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               <button 
                 disabled={cart.length === 0}
                 onClick={async () => {
@@ -716,7 +834,10 @@ export default function KioskPage() {
                         quantity: i.quantity,
                         notes: i.notes,
                         allergies: i.allergies,
+                        modifiers: i.modifiers?.map((m: any) => ({ id: m.id, name: m.name })),
                       })),
+                      orderType: effectiveOrderType,
+                      tableId: effectiveOrderType === "DINE_IN" && kioskTableId ? kioskTableId : undefined,
                       ...(pairCustomer ? { customerId: pairCustomer.id, customerName: pairCustomer.name } : {}),
                     });
                     setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total, claimToken: (res as unknown as { claimToken?: string }).claimToken });

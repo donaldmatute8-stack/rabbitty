@@ -132,6 +132,8 @@ const TERMINAL_ALLOWED_PREFIXES = [
   "stations.",
   // KDS puede correr en una tablet con token de terminal atada a su estación.
   "kds.",
+  // Comandero: celular/tablet enlazado como terminal (chequeo, mesas, tandas).
+  "comandero.",
 ] as const;
 const TERMINAL_ALLOWED_EXACT = new Set(["staff.verifyAdminPin"]);
 
