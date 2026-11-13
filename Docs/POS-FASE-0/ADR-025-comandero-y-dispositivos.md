@@ -492,5 +492,6 @@ retiraron. Si se quieren extras reales en el kiosko, falta pasar
   terminal recibía `UNAUTHORIZED` en todo el comandero. Se agregó.
 - `createStripeChargeIntent` también rechaza cobrar desde un `COMANDERO`.
 
-**Pendiente menor**: el kiosko no publica al outbox de tiempo real al crear la
-orden; la cocina lo ve por el sondeo de 10 s del KDS.
+**Tiempo real (paridad)**: al crear la orden, el kiosko encola cada ítem en el
+outbox de su estación y drena de inmediato (`drainRealtimeInBackground`). La
+cocina la ve sin esperar el sondeo de 10 s, igual que el comandero.

@@ -1730,9 +1730,12 @@ export const posRouter = router({
       const membershipCompensations: Array<() => Promise<unknown>> = [];
       /** Cuánto cubrió la membresía (para el cierre sin cobro). */
       let benefitsCovered = 0;
+      // El canal de tiempo real necesita el businessId (mismo que publica el KDS).
+      const realtimeBizId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
+
       try {
         // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
-        return await ctx.restaurantDb.transaction(async (tx: any) => {
+        const result = await ctx.restaurantDb.transaction(async (tx: any) => {
           const prices = await tx.select({ id: menuItems.id, price: menuItems.price })
             .from(menuItems)
             .where(eq(menuItems.branchId, ctx.branchId));
@@ -1812,14 +1815,34 @@ export const posRouter = router({
           );
           for (const [i, row] of itemRows.entries()) {
             const dest = stationDest.get(row.menuItemId);
-            await tx.insert(orderItems).values({
-              ...row,
-              sortOrder: i,
-              orderId: order.id,
-              stationId: dest?.stationId ?? null,
-              printerId: dest?.printerId ?? null,
-              sentToStationAt: dest?.stationId ? new Date() : null,
-            });
+            const [inserted] = await tx
+              .insert(orderItems)
+              .values({
+                ...row,
+                sortOrder: i,
+                orderId: order.id,
+                stationId: dest?.stationId ?? null,
+                printerId: dest?.printerId ?? null,
+                sentToStationAt: dest?.stationId ? new Date() : null,
+              })
+              .returning({ id: orderItems.id });
+
+            // Paridad con el comandero: aviso en vivo a la estación (ADR-017).
+            if (dest?.stationId && inserted?.id && realtimeBizId) {
+              await enqueueRealtimeEvent(tx, {
+                businessId: realtimeBizId,
+                branchId: ctx.branchId,
+                channel: stationChannel(realtimeBizId, ctx.branchId, dest.stationId),
+                eventType: "order.item.added",
+                payload: {
+                  orderId: order.id,
+                  itemId: inserted.id,
+                  stationId: dest.stationId,
+                  status: "PENDING",
+                },
+                eventId: `item-added-${inserted.id}`,
+              });
+            }
           }
 
           // ── Beneficios de membresía (mismas reglas que el cobro directo) ──
@@ -1875,6 +1898,10 @@ export const posRouter = router({
 
           return { orderId: order.id, intentId: (intent as any).intentId, payUrl, total: orderTotal, bunzApplied: (intent as any).bunzApplied ?? 0, netFiatCents: (intent as any).netFiatCents, expiresAt: (intent as any).expiresAt };
         });
+
+        // Publica ya (sin esperar al cron). Si falla, queda QUEUED.
+        drainRealtimeInBackground(ctx.restaurantDb);
+        return result;
       } catch (err) {
         for (const compensate of membershipCompensations) {
           try { await compensate(); } catch (compErr) { console.error("[membership] compensación falló:", compErr); }
