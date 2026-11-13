@@ -967,6 +967,56 @@ export const membershipsRouter = router({
       });
     }),
 
+  /**
+   * ── Vista previa del ticket con membresía (POS) ─────────────────────────
+   *
+   * Mismo cálculo que el cobro real, sin consumir cuota ni crédito. El POS la
+   * usa para mostrar el total verdadero y para decidir si hay algo que cobrar
+   * (total 0 ⇒ se cierra sin método de pago).
+   */
+  previewOrderBenefits: posProcedure
+    .input(
+      z.object({
+        customerId: z.string().uuid(),
+        items: z
+          .array(
+            z.object({
+              menuItemId: z.string(),
+              quantity: z.number().min(1),
+              unitPrice: z.number().min(0),
+            }),
+          )
+          .max(100),
+        entitlementIds: z.array(z.string().uuid()).max(20).optional(),
+        memberMenuItemIds: z.array(z.string()).max(50).optional(),
+        baseAmount: z.number().min(0).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { previewMembershipBenefits } = await import("../services/membershipBenefits");
+      const baseAmount =
+        input.baseAmount ??
+        input.items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+
+      const plan = await previewMembershipBenefits({
+        coreDb: ctx.coreDb,
+        restaurantDb: ctx.restaurantDb,
+        branchId: ctx.branchId,
+        customerId: input.customerId,
+        entitlementIds: input.entitlementIds,
+        items: input.items,
+        memberMenuItemIds: input.memberMenuItemIds,
+        baseAmount,
+      });
+
+      return {
+        baseAmount: Math.round(baseAmount * 100) / 100,
+        ...plan,
+        /** Todo el ticket queda cubierto: el POS muestra "Continuar", no cobro. */
+        covered: plan.finalAmount <= 0.005 && plan.discount > 0,
+      };
+    }),
+
   /** Membresías del usuario con estado de derechos del ciclo actual. */
   getMyMemberships: posProcedure.query(async ({ ctx }) => {
     // La terminal no tiene membresías personales.

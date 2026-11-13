@@ -1679,6 +1679,8 @@ export const posRouter = router({
       // Compensaciones si la tx de la orden falla después de consumir beneficios
       // (las tablas de membresía viven en la DB core, fuera de esta transacción).
       const membershipCompensations: Array<() => Promise<unknown>> = [];
+      /** Cuánto cubrió la membresía (para el cierre sin cobro). */
+      let benefitsCovered = 0;
       try {
         // Orden + items + PaymentIntent en una transacción; precios SIEMPRE del menú server-side
         return await ctx.restaurantDb.transaction(async (tx: any) => {
@@ -2115,7 +2117,8 @@ export const posRouter = router({
             notes: z.string().optional(),
           })
         ),
-        paymentMethod: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]),
+        // MEMBERSHIP = la membresía cubre el 100%: no hay cobro, solo cierre.
+        paymentMethod: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ", "MEMBERSHIP"]),
         /** P0-3: referencia/autorización de la terminal para cobros con tarjeta. */
         cardReference: z.string().trim().max(80).optional(),
         discountPercent: z.number().min(0).max(100).optional(),
@@ -2341,6 +2344,8 @@ export const posRouter = router({
       // RP-2A: si el cierre atómico falla, se devuelven los beneficios ya
       // consumidos (crédito/cuota) para no cobrarle al cliente dos veces.
       const membershipCompensations: Array<() => Promise<unknown>> = [];
+      /** Cuánto cubrió la membresía (para el cierre sin cobro). */
+      let benefitsCovered = 0;
       if (input.entitlementIds && input.entitlementIds.length > 0) {
         if (!input.customerId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Vincula al Rabbitter antes de aplicar su beneficio de membresía." });
@@ -2366,6 +2371,7 @@ export const posRouter = router({
         creditApplied = applied.creditApplied;
         calculatedDiscount = r2(calculatedDiscount + applied.discount);
         finalAmount = applied.finalAmount;
+        benefitsCovered = applied.discount;
       }
       // fin GAP 1
 
@@ -2373,6 +2379,39 @@ export const posRouter = router({
       const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(finalAmount);
 
       const posTip = Math.max(0, Math.round(Number(input.tip || 0) * 100) / 100);
+
+      // ── Cierre cubierto por membresía (content-aware) ──
+      // Si la membresía deja el ticket en cero no hay nada que cobrar: no se
+      // pide propina (sería una venta sin medio de pago), no hay split y el
+      // cobro se completa sin movimiento de caja ni de banco.
+      if (input.paymentMethod === "MEMBERSHIP") {
+        if (calcTotal > 0.005) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `MEMBERSHIP_REQUIRES_ZERO_TOTAL: el ticket queda en ${calcTotal.toFixed(2)}; cobra el resto con un método real.`,
+          });
+        }
+        if (benefitsCovered <= 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "MEMBERSHIP_REQUIRES_BENEFIT: no hay beneficios de membresía aplicados a esta orden.",
+          });
+        }
+        if (posTip > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Una orden cubierta por membresía no lleva propina (no hay cobro).",
+          });
+        }
+        if (input.splitCash || input.splitBunz) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Una orden cubierta por membresía no se divide." });
+        }
+      } else if (calcTotal <= 0.005) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "ZERO_TOTAL: esta orden no tiene monto a cobrar; ciérrala como MEMBERSHIP.",
+        });
+      }
 
       // ── Gratificaciones voluntarias (H10) — server guard INDEPENDIENTE del
       // medio de pago. Sin opt-in: legacy cap 15% (no rompe lo existente).
@@ -2415,7 +2454,7 @@ export const posRouter = router({
       // ── Confirmación del Rabbitter OBLIGATORIA (server-side) ──
       // Un POS con bundle viejo (sin el paso de confirmación) no puede cobrar
       // a un Rabbitter vinculado: debe actualizar y pedir la autorización.
-      if (input.customerId) {
+      if (input.customerId && input.paymentMethod !== "MEMBERSHIP") {
         if (!input.chargeApprovalId) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",

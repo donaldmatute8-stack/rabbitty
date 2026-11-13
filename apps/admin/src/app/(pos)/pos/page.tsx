@@ -324,14 +324,13 @@ export default function PosPage() {
 
   // Membresía = 1 artículo por visita. Si ya había una cuenta con varios,
   // se conserva el primero y el cajero puede eliminarlo para elegir otro.
+  // Antes esto recortaba el carrito a 1 artículo en cuanto se detectaba una
+  // membresía: un plan familiar no podía pedir nada más y los acompañantes se
+  // perdían. Ahora el carrito no se toca; el servidor calcula qué cubre el plan
+  // y el resto se cobra normalmente (ver `previewOrderBenefits`).
   const enforceMembershipCartLimit = () => {
-    setCart((prev) => {
-      if (prev.length === 0) return prev;
-      if (prev.length === 1 && prev[0].quantity === 1) return prev;
-      return [{ ...prev[0], quantity: 1 }];
-    });
-    if (cart.length > 1) {
-      toast.info("Membresía: solo se conserva el primer artículo. Elimínalo si quieres otro.");
+    if (detectedMembership && cart.length > 1) {
+      toast.info("Membresía: lo que no esté cubierto por el plan se cobra normal.");
     }
   };
   const [lastPaidOrderId, setLastPaidOrderId] = useState<string | null>(null);
@@ -981,8 +980,10 @@ export default function PosPage() {
       maxMembersLimit: first.maxMembersLimit,
       benefits: rows.map((r: any) => ({ ...r, id: r.entitlementId })),
     });
+    // Se aplican solos todos los beneficios que tocan el ticket. El saldo de
+    // crédito NO: es dinero del socio y el cajero decide si lo usa.
     const autoIds = rows
-      .filter((r: any) => r.benefitType === "MEMBER_CONSUMPTION" || r.benefitType === "DISCOUNT_PCT")
+      .filter((r: any) => r.benefitType !== "CREDIT_BALANCE")
       .map((r: any) => r.entitlementId);
     if (autoIds.length > 0) setSelectedBenefitIds(autoIds);
     const ids = cart.map((i: any) => i.menuItemId);
@@ -1610,10 +1611,6 @@ export default function PosPage() {
   }, [menuItems, activeCategory, search]);
 
   const addToCart = (item: any) => {
-    if (detectedMembership && cart.length >= 1) {
-      toast.info("Membresía: solo 1 artículo por visita. Elimina el actual para cambiarlo.");
-      return;
-    }
     setCart((prev) => {
       const existing = prev.find((i) => i.menuItemId === item.id);
       if (existing) {
@@ -1632,10 +1629,6 @@ export default function PosPage() {
   };
 
   const updateQuantity = (id: string, delta: number) => {
-    if (detectedMembership && delta > 0) {
-      toast.info("Membresía: solo 1 artículo por visita.");
-      return;
-    }
     setCart((prev) => prev.map((i) => {
       if (i.id === id) {
         const newQ = i.quantity + delta;
@@ -1645,7 +1638,28 @@ export default function PosPage() {
     }));
   };
 
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // ── Total real con membresía (content-aware) ─────────────────────────────
+  // El servidor calcula qué cubre el plan sobre ESTE carrito, sin consumir
+  // nada. Si el ticket queda en cero, el POS no pide método de pago.
+  const benefitPreview = trpc.memberships.previewOrderBenefits.useQuery(
+    {
+      customerId: selectedRabbitter?.id ?? "",
+      items: cart.map((i: any) => ({ menuItemId: i.menuItemId, quantity: i.quantity, unitPrice: i.price })),
+      entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
+      memberMenuItemIds: memberMenuItemIds.length > 0 ? memberMenuItemIds : undefined,
+      baseAmount: cartTotal,
+    },
+    {
+      enabled: Boolean(detectedMembership && selectedRabbitter?.id && cart.length > 0),
+      staleTime: 0,
+      refetchOnWindowFocus: false,
+    },
+  );
+  const coveredByMembership = Boolean(benefitPreview.data?.covered);
+  const membershipDiscount = Number(benefitPreview.data?.discount ?? 0);
+  const total = benefitPreview.data ? Number(benefitPreview.data.finalAmount) : cartTotal;
   const taxRate = ticketContext?.restaurant?.taxRate ?? 0.16;
   const subtotal = Math.round((total / (1 + taxRate)) * 100) / 100;
   const tax = Math.round((total - subtotal) * 100) / 100;
@@ -1879,6 +1893,7 @@ export default function PosPage() {
 
     // Map payment method string to schema enum
     const mappedMethod = toLegacyPosPaymentMethod(method);
+    const isMembershipCovered = mappedMethod === "MEMBERSHIP";
 
     // Map orderType
     const mappedOrderType: "DINE_IN" | "TO_GO" | "DELIVERY" = 
@@ -1957,17 +1972,18 @@ export default function PosPage() {
           entitlementIds: selectedBenefitIds.length > 0 ? selectedBenefitIds : undefined,
           memberMenuItemIds: memberMenuItemIds.length > 0 ? memberMenuItemIds : undefined,
           // ── Propina (opcional) + split DIVIDIDA (efectivo + Bunz) ──
-          tip: Number(posTip || 0),
-          splitCash: splitOverride ? splitOverride.cash : pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
-          splitBunz: splitOverride ? splitOverride.bunz : pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
+          tip: isMembershipCovered ? 0 : Number(posTip || 0),
+          splitCash: isMembershipCovered ? undefined : splitOverride ? splitOverride.cash : pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
+          splitBunz: isMembershipCovered ? undefined : splitOverride ? splitOverride.bunz : pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
           // H-PERSIST: reutiliza la comanda abierta del cliente vinculado.
           // Solo se reutiliza un BORRADOR vacío. Si la comanda vinculada ya
           // es el pedido real del móvil, se cobra desde su tarjeta en Operación.
           existingOrderId: draftOrderId && !draftHasItems ? draftOrderId : undefined,
           // RP-2A: si la red falla y el cajero reintenta, el server no duplica.
           idempotencyKey: checkoutKeyRef.current ?? undefined,
-          // Autorización del Rabbitter (obligatoria server-side si hay cliente)
-          chargeApprovalId,
+          // Autorización del Rabbitter (obligatoria server-side si hay cliente).
+          // Con membresía no hay cobro que autorizar.
+          chargeApprovalId: isMembershipCovered ? undefined : chargeApprovalId,
         });
         checkoutKeyRef.current = null;
 
@@ -3049,13 +3065,34 @@ export default function PosPage() {
                 <span className="hidden sm:inline">Enviar al Móvil</span>
               </button>
               <button 
-                onClick={() => setMethodPicker("select")}
+                onClick={() => {
+                  // Content-aware: si la membresía cubre todo, se completa sin
+                  // elegir método de pago (no hay nada que cobrar).
+                  if (coveredByMembership) { void handleCheckout("MEMBRESIA"); return; }
+                  setMethodPicker("select");
+                }}
                 disabled={cart.length === 0}
-                className="relative flex-1 overflow-hidden rounded-xl bg-cyan-500 py-2.5 text-base font-black text-gray-950 shadow-[0_8px_25px_rgba(6,182,212,0.35)] transition-all hover:bg-cyan-400 active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer"
+                className={cn(
+                  "relative flex-1 overflow-hidden rounded-xl py-2.5 text-base font-black shadow-[0_8px_25px_rgba(6,182,212,0.35)] transition-all active:scale-95 disabled:opacity-50 disabled:shadow-none group cursor-pointer",
+                  coveredByMembership
+                    ? "bg-amber-400 text-gray-950 hover:bg-amber-300 shadow-[0_8px_25px_rgba(251,191,36,0.35)]"
+                    : "bg-cyan-500 text-gray-950 hover:bg-cyan-400",
+                )}
               >
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-[0%] transition-transform duration-300 ease-out" />
                 <span className="relative z-10 flex items-center justify-center gap-1.5">
-                  <Check className="h-5 w-5" /> COBRAR (${total.toFixed(2)})
+                  {coveredByMembership ? (
+                    <><Check className="h-5 w-5" /> CONTINUAR · Membresía</>
+                  ) : (
+                    <>
+                      <Check className="h-5 w-5" /> COBRAR (${total.toFixed(2)})
+                      {membershipDiscount > 0 && (
+                        <span className="rounded-full bg-black/15 px-1.5 py-0.5 text-[10px] font-black line-through opacity-70">
+                          ${cartTotal.toFixed(2)}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </span>
               </button>
             </div>

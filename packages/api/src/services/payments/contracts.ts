@@ -195,8 +195,10 @@ export function isOrderPayableStatus(status: string): boolean {
  */
 export function toLegacyPosPaymentMethod(
   method: string
-): "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" {
+): "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ" | "MEMBERSHIP" {
   const m = String(method).toUpperCase();
+  // Cierre cubierto por membresía: no hay cobro, solo se completa la orden.
+  if (m.includes("MEMBRES") || m === "MEMBERSHIP") return "MEMBERSHIP";
   if (m.includes("DEBIT")) return "DEBIT_CARD";
   if (m.includes("BUNZ") || m.includes("QR")) return "BUNZ";
   if (m.includes("TARJETA") || m.includes("CREDIT")) return "CREDIT_CARD";
