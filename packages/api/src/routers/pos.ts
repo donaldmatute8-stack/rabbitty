@@ -3415,6 +3415,8 @@ export const posRouter = router({
         orderType: ord.orderType,
         status: ord.status,
         cashRequested: isCashPaymentRequested(ord.status),
+        /** El mesero pidió la cuenta desde el comandero (ADR-025). */
+        billRequestedAt: ord.billRequestedAt ?? null,
         total: Number(ord.total || 0),
         createdAt: ord.createdAt,
         items,

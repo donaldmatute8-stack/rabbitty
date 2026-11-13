@@ -277,7 +277,7 @@ bloqueada, la notificación del sistema solo donde el navegador lo permita.
 | **3** | Chequeo con QR + PIN + admin del reloj | **hecho** · candado de Wi-Fi pendiente |
 | **4** | Notificador de "listo" al mesero | **hecho v1** (sondeo 10 s + sonido/vibración; push nativo pendiente) |
 | **5** | Pedir la cuenta desde el comandero | **hecho** (marca `billRequestedAt`) |
-| **6** | Cola local sin conexión | pendiente |
+| **6** | Cola local sin conexión | **hecho v1** (localStorage + reintento) |
 
 ---
 
@@ -377,3 +377,21 @@ al Wi-Fi. Donde el navegador no expone el tipo (iOS/Safari) se muestra un aviso
 permanente, no un bloqueo: no se puede fingir una capacidad que no existe.
 
 **Pendiente**: cola local sin conexión (fase 6) y push nativo.
+
+---
+
+## 17. Cola local sin conexión (fase 6, v1)
+
+`apps/admin/src/lib/comandero-queue.ts` guarda en el dispositivo lo que no se
+pudo enviar:
+
+- se encola **solo** lo que falló por red; un error de negocio (platillo
+  agotado, extra inválido) se descarta y se avisa;
+- se reenvía al volver `online`, cada 20 s y al abrir el comandero;
+- se manda con `hold: true`, así cae en captura y el mesero decide cuándo
+  manda la tanda;
+- el contador **“N en cola”** se ve en la cabecera de la cuenta.
+
+Límite honesto: es almacenamiento del navegador. Si se limpia el sitio o se
+desinstala la PWA, la cola se pierde. Para blindarlo haría falta IndexedDB +
+service worker (siguiente nivel).

@@ -5177,6 +5177,14 @@ export default function PosPage() {
                             {tab.tableLocation}
                           </span>
                         )}
+                        {tab.billRequestedAt && (
+                          <span
+                            className="text-[10px] font-bold text-pink-300 bg-pink-500/20 border border-pink-500/30 px-2.5 py-0.5 rounded-full"
+                            title="El mesero pidió la cuenta desde el comandero"
+                          >
+                            Cuenta pedida
+                          </span>
+                        )}
                       </div>
 
                       {/* Cliente Rabbitter */}

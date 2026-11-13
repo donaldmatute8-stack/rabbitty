@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { getPosTerminalToken, savePosOperator, clearPosOperator } from "../../../lib/pos-terminal";
+import { flushQueue, listQueue, queueAdd, type QueuedAdd } from "../../../lib/comandero-queue";
 import { Badge, Button, Input, cn, toast, useWakeLock } from "@rabbitty/ui";
 import {
   AlertTriangle,
@@ -247,6 +248,50 @@ function Comandero({ onExit }: { onExit: () => void }) {
 
   const board = trpc.comandero.board.useQuery(undefined, { refetchInterval: 20_000 });
 
+  // ── Cola local: lo que no se pudo enviar por falta de red ──
+  const [queued, setQueued] = useState<QueuedAdd[]>([]);
+  const refreshQueue = () => setQueued(listQueue());
+  const replayAdd = trpc.pos.addToCart.useMutation();
+
+  const flush = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    const sent = await flushQueue(
+      (item) =>
+        replayAdd.mutateAsync({
+          orderId: item.orderId,
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          modifiers: item.modifiers.length ? item.modifiers : undefined,
+          notes: item.notes,
+          allergies: item.allergies,
+          guestName: item.guestName,
+          hold: true,
+        }),
+      (item, error) => {
+        toast.error(`No se pudo agregar ${item.menuItemId}: ${(error as Error).message}`);
+      },
+    );
+    refreshQueue();
+    if (sent > 0) {
+      toast.success(`${sent} pendiente(s) enviados`);
+      void utils.pos.getOrders.invalidate();
+      void board.refetch();
+    }
+  };
+
+  useEffect(() => {
+    refreshQueue();
+    void flush();
+    const onOnline = () => void flush();
+    window.addEventListener("online", onOnline);
+    const id = setInterval(() => void flush(), 20_000);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Aviso de "listo" (D9): sondeo corto + sonido y vibración ──
   const ready = trpc.comandero.readyFeed.useQuery(undefined, { refetchInterval: 10_000 });
   const readyItems = ready.data ?? [];
@@ -468,6 +513,9 @@ function Comandero({ onExit }: { onExit: () => void }) {
             {tableId ? `Mesa ${(board.data?.tables ?? []).find((t: any) => t.id === tableId)?.number ?? ""}` : "Mostrador"}
           </p>
           <p className="m-0 text-sm font-black">{money(total)}</p>
+          {queued.length > 0 && (
+            <p className="m-0 text-[9px] font-bold text-amber-300">{queued.length} en cola</p>
+          )}
         </div>
         <button
           onClick={() => sendRound.mutate({ orderId: currentOrder!.id })}
@@ -614,8 +662,15 @@ function Comandero({ onExit }: { onExit: () => void }) {
           onClose={() => setSelectedItem(null)}
           onAdded={() => {
             setSelectedItem(null);
+            refreshQueue();
             void utils.pos.getOrders.invalidate();
             void board.refetch();
+          }}
+          onOfflineAdd={(payload) => {
+            queueAdd(payload);
+            refreshQueue();
+            toast.info("Sin conexión: guardado en el equipo. Se envía al volver la red.");
+            setSelectedItem(null);
           }}
         />
       )}
@@ -630,11 +685,21 @@ function ItemSheet({
   orderId,
   onClose,
   onAdded,
+  onOfflineAdd,
 }: {
   item: any;
   orderId: string;
   onClose: () => void;
   onAdded: () => void;
+  onOfflineAdd: (payload: {
+    orderId: string;
+    menuItemId: string;
+    quantity: number;
+    modifiers: { id: string; name: string }[];
+    notes?: string;
+    allergies?: string;
+    guestName?: string;
+  }) => void;
 }) {
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
@@ -661,15 +726,31 @@ function ItemSheet({
   const allergyText = [...allergens, allergyNote.trim()].filter(Boolean).join(", ");
 
   const submit = () => {
-    add.mutate({
+    const payload = {
       orderId,
       menuItemId: item.id,
       quantity,
-      modifiers: mods.filter((m: any) => selectedMods.includes(m.id)).map((m: any) => ({ id: m.id, name: m.name })),
+      modifiers: mods
+        .filter((m: any) => selectedMods.includes(m.id))
+        .map((m: any) => ({ id: m.id, name: m.name })),
       notes: notes.trim() || undefined,
       allergies: allergyText || undefined,
       guestName: guestName.trim() || undefined,
-      hold: true,
+    };
+
+    // Sin red: no se intenta; se guarda para reenviar.
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      onOfflineAdd(payload);
+      return;
+    }
+
+    add.mutate({ ...payload, hold: true }, {
+      onError: (e) => {
+        // Si es de red, se guarda; si es de negocio, se muestra.
+        if (!(e as { data?: { code?: string } }).data?.code) {
+          onOfflineAdd(payload);
+        }
+      },
     });
   };
 
