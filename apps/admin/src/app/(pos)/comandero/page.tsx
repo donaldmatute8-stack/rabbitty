@@ -46,6 +46,12 @@ export default function ComanderoPage() {
   const [terminalToken, setTerminalToken] = useState<string | null>(null);
   useEffect(() => setTerminalToken(getPosTerminalToken()), []);
 
+  // Service worker: deja el armazón del comandero en caché para abrir sin red.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
+
   // ── D8: solo Wi-Fi ───────────────────────────────────────────────────────
   // Un PWA no puede activar modo avión, pero sí puede negarse a operar cuando
   // el navegador informa que la conexión es de datos móviles (Android/Chrome).
@@ -250,7 +256,9 @@ function Comandero({ onExit }: { onExit: () => void }) {
 
   // ── Cola local: lo que no se pudo enviar por falta de red ──
   const [queued, setQueued] = useState<QueuedAdd[]>([]);
-  const refreshQueue = () => setQueued(listQueue());
+  const refreshQueue = () => {
+    void listQueue().then(setQueued);
+  };
   const replayAdd = trpc.pos.addToCart.useMutation();
 
   const flush = async () => {
@@ -667,8 +675,7 @@ function Comandero({ onExit }: { onExit: () => void }) {
             void board.refetch();
           }}
           onOfflineAdd={(payload) => {
-            queueAdd(payload);
-            refreshQueue();
+            void queueAdd(payload).then(refreshQueue);
             toast.info("Sin conexión: guardado en el equipo. Se envía al volver la red.");
             setSelectedItem(null);
           }}

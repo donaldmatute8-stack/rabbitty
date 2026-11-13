@@ -1,0 +1,17 @@
+{
+  "name": "Rabbitty Comandero",
+  "short_name": "Comandero",
+  "description": "Toma pedidos en mesa y manda la comanda a cocina",
+  "start_url": "/comandero",
+  "scope": "/comandero",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#08080a",
+  "theme_color": "#08080a",
+  "icons": [
+    { "src": "/icons/icon-96.webp", "type": "image/webp", "sizes": "96x96", "purpose": "any maskable" },
+    { "src": "/icons/icon-128.webp", "type": "image/webp", "sizes": "128x128", "purpose": "any maskable" },
+    { "src": "/icons/icon-192.webp", "type": "image/webp", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.webp", "type": "image/webp", "sizes": "512x512", "purpose": "any maskable" }
+  ]
+}

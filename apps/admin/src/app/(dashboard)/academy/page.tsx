@@ -57,7 +57,19 @@ El comandero convierte **cualquier celular o tablet** en una terminal para tomar
 
 ### El chequeo
 
-Sin checar no hay comandero. El QR prueba que el dispositivo está en la sucursal; el PIN prueba quién es. Al cerrar sesión se registra la salida y el admin puede ver el historial y cerrar turnos huérfanos.`,
+Sin checar no hay comandero. El QR prueba que el dispositivo está en la sucursal; el PIN prueba quién es. Al cerrar sesión se registra la salida y el admin puede ver el historial y cerrar turnos huérfanos.
+
+### Sin señal
+
+El comandero abre aunque no haya red (queda en caché) y lo que captures se guarda en el propio dispositivo. Al volver el Wi-Fi se reenvía solo: verás "N en cola" en la cabecera.
+
+### Bloquear el equipo (opcional)
+
+- **iPhone/iPad**: Ajustes → Accesibilidad → Acceso Guiado (triple clic para fijar la app).
+- **Android**: Ajustes → Seguridad → Fijación de pantalla.
+- **Con MDM**: modo quiosco, solo la app y solo Wi-Fi.
+
+Con eso el mesero no puede salirse a otras apps ni recibir notificaciones que lo distraigan.`,
   },
   {
     id: "poa",

@@ -91,12 +91,45 @@ envía la tanda                      │
 
 ---
 
+## 5.1 Bloquear el dispositivo (modo kiosco)
+
+El comandero ya bloquea su propia pantalla, pero un PWA **no puede** impedir que
+el mesero salga a WhatsApp o silenciar las notificaciones del sistema. Eso se
+resuelve en el equipo:
+
+**iPhone / iPad — Guided Access**
+
+1. Ajustes → Accesibilidad → *Acceso Guiado* → activar.
+2. Abrir el comandero en Safari (o como app instalada).
+3. Triple clic en el botón lateral → *Opciones* → desactivar teclado y toques
+   fuera de zonas → **Iniciar**.
+4. Para salir: triple clic + Face ID/código.
+
+**Android — Fijar pantalla**
+
+1. Ajustes → Seguridad → *Fijación de pantalla* → activar (con PIN).
+2. Abrir el comandero → Recientes → icono de la app → *Fijar*.
+
+**Restaurantes con varios equipos — MDM**
+
+Con un MDM (Android Enterprise, Jamf, Kandji…) se deja el dispositivo en modo
+quiosco: solo la app, Wi-Fi fijo, sin tienda ni notificaciones. Es la única
+forma de que sea *imposible* salir, no solo incómodo.
+
+**Datos móviles**
+
+Donde el navegador informa el tipo de red (Android/Chrome), el comandero se
+niega a operar con datos móviles. En iOS no se puede detectar: ahí la regla es
+Guided Access + Wi-Fi del restaurante.
+
+---
+
 ## 6. Límites conocidos (para no prometer de más)
 
 | Tema | Realidad |
 |---|---|
 | Modo avión / silenciar notificaciones | Un PWA **no puede**. Se detecta datos móviles y se avisa; el bloqueo duro se hace con **Guided Access** (iOS) o **Screen Pinning** (Android) o MDM. |
-| Sin internet | Todavía no hay cola local: si no hay red, no se envía. Es la siguiente fase. |
+| Sin internet | El comandero **abre sin red** (service worker) y guarda lo capturado en el dispositivo (IndexedDB); se reenvía al volver la conexión. |
 | Pedir la cuenta desde el comandero | Aún no; se hace en caja. Está en la lista. |
 | División de cuenta | Solo en caja. |
 

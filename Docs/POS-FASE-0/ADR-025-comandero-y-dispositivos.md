@@ -277,7 +277,7 @@ bloqueada, la notificación del sistema solo donde el navegador lo permita.
 | **3** | Chequeo con QR + PIN + admin del reloj | **hecho** · candado de Wi-Fi pendiente |
 | **4** | Notificador de "listo" al mesero | **hecho v1** (sondeo 10 s + sonido/vibración; push nativo pendiente) |
 | **5** | Pedir la cuenta desde el comandero | **hecho** (marca `billRequestedAt`) |
-| **6** | Cola local sin conexión | **hecho v1** (localStorage + reintento) |
+| **6** | Cola local sin conexión | **hecho** (IndexedDB + service worker) |
 
 ---
 
@@ -395,3 +395,40 @@ pudo enviar:
 Límite honesto: es almacenamiento del navegador. Si se limpia el sitio o se
 desinstala la PWA, la cola se pierde. Para blindarlo haría falta IndexedDB +
 service worker (siguiente nivel).
+
+---
+
+## 18. Cierre del hito (13-nov-2026)
+
+**IndexedDB + service worker**
+
+- `lib/comandero-queue.ts` usa IndexedDB (`rabbitty/comandero_queue`) con
+  respaldo a localStorage si el navegador no lo permite.
+- `public/sw.js`: cache-first para estáticos, network-first para `/comandero`,
+  **nunca** cachea `/api/`. El comandero abre sin red con lo último guardado.
+- `comandero.webmanifest` + `layout.tsx` para instalarlo como app propia.
+
+**Push nativo (encolado)**
+
+Al marcar un ítem `READY`, `kds.updateOrderItemStatus` encola en
+`notifications_outbox` (core, misma base) una notificación para el usuario del
+mesero (`staff.userId`):
+
+```
+type: ORDER_READY · priority: high
+"2× Tacos · Barra · Mesa 4 · para Luis"
+dedupeKey: ready-<orderItemId>
+```
+
+El worker de notificaciones de la miniapp entrega APNs/FCM + in-app. El KDS
+nunca llama al proveedor: si el encolado falla, el bump de cocina no se rompe.
+
+**Modo kiosco**
+
+Documentado en la guía: Guided Access (iOS), Screen Pinning (Android) y modo
+quiosco por MDM. Con eso el dispositivo queda realmente bloqueado; el PWA por
+sí solo no puede.
+
+**Pendiente real**: que el comandero se empaquete con Capacitor para recibir el
+push con la pantalla bloqueada (hoy el aviso es sondeo en primer plano + push
+cuando el usuario está en la app nativa).

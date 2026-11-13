@@ -8,6 +8,8 @@ import { orders, tables, orderItems, menuItems, stations } from "@rabbitty/datab
 import { withOrderMutation } from "../services/orderIntegrity";
 import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch as resolveBusinessIdForBranch } from "../services/businessContext";
+import { notificationsOutbox } from "@rabbitty/database-core/schema";
+import { staff as staffTable } from "@rabbitty/database-restaurant/schema";
 
 /**
  * Carga la cola del KDS.
@@ -262,6 +264,76 @@ export const kdsRouter = router({
           },
         );
       });
+      // ── Aviso al mesero (ADR-025 D9) ──
+      // Se encola en el outbox compartido: el worker de notificaciones entrega
+      // push nativo (APNs/FCM) e in-app. Nunca se llama al proveedor aquí.
+      if (input.status === "READY") {
+        try {
+          const [row] = await ctx.restaurantDb
+            .select({
+              staffId: orders.staffId,
+              tableNumber: tables.number,
+              orderType: orders.orderType,
+              quantity: orderItems.quantity,
+              guestName: orderItems.guestName,
+              itemName: menuItems.name,
+              stationName: stations.name,
+            })
+            .from(orderItems)
+            .innerJoin(orders, eq(orders.id, orderItems.orderId))
+            .leftJoin(tables, eq(tables.id, orders.tableId))
+            .leftJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+            .leftJoin(stations, eq(stations.id, orderItems.stationId))
+            .where(eq(orderItems.id, input.orderItemId))
+            .limit(1);
+
+          const waiterUserId = row?.staffId
+            ? (
+                await ctx.restaurantDb
+                  .select({ userId: staffTable.userId })
+                  .from(staffTable)
+                  .where(eq(staffTable.id, row.staffId))
+                  .limit(1)
+              )[0]?.userId
+            : null;
+
+          if (waiterUserId) {
+            const where = row?.tableNumber
+              ? `Mesa ${row.tableNumber}`
+              : row?.orderType === "TO_GO"
+              ? "Para llevar"
+              : "Mostrador";
+            const parts = [
+              `${row?.quantity ?? 1}× ${row?.itemName ?? "Platillo"}`,
+              row?.stationName ?? "Cocina",
+              where,
+              row?.guestName ? `para ${row.guestName}` : null,
+            ].filter(Boolean);
+
+            await ctx.coreDb
+              .insert(notificationsOutbox)
+              .values({
+                userId: waiterUserId,
+                type: "ORDER_READY",
+                title: "Listo para entregar",
+                message: parts.join(" · "),
+                route: "/comandero",
+                data: {
+                  orderId: kdsItem.orderId,
+                  orderItemId: input.orderItemId,
+                  stationId: row?.stationName ?? null,
+                },
+                dedupeKey: `ready-${input.orderItemId}`,
+                priority: "high",
+              })
+              .onConflictDoNothing();
+          }
+        } catch (error) {
+          // Nunca romper el bump de cocina por una notificación.
+          console.error("[KDS_READY_NOTIFY]", error);
+        }
+      }
+
       // Push casi inmediato a las demás pantallas de la estación.
       drainRealtimeInBackground(ctx.restaurantDb);
       bus.emit(EventTypes.KDS_ITEM_UPDATED, { orderItemId: input.orderItemId, status: input.status });
