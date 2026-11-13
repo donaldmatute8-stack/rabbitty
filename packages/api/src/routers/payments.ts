@@ -774,8 +774,12 @@ export const paymentsRouter = router({
       // `sk_test`, así que una llave restringida de prueba (rk_test_) se
       // reportaba como "live" — riesgo de creer que se cobra dinero real.
       const secretKey = process.env.STRIPE_SECRET_KEY || "";
+      const configured = Boolean(secretKey || pk);
       const isTest = secretKey.includes("_test_") || pk.includes("_test_");
-      return { publishableKey: pk, ready: Boolean(pk), mode: isTest ? "test" : "live" };
+      // "disabled" cuando no hay llaves (p. ej. staging sin Stripe): antes
+      // reportaba "live", que es justo lo contrario de la realidad.
+      const mode = !configured ? "disabled" : isTest ? "test" : "live";
+      return { publishableKey: pk, ready: Boolean(pk), mode };
     }),
 
   getStripeAccountStatus: posProcedure
