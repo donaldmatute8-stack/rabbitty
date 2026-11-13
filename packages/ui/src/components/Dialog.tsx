@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type HTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../cn";
 
@@ -28,6 +28,35 @@ interface DialogProps extends HTMLAttributes<HTMLDivElement> {
  */
 function Dialog({ open, onClose, title, kicker, hideClose, children, className }: DialogProps) {
   const [mounted, setMounted] = useState(false);
+
+  // ── Swipe hacia abajo para cerrar (gesto nativo, ADR-025) ──
+  // Solo se inicia en la cabecera del modal, para no pelear con el scroll
+  // del contenido.
+  const dragStartY = useRef<number | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const HEADER_ZONE = 96;
+  const DISMISS_AT = 110;
+
+  const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const y = event.touches[0]?.clientY;
+    if (y == null) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (y - rect.top > HEADER_ZONE) return;
+    dragStartY.current = y;
+  };
+
+  const onTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (dragStartY.current == null) return;
+    const y = event.touches[0]?.clientY ?? dragStartY.current;
+    const delta = y - dragStartY.current;
+    if (delta > 0) setDragY(delta);
+  };
+
+  const onTouchEnd = () => {
+    if (dragY > DISMISS_AT) onClose();
+    dragStartY.current = null;
+    setDragY(0);
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -62,6 +91,18 @@ function Dialog({ open, onClose, title, kicker, hideClose, children, className }
         onClick={onClose}
       />
       <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={
+          dragY > 0
+            ? {
+                transform: `translateY(${dragY}px)`,
+                opacity: Math.max(0.45, 1 - dragY / 380),
+                transition: "none",
+              }
+            : undefined
+        }
         className={cn(
           "relative z-10 w-full max-w-md rounded-3xl overflow-hidden p-6",
           "bg-[#0B0B12]/85 backdrop-blur-xl",

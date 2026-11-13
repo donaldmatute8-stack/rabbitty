@@ -347,8 +347,12 @@ export default function PosPage() {
   // P0-3: referencia/autorización de la terminal externa (obligatoria para tarjeta)
   const [cardReference, setCardReference] = useState("");
   const [rabbitterQuery, setRabbitterQuery] = useState("");
-  // ── Propina del cobro directo + split DIVIDIDA (efectivo vs Bunz) ──
+  // ── Propina del cobro directo + split de dos formas de pago ──
   const [posTip, setPosTip] = useState("");
+  // Split genérico: dos métodos distintos sobre la misma cuenta.
+  const [splitMethodA, setSplitMethodA] = useState<"CASH" | "CARD" | "BUNZ">("CASH");
+  const [splitMethodB, setSplitMethodB] = useState<"CASH" | "CARD" | "BUNZ">("BUNZ");
+  const [splitAmountA, setSplitAmountA] = useState<string>("");
   const [splitBunzAsk, setSplitBunzAsk] = useState<number>(0);
   // Buscador unificado en el modal del QR Neón (check-ins primero, luego lookup)
   const [qrModalQuery, setQrModalQuery] = useState("");
@@ -463,7 +467,7 @@ export default function PosPage() {
   const cancelApprovalMutation = trpc.pos.cancelChargeApproval.useMutation();
   const [approval, setApproval] = useState<{
     requestId: string; amount: number; method: string; cashGiven?: number;
-    split?: { cash: number; bunz: number }; customerName: string;
+    split?: Array<{ method: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ"; amount: number; reference?: string }>; customerName: string;
   } | null>(null);
   const approvalHandledRef = useRef(false);
   const approvalQuery = trpc.pos.getChargeApproval.useQuery(
@@ -1787,16 +1791,35 @@ export default function PosPage() {
       : pendingMethod === "TARJETA" && chosen && String(chosen).includes("EXTERNA")
         ? "TARJETA_EXTERNA"
         : pendingMethod;
-    // GAP: split DIVIDIDA — el resto (total − efectivo recibido) se cobra con Bunz
-    const splitBunz = pendingMethod === "DIVIDIDA"
-      ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100)
-      : 0;
+    // ── Cuenta dividida: dos formas de pago sobre la misma cuenta ──
+    let splitLegs: Array<{ method: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ"; amount: number; reference?: string }> | undefined;
     if (pendingMethod === "DIVIDIDA") {
-      const bunzAsk = Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100);
-      if (!selectedRabbitter?.id || bunzAsk <= 0 || bunzAsk >= total) {
-        toast.error("Para dividir: vincula al Rabbitter y pon el efectivo de su parte");
+      const toApi = (m: "CASH" | "CARD" | "BUNZ") =>
+        m === "CARD" ? ("CREDIT_CARD" as const) : m === "BUNZ" ? ("BUNZ" as const) : ("CASH" as const);
+
+      if (splitMethodA === splitMethodB) {
+        toast.error("Elige dos formas de pago distintas.");
         return;
       }
+      const amountA = Math.round((parseFloat(splitAmountA) || 0) * 100) / 100;
+      const amountB = Math.round((total - amountA) * 100) / 100;
+      if (amountA <= 0 || amountB <= 0) {
+        toast.error("Cada parte debe ser mayor a 0.");
+        return;
+      }
+      const methods = [splitMethodA, splitMethodB];
+      if (methods.includes("BUNZ") && !selectedRabbitter?.id) {
+        toast.error("Vincula al Rabbitter para cobrar la parte con Bunz.");
+        return;
+      }
+      if (methods.includes("CARD") && cardReference.trim().length < 3) {
+        toast.error("Registra la referencia de la terminal para la parte con tarjeta.");
+        return;
+      }
+      splitLegs = [
+        { method: toApi(splitMethodA), amount: amountA, reference: splitMethodA === "CARD" ? cardReference.trim() : undefined },
+        { method: toApi(splitMethodB), amount: amountB, reference: splitMethodB === "CARD" ? cardReference.trim() : undefined },
+      ];
     }
     if (pendingMethod === "BUNZ") {
       if (!selectedRabbitter?.id) {
@@ -1821,12 +1844,7 @@ export default function PosPage() {
     // El cobro NO se ejecuta hasta que el cliente autoriza en su app.
     // Tarjeta Rabbitty Pay se excluye: el cliente ya confirma pagando.
     if (selectedRabbitter?.id && !method.includes("STRIPE")) {
-      const splitOverride = pendingMethod === "DIVIDIDA"
-        ? {
-            cash: parseFloat(cashReceived) || 0,
-            bunz: Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100),
-          }
-        : undefined;
+      const splitOverride = splitLegs;
       setIsCharging(true);
       try {
         const req = await requestApprovalMutation.mutateAsync({
@@ -1859,7 +1877,7 @@ export default function PosPage() {
     setPendingMethod(null);
     setIsCharging(true);
     try {
-      await handleCheckout(method, customCashGiven);
+      await handleCheckout(method, customCashGiven, splitLegs);
     } finally {
       setIsCharging(false);
     }
@@ -1885,7 +1903,7 @@ export default function PosPage() {
   const handleCheckout = async (
     method: string = "EFECTIVO",
     cashGiven?: number,
-    splitOverride?: { cash: number; bunz: number },
+    splitOverride?: Array<{ method: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ"; amount: number; reference?: string }>,
     chargeApprovalId?: string,
   ) => {
     if (cart.length === 0) return;
@@ -1974,8 +1992,7 @@ export default function PosPage() {
           memberMenuItemIds: memberMenuItemIds.length > 0 ? memberMenuItemIds : undefined,
           // ── Propina (opcional) + split DIVIDIDA (efectivo + Bunz) ──
           tip: isMembershipCovered ? 0 : Number(posTip || 0),
-          splitCash: isMembershipCovered ? undefined : splitOverride ? splitOverride.cash : pendingMethod === "DIVIDIDA" ? (parseFloat(cashReceived) || 0) : undefined,
-          splitBunz: isMembershipCovered ? undefined : splitOverride ? splitOverride.bunz : pendingMethod === "DIVIDIDA" ? Math.max(0, Math.round((total - (parseFloat(cashReceived) || 0)) * 100) / 100) : undefined,
+          splitPayments: isMembershipCovered ? undefined : splitOverride,
           // H-PERSIST: reutiliza la comanda abierta del cliente vinculado.
           // Solo se reutiliza un BORRADOR vacío. Si la comanda vinculada ya
           // es el pedido real del móvil, se cobra desde su tarjeta en Operación.
@@ -3458,7 +3475,15 @@ export default function PosPage() {
             ] as const).map(([method, Icon, label, desc, hoverCls, iconCls]) => (
               <button
                 key={method}
-                onClick={() => { setChosenMethod(method); setMethodPicker("confirm"); }}
+                onClick={() => {
+                  setChosenMethod(method);
+                  if (method === "DIVIDIDA") {
+                    setSplitAmountA((total / 2).toFixed(2));
+                    setSplitMethodA("CASH");
+                    setSplitMethodB("BUNZ");
+                  }
+                  setMethodPicker("confirm");
+                }}
                 className={`group flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-left transition-all cursor-pointer active:scale-[0.97] ${hoverCls}`}
               >
                 <div className="h-9 w-9 shrink-0 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center">
@@ -3515,7 +3540,7 @@ export default function PosPage() {
         className="max-w-md w-full"
       >
         {(() => {
-          const isCash = pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA" || pendingMethod === "DIVIDIDA";
+          const isCash = pendingMethod === "EFECTIVO" || pendingMethod === "VENTA DIRECTA";
           const numericReceived = parseFloat(cashReceived) || 0;
           const change = numericReceived >= total ? numericReceived - total : 0;
           const isExact = cashReceived !== "" && numericReceived === total;
@@ -3597,6 +3622,75 @@ export default function PosPage() {
                   memberItemIds={memberMenuItemIds}
                   onMemberItemsChange={setMemberMenuItemIds}
                 />
+              )}
+
+              {/* ── Cuenta dividida: dos formas de pago ── */}
+              {pendingMethod === "DIVIDIDA" && (
+                <div className="space-y-3">
+                  <p className="m-0 text-xs font-bold text-gray-400">
+                    Elige las dos formas de pago y cuánto va en cada una.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Forma 1</label>
+                      <select
+                        value={splitMethodA}
+                        onChange={(e) => setSplitMethodA(e.target.value as "CASH" | "CARD" | "BUNZ")}
+                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                      >
+                        <option value="CASH">Efectivo</option>
+                        <option value="CARD">Tarjeta (terminal)</option>
+                        <option value="BUNZ">Bunz</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Forma 2</label>
+                      <select
+                        value={splitMethodB}
+                        onChange={(e) => setSplitMethodB(e.target.value as "CASH" | "CARD" | "BUNZ")}
+                        className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                      >
+                        <option value="CASH">Efectivo</option>
+                        <option value="CARD">Tarjeta (terminal)</option>
+                        <option value="BUNZ">Bunz</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Monto de la forma 1"
+                    type="number"
+                    inputMode="decimal"
+                    value={splitAmountA}
+                    onChange={(e) => setSplitAmountA(e.target.value)}
+                    placeholder={(total / 2).toFixed(2)}
+                  />
+
+                  <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
+                    <span className="text-gray-400">
+                      Resto en {splitMethodB === "CASH" ? "efectivo" : splitMethodB === "CARD" ? "tarjeta" : "Bunz"}
+                    </span>
+                    <span className="font-black text-white">
+                      ${Math.max(0, total - (parseFloat(splitAmountA) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {(splitMethodA === "CARD" || splitMethodB === "CARD") && (
+                    <Input
+                      label="Referencia / autorización de la terminal"
+                      value={cardReference}
+                      onChange={(e) => setCardReference(e.target.value)}
+                      placeholder="Ej. 482913"
+                    />
+                  )}
+
+                  {(splitMethodA === "BUNZ" || splitMethodB === "BUNZ") && !selectedRabbitter?.id && (
+                    <p className="m-0 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-300">
+                      Vincula al Rabbitter para cobrar la parte con Bunz.
+                    </p>
+                  )}
+                </div>
               )}
 
               {isCash ? (

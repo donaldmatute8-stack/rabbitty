@@ -4,6 +4,7 @@ import "./globals.css";
 import { TRPCProvider } from "../lib/providers";
 import { ErrorBoundary, Toaster } from "@rabbitty/ui";
 import { PushRegistration } from "../components/PushRegistration";
+import { NativeGestures } from "../components/NativeGestures";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={`${outfit.variable} antialiased dark`}>
       <body className="min-h-screen" style={{ background: "var(--bg-primary)", color: "var(--text-primary)" }}>
+        <NativeGestures />
         <ErrorBoundary>
           <TRPCProvider>
             <PushRegistration />

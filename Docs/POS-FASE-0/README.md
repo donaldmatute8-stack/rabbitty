@@ -102,3 +102,4 @@ Para saber **en qué rama trabajar y cómo integrar**, leer [`RAMAS-Y-FLUJO.md`]
 - [`ADR-024-membresias-en-pos.md`](./ADR-024-membresias-en-pos.md) — membresías aplicadas al ticket y cierre sin cobro
 - [`ADR-025-comandero-y-dispositivos.md`](./ADR-025-comandero-y-dispositivos.md) — comandero, enlace de celulares/tablets y cableado con POS/KDS
 - [`GUIA-COMANDERO.md`](./GUIA-COMANDERO.md) — cómo se usa el comandero, el checador y sus límites
+- [`ADR-026-cuenta-dividida.md`](./ADR-026-cuenta-dividida.md) — dos formas de pago sobre la misma cuenta

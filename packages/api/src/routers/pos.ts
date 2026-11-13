@@ -2247,8 +2247,25 @@ export const posRouter = router({
         memberMenuItemIds: z.array(z.string()).max(50).optional(),
         // ── Propina + split DIVIDIDA (efectivo + Bunz) ──
         tip: z.number().min(0).max(5000).optional(),
+        // Compat: efectivo + Bunz (forma histórica).
         splitCash: z.number().min(0).optional(),
         splitBunz: z.number().min(0).optional(),
+        /**
+         * Split genérico: EXACTAMENTE 2 formas de pago sobre la misma cuenta
+         * (efectivo + tarjeta, tarjeta + Bunz, efectivo + Bunz, …).
+         * La suma debe igualar el total.
+         */
+        splitPayments: z
+          .array(
+            z.object({
+              method: z.enum(["CASH", "CREDIT_CARD", "DEBIT_CARD", "BUNZ"]),
+              amount: z.number().positive(),
+              /** Referencia de la terminal cuando la pata es tarjeta. */
+              reference: z.string().trim().max(80).optional(),
+            }),
+          )
+          .max(2)
+          .optional(),
         // H-PERSIST: si el cliente fue vinculado antes, la comanda ya existe
         // (PENDING, en Tabs). El cobro la REUTILIZA en vez de crear otra.
         existingOrderId: z.string().uuid().optional(),
@@ -2277,15 +2294,38 @@ export const posRouter = router({
       // RP-2A/RP-2B: split efectivo + Bunz sobre el motor canónico.
       // La parte Bunz se captura con paymentCore (saldo + capacidad + libro);
       // nada se cobra fuera de transacción ni se registra CASH en silencio.
-      const isSplit = pendingSplit(input);
+      // Split: nueva forma (splitPayments) o la histórica (efectivo + Bunz).
+      const splitLegsInput =
+        Array.isArray(input.splitPayments) && input.splitPayments.length > 0
+          ? input.splitPayments.map((l) => ({ ...l, method: l.method }))
+          : Number(input.splitCash) > 0 && Number(input.splitBunz) > 0
+          ? ([
+              { method: "CASH" as const, amount: Number(input.splitCash), reference: undefined },
+              { method: "BUNZ" as const, amount: Number(input.splitBunz), reference: undefined },
+            ] as Array<{ method: "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "BUNZ"; amount: number; reference?: string }>)
+          : [];
+      const isSplit = splitLegsInput.length > 0;
+
       if (isSplit) {
-        if (!(Number(input.splitCash) > 0) || !(Number(input.splitBunz) > 0)) {
+        if (splitLegsInput.length !== 2) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "SPLIT_INVALID: indica un monto de efectivo y otro de Bunz mayores a 0.",
+            message: "SPLIT_INVALID: la cuenta se divide en exactamente 2 formas de pago.",
           });
         }
-        if (!input.customerId) {
+        if (splitLegsInput.some((l) => !(Number(l.amount) > 0))) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "SPLIT_INVALID: cada parte debe ser mayor a 0.",
+          });
+        }
+        if (splitLegsInput.filter((l) => l.method === "BUNZ").length > 1) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "SPLIT_INVALID: solo una parte puede ser Bunz.",
+          });
+        }
+        if (splitLegsInput.some((l) => l.method === "BUNZ") && !input.customerId) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: "SPLIT_REQUIRES_CUSTOMER: vincula al Rabbitter para cobrar la parte Bunz.",
@@ -2296,6 +2336,12 @@ export const posRouter = router({
             code: "BAD_REQUEST",
             message: "SPLIT_NO_DISCOUNT: no combines cuenta dividida con descuento o membresía.",
           });
+        }
+        // Cada pata de tarjeta exige referencia de terminal.
+        for (const leg of splitLegsInput) {
+          if (isCardMethod(leg.method)) {
+            assertCardPaymentAllowed(leg.method, leg.reference ?? input.cardReference);
+          }
         }
       }
 
@@ -2531,7 +2577,7 @@ export const posRouter = router({
             message: "Una orden cubierta por membresía no lleva propina (no hay cobro).",
           });
         }
-        if (input.splitCash || input.splitBunz) {
+        if (input.splitCash || input.splitBunz || (input.splitPayments?.length ?? 0) > 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Una orden cubierta por membresía no se divide." });
         }
       }
@@ -2717,12 +2763,16 @@ export const posRouter = router({
       const strictStock = process.env.RABBITTY_STOCK_STRICT === "true";
       const createdNew = !input.existingOrderId;
 
-      const splitCashPart = isSplit ? r2(Number(input.splitCash)) : 0;
-      const splitBunzPart = isSplit ? r2(Number(input.splitBunz)) : 0;
-      if (isSplit && Math.abs(splitCashPart + splitBunzPart - calcTotal) > 0.01) {
+      const splitLegs = isSplit
+        ? splitLegsInput.map((l) => ({ ...l, amount: r2(Number(l.amount)) }))
+        : [];
+      const splitCashPart = r2(splitLegs.filter((l) => l.method === "CASH").reduce((sum, l) => sum + l.amount, 0));
+      const splitBunzPart = r2(splitLegs.filter((l) => l.method === "BUNZ").reduce((sum, l) => sum + l.amount, 0));
+      const splitSum = r2(splitLegs.reduce((sum, l) => sum + l.amount, 0));
+      if (isSplit && Math.abs(splitSum - calcTotal) > 0.01) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `SPLIT_MISMATCH: efectivo ${splitCashPart} + Bunz ${splitBunzPart} ≠ total ${calcTotal}.`,
+          message: `SPLIT_MISMATCH: las dos partes suman ${splitSum} y el total es ${calcTotal}.`,
         });
       }
 
@@ -2789,7 +2839,22 @@ export const posRouter = router({
         splitBunzPaymentId = bunzPayment?.id ?? null;
       }
 
-      const mainPaymentAmount = isSplit ? splitCashPart : r2(Math.max(0, calcTotal - creditApplied));
+      // Una pata de pago por cada forma elegida (Bunz ya se capturó aparte).
+      const paymentLegs = isSplit
+        ? splitLegs
+            .filter((l) => l.method !== "BUNZ")
+            .map((l) => ({
+              method: l.method,
+              amount: l.amount,
+              reference: isCardMethod(l.method) ? l.reference ?? input.cardReference : undefined,
+            }))
+        : [
+            {
+              method: input.paymentMethod,
+              amount: r2(Math.max(0, calcTotal - creditApplied)),
+              reference: isCardMethod(input.paymentMethod) ? input.cardReference : undefined,
+            },
+          ];
 
       try {
         await ctx.restaurantDb.transaction(async (tx: any) => {
@@ -2808,16 +2873,19 @@ export const posRouter = router({
             tip: posTip,
           }).where(eq(orders.id, order.id));
 
-          await tx.insert(payments).values({
-            orderId: order.id,
-            method: input.paymentMethod,
-            amount: mainPaymentAmount,
-            tipAmount: posTip,
-            reference: isCardMethod(input.paymentMethod) ? input.cardReference : undefined,
-            verificationMethod: isCardMethod(input.paymentMethod)
-              ? "EXTERNAL_TERMINAL"
-              : "CASHIER_CONFIRMED",
-          });
+          // Propina: solo en la primera pata (no se duplica el asiento).
+          for (const [index, leg] of paymentLegs.entries()) {
+            await tx.insert(payments).values({
+              orderId: order.id,
+              method: leg.method,
+              amount: leg.amount,
+              tipAmount: index === 0 ? posTip : 0,
+              reference: leg.reference,
+              verificationMethod: isCardMethod(leg.method)
+                ? "EXTERNAL_TERMINAL"
+                : "CASHIER_CONFIRMED",
+            });
+          }
 
           if (creditApplied > 0) {
             await tx.insert(payments).values({
