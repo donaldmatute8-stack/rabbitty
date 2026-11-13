@@ -276,8 +276,8 @@ bloqueada, la notificación del sistema solo donde el navegador lo permita.
 | **2** | Comandero: mesas → menú → ítem (extras/notas/alergias/nombre) → tanda → enviar | **hecho (v1)** |
 | **3** | Chequeo con QR + PIN + admin del reloj | **hecho** · candado de Wi-Fi pendiente |
 | **4** | Notificador de "listo" al mesero | **hecho v1** (sondeo 10 s + sonido/vibración; push nativo pendiente) |
-| **5** | Pedir la cuenta desde el comandero (avisa a caja) | otra fase |
-| **6** | Cola local sin conexión | al final |
+| **5** | Pedir la cuenta desde el comandero | **hecho** (marca `billRequestedAt`) |
+| **6** | Cola local sin conexión | pendiente |
 
 ---
 
@@ -362,3 +362,18 @@ Barra · Mesa 4 · para Luis
 worker + suscripción; el comandero está abierto mientras el mesero trabaja, así
 que 10 s de latencia es aceptable. El push nativo (APNs, Capacitor) queda para
 cuando el comandero se empaquete como app.
+
+---
+
+## 16. Pedir la cuenta y candado de Wi-Fi (fase 5 + D8)
+
+**Pedir la cuenta**: migración `0057` añade `orders.billRequestedAt`. El mesero
+toca **Pedir la cuenta** en el comandero; la mesa queda marcada ("Cuenta
+pedida") y la caja lo ve en la orden. El comandero sigue sin cobrar.
+
+**Candado de Wi-Fi**: si el navegador informa `navigator.connection.type ===
+"cellular"`, el comandero **no opera** y muestra una pantalla que pide conectarse
+al Wi-Fi. Donde el navegador no expone el tipo (iOS/Safari) se muestra un aviso
+permanente, no un bloqueo: no se puede fingir una capacidad que no existe.
+
+**Pendiente**: cola local sin conexión (fase 6) y push nativo.

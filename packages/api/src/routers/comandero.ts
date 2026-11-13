@@ -195,6 +195,31 @@ export const comanderoRouter = router({
   }),
 
   /**
+   * El mesero pide la cuenta: la caja la ve marcada y cobra. El comandero no
+   * cobra (ADR-025 D5).
+   */
+  requestBill: posProcedure
+    .input(z.object({ orderId: z.string(), note: z.string().trim().max(200).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({ id: orders.id })
+        .from(orders)
+        .where(and(eq(orders.id, input.orderId), eq(orders.branchId, ctx.branchId)))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta no encontrada" });
+
+      await ctx.restaurantDb
+        .update(orders)
+        .set({
+          billRequestedAt: new Date(),
+          ...(input.note ? { notes: input.note } : {}),
+        })
+        .where(eq(orders.id, order.id));
+
+      return { success: true };
+    }),
+
+  /**
    * ── Notificador de "listo" (ADR-025 D9) ─────────────────────────────────
    *
    * Ítems que cocina/barra ya marcaron como listos, de las cuentas de ESTE
@@ -258,6 +283,7 @@ export const comanderoRouter = router({
         total: orders.total,
         customerName: orders.customerName,
         createdAt: orders.createdAt,
+        billRequestedAt: orders.billRequestedAt,
         items: sql<number>`(SELECT COUNT(*) FROM order_items oi WHERE oi."orderId" = ${orders.id})`,
       })
       .from(orders)
@@ -283,6 +309,7 @@ export const comanderoRouter = router({
               total: Number(byTable.get(t.id)!.total),
               items: Number(byTable.get(t.id)!.items),
               status: byTable.get(t.id)!.status,
+              billRequested: Boolean(byTable.get(t.id)!.billRequestedAt),
             }
           : null,
       })),

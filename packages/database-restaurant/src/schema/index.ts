@@ -215,6 +215,8 @@ export const orders = pgTable("orders", {
    * comprobante. Las órdenes normales quedan en false.
    */
   billOnly: boolean("billOnly").default(false).notNull(),
+  /** El mesero pidió la cuenta desde el comandero (ADR-025). La caja la cobra. */
+  billRequestedAt: timestamp("billRequestedAt"),
   subtotal: real("subtotal").notNull(),
   tax: real("tax").default(0).notNull(),
   discount: real("discount").default(0).notNull(),

@@ -45,6 +45,23 @@ export default function ComanderoPage() {
   const [terminalToken, setTerminalToken] = useState<string | null>(null);
   useEffect(() => setTerminalToken(getPosTerminalToken()), []);
 
+  // ── D8: solo Wi-Fi ───────────────────────────────────────────────────────
+  // Un PWA no puede activar modo avión, pero sí puede negarse a operar cuando
+  // el navegador informa que la conexión es de datos móviles (Android/Chrome).
+  // En iOS no se expone el tipo: se muestra un aviso, no se bloquea.
+  const [net, setNet] = useState<{ blocked: boolean; type: string | null }>({ blocked: false, type: null });
+  useEffect(() => {
+    const conn = (navigator as any).connection;
+    if (!conn) return;
+    const check = () => {
+      const type = String(conn.type || "");
+      setNet({ blocked: type === "cellular", type: type || null });
+    };
+    check();
+    conn.addEventListener?.("change", check);
+    return () => conn.removeEventListener?.("change", check);
+  }, []);
+
   // ── Chequeo ──────────────────────────────────────────────────────────────
   const status = trpc.comandero.status.useQuery(undefined, {
     enabled: Boolean(terminalToken),
@@ -52,8 +69,27 @@ export default function ComanderoPage() {
   });
   const checkedIn = status.data?.checkedIn === true;
 
+  if (net.blocked) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-[#08080a] p-8 text-center text-white">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600 text-2xl font-black">!</div>
+        <h1 className="m-0 text-xl font-black">Conéctate al Wi-Fi</h1>
+        <p className="m-0 max-w-sm text-sm text-gray-400">
+          El comandero no opera con datos móviles. Activa el Wi-Fi del restaurante y vuelve a
+          entrar: así las comandas no se pierden y no gastas datos del mesero.
+        </p>
+        <p className="m-0 text-[11px] text-gray-500">Red detectada: {net.type ?? "desconocida"}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[100dvh] flex-col bg-[#08080a] text-white">
+      {!net.type && terminalToken && (
+        <p className="m-0 bg-amber-500/10 px-3 py-1 text-center text-[10px] text-amber-300">
+          Este navegador no informa el tipo de red. Verifica que estés en el Wi-Fi del restaurante.
+        </p>
+      )}
       {!terminalToken ? (
         <PairingGate />
       ) : !checkedIn ? (
@@ -258,6 +294,15 @@ function Comandero({ onExit }: { onExit: () => void }) {
   const unsent = (currentOrder?.items ?? []).filter((i: any) => !i.sentToStationAt);
   const total = Number(currentOrder?.total ?? 0);
 
+  const requestBill = trpc.comandero.requestBill.useMutation({
+    onSuccess: () => {
+      toast.success("Cuenta pedida — caja ya la ve");
+      void board.refetch();
+      void utils.pos.getOrders.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const sendRound = trpc.comandero.sendRound.useMutation({
     onSuccess: (r) => {
       toast.success(r.sent > 0 ? `${r.sent} platillo(s) enviados a cocina` : "No había nada pendiente");
@@ -390,6 +435,11 @@ function Comandero({ onExit }: { onExit: () => void }) {
                 {t.order && (
                   <p className="m-0 mt-1 text-xs font-bold text-amber-300">
                     {money(t.order.total)} · {t.order.items} ítems
+                  </p>
+                )}
+                {t.order?.billRequested && (
+                  <p className="m-0 mt-1 inline-flex rounded-full bg-pink-500/20 px-2 py-0.5 text-[10px] font-black text-pink-300">
+                    Cuenta pedida
                   </p>
                 )}
               </button>
@@ -537,6 +587,19 @@ function Comandero({ onExit }: { onExit: () => void }) {
             )}
           >
             Enviar a cocina {unsent.length > 0 ? `(${unsent.length})` : ""}
+          </button>
+
+          <button
+            onClick={() => requestBill.mutate({ orderId: currentOrder!.id })}
+            disabled={!currentOrder || requestBill.isPending || Boolean(currentOrder?.billRequestedAt)}
+            className={cn(
+              "mt-2 w-full rounded-xl py-2.5 text-xs font-black",
+              currentOrder?.billRequestedAt
+                ? "bg-pink-500/15 text-pink-300"
+                : "bg-white/10 text-white hover:bg-white/15",
+            )}
+          >
+            {currentOrder?.billRequestedAt ? "Cuenta pedida ✓" : "Pedir la cuenta"}
           </button>
           <p className="m-0 mt-2 text-center text-[10px] leading-snug text-gray-500">
             La cuenta se cobra en caja. Aquí solo se levanta el pedido.
