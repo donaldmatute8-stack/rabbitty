@@ -495,3 +495,25 @@ retiraron. Si se quieren extras reales en el kiosko, falta pasar
 **Tiempo real (paridad)**: al crear la orden, el kiosko encola cada ítem en el
 outbox de su estación y drena de inmediato (`drainRealtimeInBackground`). La
 cocina la ve sin esperar el sondeo de 10 s, igual que el comandero.
+
+---
+
+## 21. Membresía en el kiosko (content-aware, 13-nov-2026)
+
+El kiosko ya aplica la membresía del cliente vinculado, con las mismas reglas
+que el POS:
+
+- al vincular al Rabbitter se consultan sus beneficios
+  (`memberships.getMembershipBenefits`) y se calcula el ticket con
+  `previewOrderBenefits` (sin consumir nada);
+- se aplican todos los que tocan el ticket; el **saldo de crédito no** (es
+  dinero del socio);
+- el total y los Bunz a acumular se muestran sobre el **neto**;
+- **si cubre el 100 %** el botón deja de ser "PAGAR ORDEN" y pasa a
+  **"CONFIRMAR · Membresía"**: se cierra con `pos.directCheckout` y
+  `paymentMethod: "MEMBERSHIP"`, sin Stripe (un PaymentIntent de $0 no existe);
+- **si es parcial**, se cobra la diferencia por Stripe: el intent recibe
+  `entitlementIds` y el servidor ajusta el total antes de crear el intent.
+
+Detalle: `directCheckout` ahora acepta `allergies` y `modifiers` por ítem, para
+que el cierre por membresía no pierda lo que el comensal capturó.

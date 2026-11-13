@@ -2228,6 +2228,10 @@ export const posRouter = router({
             quantity: z.number().min(1),
             price: z.number(),
             notes: z.string().optional(),
+            /** Alergias del comensal (kiosko/comandero). */
+            allergies: z.string().trim().max(300).optional(),
+            /** Extras elegidos (ids del menú). El precio ya viene en `price`. */
+            modifiers: z.array(z.object({ id: z.string(), name: z.string() })).max(20).optional(),
           })
         ),
         // MEMBERSHIP = la membresía cubre el 100%: no hay cobro, solo cierre.
@@ -2443,6 +2447,8 @@ export const posRouter = router({
           totalPrice,
           sortOrder: i,
           notes: item.notes ?? null,
+          allergies: item.allergies ?? null,
+          modifiers: item.modifiers ?? null,
           stationId: dest?.stationId ?? null,
           printerId: dest?.printerId ?? null,
           sentToStationAt: dest?.stationId ? new Date() : null,

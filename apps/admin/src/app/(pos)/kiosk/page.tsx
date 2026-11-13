@@ -14,7 +14,7 @@ export default function KioskPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [view, setView] = useState<"welcome" | "menu" | "checkout" | "qr_payment" | "success">("welcome");
-  const [intent, setIntent] = useState<{ orderId: string; intentId: string; payUrl: string; total: number; claimToken?: string } | null>(null);
+  const [intent, setIntent] = useState<{ orderId: string; intentId: string; payUrl: string; total: number; claimToken?: string; orderLabel?: string } | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
   // Notas y alergias del comensal en el kiosko (ADR-025).
@@ -114,6 +114,9 @@ export default function KioskPage() {
   }, [view, pairToken, pairCustomer]);
 
   const kioskIntentMutation = trpc.pos.createStripeChargeIntent.useMutation();
+  const kioskMembershipCheckout = trpc.pos.directCheckout.useMutation();
+
+
 
   const itemModifiers = trpc.pos.getModifiers.useQuery(
     { itemId: selectedItem?.id ?? "" },
@@ -204,6 +207,35 @@ export default function KioskPage() {
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  // ── Membresía del cliente vinculado (mismo content-aware que el POS) ──
+  const kioskBusinessId = (ticketContext?.restaurant as { businessId?: string } | null)?.businessId ?? "";
+  const memberBenefits = trpc.memberships.getMembershipBenefits.useQuery(
+    { businessId: kioskBusinessId, customerId: pairCustomer?.id ?? "" },
+    { enabled: Boolean(kioskBusinessId && pairCustomer?.id), retry: false },
+  );
+  // Se aplican todos los beneficios que tocan el ticket; el saldo de crédito
+  // no se gasta solo (es dinero del socio).
+  const kioskEntitlementIds = (memberBenefits.data ?? [])
+    .filter((b: any) => b.benefitType !== "CREDIT_BALANCE" && (b.remaining ?? 1) > 0)
+    .map((b: any) => b.entitlementId);
+  const kioskHasMemberConsumption = (memberBenefits.data ?? []).some(
+    (b: any) => b.benefitType === "MEMBER_CONSUMPTION" && (b.remaining ?? 1) > 0,
+  );
+
+  const membershipPreview = trpc.memberships.previewOrderBenefits.useQuery(
+    {
+      customerId: pairCustomer?.id ?? "",
+      items: cart.map((i: any) => ({ menuItemId: i.menuItemId, quantity: i.quantity, unitPrice: i.price })),
+      entitlementIds: kioskEntitlementIds,
+      memberMenuItemIds: kioskHasMemberConsumption ? cart.map((i: any) => i.menuItemId) : undefined,
+      baseAmount: total,
+    },
+    { enabled: Boolean(pairCustomer?.id && cart.length > 0 && kioskEntitlementIds.length > 0), retry: false },
+  );
+  const membershipDiscount = Number(membershipPreview.data?.discount ?? 0);
+  const membershipCovered = Boolean(membershipPreview.data?.covered);
+  const netTotal = membershipPreview.data ? Number(membershipPreview.data.finalAmount) : total;
 
   // Extras seleccionados en la hoja abierta (precio del menú).
   const sheetMods = (itemModifiers.data ?? []) as Array<{ id: string; name: string; priceAdjust: number }>;
@@ -305,10 +337,14 @@ export default function KioskPage() {
           <div className="h-48 w-48 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center mb-10 shadow-[0_0_100px_rgba(16,185,129,0.3)]">
             <CheckCircle2 className="h-24 w-24 text-emerald-400" />
           </div>
-          <h1 className="text-7xl font-black mb-6 tracking-tight">¡Orden Pagada!</h1>
+          <h1 className="text-7xl font-black mb-6 tracking-tight">
+            {intent?.total === 0 ? "¡Orden confirmada!" : "¡Orden Pagada!"}
+          </h1>
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-4xl p-10 w-full mb-12">
             <p className="text-2xl text-gray-400 font-medium mb-2">Tu número de orden es</p>
-            <p className="text-[6rem] font-black text-emerald-400 leading-none">842</p>
+            <p className="text-[6rem] font-black text-emerald-400 leading-none">
+              {intent?.orderLabel ?? (intent?.orderId ? intent.orderId.slice(-4).toUpperCase() : "----")}
+            </p>
           </div>
           
           {intent?.claimToken && (
@@ -757,15 +793,21 @@ export default function KioskPage() {
               <div className="space-y-4">
                 <div className="flex justify-between text-lg text-gray-400 font-medium">
                   <span>Subtotal (Base)</span>
-                  <span className="text-white font-bold">${(Math.round((total / 1.16) * 100) / 100).toFixed(2)}</span>
+                  <span className="text-white font-bold">${(Math.round((netTotal / 1.16) * 100) / 100).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-lg text-purple-400 font-medium">
                   <span>IVA (16% Incluido)</span>
-                  <span className="font-bold">${(Math.round((total - Math.round((total / 1.16) * 100) / 100) * 100) / 100).toFixed(2)}</span>
+                  <span className="font-bold">${(Math.round((netTotal - Math.round((netTotal / 1.16) * 100) / 100) * 100) / 100).toFixed(2)}</span>
                 </div>
+                {membershipDiscount > 0 && (
+                  <div className="flex justify-between text-lg font-bold text-amber-300">
+                    <span>🎟️ Tu membresía cubre</span>
+                    <span>−${membershipDiscount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 font-semibold">
                   <span>Puntos Bunz a Acumular</span>
-                  <span>+{Math.round(total * 0.2)} Bunz</span>
+                  <span>+{Math.round(netTotal * 0.2)} Bunz</span>
                 </div>
               </div>
 
@@ -776,7 +818,7 @@ export default function KioskPage() {
                   <span className="text-3xl font-black text-white block">Total</span>
                   <span className="text-xs text-gray-400 font-normal">Impuestos incluidos</span>
                 </div>
-                <span className="text-5xl font-black text-emerald-400 tracking-tight">${total.toFixed(2)}</span>
+                <span className="text-5xl font-black text-emerald-400 tracking-tight">${netTotal.toFixed(2)}</span>
               </div>
             </div>
 
@@ -823,8 +865,43 @@ export default function KioskPage() {
               </div>
 
               <button 
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || kioskIntentMutation.isPending || kioskMembershipCheckout.isPending}
                 onClick={async () => {
+                  // ── Cubierto por membresía: no hay cobro (Stripe no acepta $0) ──
+                  if (membershipCovered && pairCustomer) {
+                    try {
+                      const res = await kioskMembershipCheckout.mutateAsync({
+                        orderType: effectiveOrderType,
+                        tableId: effectiveOrderType === "DINE_IN" && kioskTableId ? kioskTableId : undefined,
+                        customerId: pairCustomer.id,
+                        customerName: pairCustomer.name,
+                        items: cart.map((i) => ({
+                          menuItemId: i.menuItemId,
+                          quantity: i.quantity,
+                          price: i.price,
+                          modifiers: i.modifiers?.map((m: any) => ({ id: m.id, name: m.name })),
+                          notes: i.notes,
+                          allergies: i.allergies,
+                        })),
+                        paymentMethod: "MEMBERSHIP" as const,
+                        entitlementIds: kioskEntitlementIds,
+                        memberMenuItemIds: kioskHasMemberConsumption ? cart.map((i) => i.menuItemId) : undefined,
+                        idempotencyKey: `kiosk-mem-${Date.now()}`,
+                      });
+                      setIntent({
+                        orderId: (res as any).orderId,
+                        intentId: "",
+                        payUrl: "",
+                        total: 0,
+                        orderLabel: (res as any).orderNumber ? String((res as any).orderNumber) : undefined,
+                      });
+                      setView("success");
+                    } catch (err) {
+                      console.error("[KIOSK] membresía:", err);
+                      setPayError("No se pudo confirmar con tu membresía. Pide ayuda al personal.");
+                    }
+                    return;
+                  }
                   try {
                     const res = await kioskIntentMutation.mutateAsync({
                       // `menuItemId` (no `id`, que es la clave de la línea) y los
@@ -839,6 +916,9 @@ export default function KioskPage() {
                       orderType: effectiveOrderType,
                       tableId: effectiveOrderType === "DINE_IN" && kioskTableId ? kioskTableId : undefined,
                       ...(pairCustomer ? { customerId: pairCustomer.id, customerName: pairCustomer.name } : {}),
+                      // Beneficios de membresía (mismas reglas que el POS).
+                      entitlementIds: kioskEntitlementIds.length > 0 ? kioskEntitlementIds : undefined,
+                      memberMenuItemIds: kioskHasMemberConsumption ? cart.map((i) => i.menuItemId) : undefined,
                     });
                     setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total, claimToken: (res as unknown as { claimToken?: string }).claimToken });
                     setView("qr_payment");
@@ -848,7 +928,7 @@ export default function KioskPage() {
                 }}
                 className="w-full flex items-center justify-center gap-3 rounded-2xl bg-linear-to-r from-purple-500 to-pink-500 py-6 text-2xl font-black text-white shadow-[0_15px_40px_rgba(168,85,247,0.4)] active:scale-95 disabled:opacity-40 transition-all cursor-pointer"
               >
-                PAGAR ORDEN <ChevronRight className="h-7 w-7" />
+                {membershipCovered ? "CONFIRMAR · Membresía" : "PAGAR ORDEN"} <ChevronRight className="h-7 w-7" />
               </button>
               
               <button 
