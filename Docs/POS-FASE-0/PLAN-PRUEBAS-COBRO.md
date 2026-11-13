@@ -244,10 +244,29 @@ pagos de la orden: 350 (REFUNDED) + (−350) (REFUNDED)  → neto 0
 
 ## 11. Hallazgos de la ventana
 
-### H-1 · Stripe con llaves LIVE en staging (crítico)
+### H-1 · Stripe con llaves LIVE en staging — **RESUELTO (12-nov-2026)**
 
-El clon copió `STRIPE_SECRET_KEY=sk_live_…`. **No se deben hacer cobros con tarjeta en staging.**
-Para habilitar C-02 hay que poner llaves `sk_test_`/`pk_test_` en el ambiente.
+El clon copió la misma `sk_live_…` de producción. Dos capas de defensa:
+
+1. **Las llaves se eliminaron del ambiente staging** (`STRIPE_SECRET_KEY` y
+   `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`). Sin secreto, `getStripeClient()`
+   responde "STRIPE_SECRET_KEY no está configurada" y no hay cobro posible.
+2. **Guard en código** (`services/stripeConnect.ts`): si alguien vuelve a poner
+   una llave `sk_live_` en un ambiente cuyo nombre no es `production`, el cobro
+   se rechaza con `PRECONDITION_FAILED`. `NODE_ENV` no sirve para esto porque
+   Railway compila staging como producción; se usa `RAILWAY_ENVIRONMENT_NAME`.
+   Override deliberado: `ALLOW_LIVE_PAYMENTS=1`.
+   Cubierto por 5 tests en `services/stripeGuard.test.ts`.
+
+**Para habilitar C-02** (tarjeta en staging) hay que crear llaves de prueba en
+Stripe y cargarlas en el servicio `rabbitty-admin` del ambiente staging:
+
+```bash
+railway variables -s rabbitty-admin -e staging --set "STRIPE_SECRET_KEY=sk_test_…"
+railway variables -s rabbitty-admin -e staging --set "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_…"
+```
+
+Mientras no existan, C-02 queda bloqueado por diseño.
 
 ### H-2 · El split depende de un Rabbitter con saldo
 

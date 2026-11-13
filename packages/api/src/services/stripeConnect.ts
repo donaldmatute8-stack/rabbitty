@@ -11,6 +11,40 @@ type Db = any;
 
 let stripeInstance: Stripe | null = null;
 
+/**
+ * ── H-1 · Llave LIVE fuera de producción ───────────────────────────────────
+ *
+ * Una `sk_live_` en un ambiente de pruebas cobra dinero real en cuanto alguien
+ * pasa una tarjeta. `NODE_ENV` no sirve para distinguirlos (Railway compila
+ * todos los ambientes como producción), así que se mira el nombre del ambiente.
+ *
+ * Si el ambiente no se puede determinar, se permite: bloquear a ciegas rompería
+ * producción. El bloqueo es positivo y explícito.
+ */
+export function assertLiveKeyAllowed(
+  secretKey: string,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (!secretKey.startsWith("sk_live_")) return;
+  if (env.ALLOW_LIVE_PAYMENTS === "1") return;
+
+  const environment = (
+    env.RAILWAY_ENVIRONMENT_NAME ||
+    env.RAILWAY_ENVIRONMENT ||
+    env.APP_ENV ||
+    ""
+  ).toLowerCase();
+
+  if (environment && environment !== "production") {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        `Pagos reales bloqueados: hay una llave LIVE en el ambiente "${environment}". ` +
+        "Configura llaves sk_test_/pk_test_ para probar, o define ALLOW_LIVE_PAYMENTS=1 si de verdad es producción.",
+    });
+  }
+}
+
 export function getStripeClient(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
@@ -19,6 +53,7 @@ export function getStripeClient(): Stripe {
       message: "STRIPE_SECRET_KEY no está configurada en las variables de entorno.",
     });
   }
+  assertLiveKeyAllowed(secretKey);
   if (!stripeInstance) {
     stripeInstance = new Stripe(secretKey, {
       apiVersion: "2024-06-20" as any,
