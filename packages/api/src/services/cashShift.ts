@@ -1,3 +1,4 @@
+import { settledPaymentStatuses } from "./payments/settled";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
@@ -126,7 +127,7 @@ export async function computeShiftTotals(db: Db, shift: { id: string; branchId: 
     .where(
       and(
         eq(orders.branchId, shift.branchId),
-        eq(payments.status, "COMPLETED"),
+        settledPaymentStatuses(),
         gte(payments.createdAt, shift.openedAt),
         lte(payments.createdAt, until)
       )

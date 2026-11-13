@@ -1808,11 +1808,18 @@ export const posRouter = router({
       // ── C-10: anular una orden cobrada exige reverso, no silencio ──
       // Antes quedaba VOIDED con el pago COMPLETED: el turno y los reportes
       // seguían contando el dinero de una orden anulada, sin asiento ni aviso.
+      // Neto vivo: una orden con reembolso parcial todavía tiene dinero cobrado
+      // (no se puede anular); una reembolsada al 100 % sí.
       const [charged] = await ctx.restaurantDb
-        .select({ count: sql<number>`count(*)` })
+        .select({ net: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
         .from(payments)
-        .where(and(eq(payments.orderId, input.orderId), eq(payments.status, "COMPLETED")));
-      if (Number(charged?.count ?? 0) > 0) {
+        .where(
+          and(
+            eq(payments.orderId, input.orderId),
+            inArray(payments.status, ["COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED"]),
+          ),
+        );
+      if (Number(charged?.net ?? 0) > 0.005) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message:

@@ -1,3 +1,4 @@
+import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
@@ -317,13 +318,13 @@ export const expensesRouter = router({
         ? and(
             gte(payments.createdAt, start),
             lt(payments.createdAt, end),
-            eq(payments.status, "COMPLETED"),
+            settledPaymentStatuses(),
             sql`${payments.orderId} IN (SELECT id FROM orders WHERE "branchId" = ${ctx.staffBranchId})`
           )
         : and(
             gte(payments.createdAt, start),
             lt(payments.createdAt, end),
-            eq(payments.status, "COMPLETED")
+            settledPaymentStatuses()
           );
 
       const revenue = await ctx.restaurantDb

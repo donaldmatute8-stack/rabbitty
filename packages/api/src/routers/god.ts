@@ -1,3 +1,4 @@
+import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import crypto from "crypto";
 import { and, eq, sql, desc, gte, inArray, lt } from "drizzle-orm";
@@ -450,7 +451,7 @@ export const godRouter = router({
           avg: sql<number>`COALESCE(AVG(${payments.amount}), 0)`,
         })
         .from(payments)
-        .where(and(eq(payments.status, "COMPLETED"), gte(payments.createdAt, window)))
+        .where(and(settledPaymentStatuses(), gte(payments.createdAt, window)))
         .groupBy(payments.method)
         .orderBy(desc(sql`COALESCE(SUM(${payments.amount}), 0)`));
 
@@ -464,7 +465,7 @@ export const godRouter = router({
           count: sql<number>`COUNT(*)`,
         })
         .from(payments)
-        .where(and(eq(payments.status, "COMPLETED"), gte(payments.createdAt, window)))
+        .where(and(settledPaymentStatuses(), gte(payments.createdAt, window)))
         .groupBy(payments.verificationMethod);
 
       // Intents: funnel de conversión del cobro digital
@@ -506,7 +507,7 @@ export const godRouter = router({
           total: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
         })
         .from(payments)
-        .where(and(eq(payments.status, "COMPLETED"), gte(payments.createdAt, sql`NOW() - (INTERVAL '1 day' * 84)`)))
+        .where(and(settledPaymentStatuses(), gte(payments.createdAt, sql`NOW() - (INTERVAL '1 day' * 84)`)))
         .groupBy(sql`date_trunc('week', ${payments.createdAt})`, payments.method)
         .orderBy(sql`date_trunc('week', ${payments.createdAt})`);
 

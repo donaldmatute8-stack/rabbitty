@@ -1,3 +1,4 @@
+import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
@@ -327,7 +328,7 @@ export const analyticsRouter = router({
         .where(
           and(
             eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
-            eq(payments.status, "COMPLETED"),
+            settledPaymentStatuses(),
             gte(payments.createdAt, startDate),
             ...(endDate ? [lte(payments.createdAt, endDate)] : [])
           )
@@ -461,7 +462,7 @@ export const analyticsRouter = router({
         .innerJoin(orders, eq(payments.orderId, orders.id))
         .where(and(
           eq(orders.branchId, branchId),
-          eq(payments.status, "COMPLETED"),
+          settledPaymentStatuses(),
           gte(payments.createdAt, startDate),
           ...(endDate ? [lte(payments.createdAt, endDate)] : [])
         ));
@@ -526,7 +527,7 @@ export const analyticsRouter = router({
         })
         .from(payments)
         .innerJoin(orders, eq(payments.orderId, orders.id))
-        .where(and(eq(orders.branchId, branchId), eq(payments.status, "COMPLETED"), gte(payments.createdAt, sql`NOW() - (INTERVAL '1 day' * 84)`)))
+        .where(and(eq(orders.branchId, branchId), settledPaymentStatuses(), gte(payments.createdAt, sql`NOW() - (INTERVAL '1 day' * 84)`)))
         .groupBy(sql`date_trunc('week', ${payments.createdAt})`, payments.method)
         .orderBy(sql`date_trunc('week', ${payments.createdAt})`);
       return {

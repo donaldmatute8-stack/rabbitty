@@ -1271,6 +1271,57 @@ export async function resolveProviderWebhookDiscrepancy(
  * Restaura el saldo del usuario y el stock del afiliado, con asientos
  * idempotentes. Se usa desde payments.refund.
  */
+/**
+ * ── H-3: el estado de la orden refleja los reembolsos ──────────────────────
+ *
+ * Antes, reembolsar no tocaba la orden: seguía `COMPLETED` y los reportes la
+ * contaban como venta viva. Ahora:
+ *   neto > 0 y hay reversos → PARTIALLY_REFUNDED
+ *   neto ≤ 0 (todo devuelto) → REFUNDED
+ *
+ * Solo actúa sobre órdenes cobradas; una orden anulada o pendiente no se toca.
+ */
+export async function syncOrderRefundStatus(
+  db: Db,
+  orderId: string,
+): Promise<"COMPLETED" | "PARTIALLY_REFUNDED" | "REFUNDED" | null> {
+  const [order] = await db
+    .select({ status: orders.status })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!order) return null;
+
+  const current = String(order.status).toUpperCase();
+  if (!["COMPLETED", "PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(current)) return null;
+
+  const [row] = await db
+    .select({
+      net: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
+      gross: sql<number>`COALESCE(SUM(CASE WHEN ${payments.amount} > 0 THEN ${payments.amount} ELSE 0 END), 0)`,
+      refunded: sql<number>`COALESCE(SUM(CASE WHEN ${payments.amount} < 0 THEN -${payments.amount} ELSE 0 END), 0)`,
+    })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.orderId, orderId),
+        inArray(payments.status, ["COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED"]),
+      ),
+    );
+
+  const net = Math.round(Number(row?.net ?? 0) * 100) / 100;
+  const gross = Number(row?.gross ?? 0);
+  const refunded = Number(row?.refunded ?? 0);
+  if (refunded <= 0) return current as "COMPLETED";
+
+  const next: "REFUNDED" | "PARTIALLY_REFUNDED" =
+    gross > 0 && net <= 0.005 ? "REFUNDED" : "PARTIALLY_REFUNDED";
+  if (next === current) return next;
+
+  await db.update(orders).set({ status: next, updatedAt: new Date() }).where(eq(orders.id, orderId));
+  return next;
+}
+
 export async function refundBunzPayment(
   db: Db,
   params: { paymentId: string; amountMxn: number; reason?: string }
@@ -1436,6 +1487,11 @@ export async function refundBunzPayment(
       .update(payments)
       .set({ status: amount >= original ? "REFUNDED" : "PARTIALLY_REFUNDED" })
       .where(eq(payments.id, payment.id));
+
+    // H-3: la orden deja de ser una venta viva.
+    if (payment.orderId) {
+      await syncOrderRefundStatus(tx, payment.orderId);
+    }
 
     // OT-3: reembolso total ⇒ revertir redención y recompensa del pedido.
     if (amount >= original && payment.orderId) {

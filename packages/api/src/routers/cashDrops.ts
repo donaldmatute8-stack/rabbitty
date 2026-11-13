@@ -1,3 +1,4 @@
+import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import { router, posProcedure, posPermission, resolveBranchId } from "../trpc";
 import { eq, and, gte, sql } from "drizzle-orm";
@@ -134,7 +135,7 @@ export const cashDropsRouter = router({
           and(
             eq(orders.branchId, branchId),
             eq(payments.method, "CASH"),
-            eq(payments.status, "COMPLETED"),
+            settledPaymentStatuses(),
             gte(payments.createdAt, today)
           )
         );

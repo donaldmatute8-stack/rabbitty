@@ -252,6 +252,12 @@ export const paymentsRouter = router({
         .set({ status: isFull ? "REFUNDED" : "PARTIALLY_REFUNDED" })
         .where(eq(payments.id, input.paymentId));
 
+      // H-3: la orden deja de contar como venta viva (total o parcial).
+      if (payment.orderId) {
+        const { syncOrderRefundStatus } = await import("../services/paymentCore");
+        await syncOrderRefundStatus(ctx.restaurantDb, payment.orderId);
+      }
+
       // OT-3: reembolso total ⇒ revertir la recompensa emitida (clawback).
       if (isFull && payment.orderId) {
         const { reverseOrderLedger } = await import("../services/paymentCore");
