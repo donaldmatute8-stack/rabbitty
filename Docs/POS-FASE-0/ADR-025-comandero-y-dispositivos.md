@@ -275,7 +275,7 @@ bloqueada, la notificación del sistema solo donde el navegador lo permita.
 | **1** | Alergias, nombre del comensal, extras con precio, `pos_terminals.kind`, KDS muestra alergias | **en curso** |
 | **2** | Comandero: mesas → menú → ítem (extras/notas/alergias/nombre) → tanda → enviar | **hecho (v1)** |
 | **3** | Chequeo con QR + PIN + admin del reloj | **hecho** · candado de Wi-Fi pendiente |
-| **4** | Notificador de "listo" al mesero (canal + push nativo) | después |
+| **4** | Notificador de "listo" al mesero | **hecho v1** (sondeo 10 s + sonido/vibración; push nativo pendiente) |
 | **5** | Pedir la cuenta desde el comandero (avisa a caja) | otra fase |
 | **6** | Cola local sin conexión | al final |
 
@@ -332,3 +332,33 @@ sesión es de una terminal `COMANDERO` sin usuario. El admin elige el tipo en
 **Pendiente**: notificador de "listo" al mesero (fase 4), pedir la cuenta desde
 el comandero (5), cola local sin conexión (6) y el candado de Wi-Fi (depende del
 navegador).
+
+---
+
+## 15. Notificador de "listo" (fase 4, v1)
+
+`comandero.readyFeed` devuelve los ítems `READY` de las cuentas **de este
+mesero** con todo lo que necesita para entregar:
+
+```
+{ itemId, orderId, quantity, name, guestName, allergies,
+  stationName, tableNumber, orderType }
+```
+
+El comandero lo consulta cada 10 s. Cuando aparece algo nuevo suena (oscilador
+WebAudio, sin asset), vibra y muestra un banner fijo sobre cualquier vista:
+
+```
+2× Tacos al pastor
+Barra · Mesa 4 · para Luis
+⚠ sin cebolla (alergia)
+[ Entregado ]
+```
+
+"Entregado" marca el ítem como `SERVED` con la misma ruta del KDS
+(`kds.updateOrderItemStatus`), así cocina y mesero ven lo mismo.
+
+**Por qué sondeo y no push todavía**: en PWA no hay push fiable sin service
+worker + suscripción; el comandero está abierto mientras el mesero trabaja, así
+que 10 s de latencia es aceptable. El push nativo (APNs, Capacitor) queda para
+cuando el comandero se empaquete como app.

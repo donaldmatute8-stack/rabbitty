@@ -20,10 +20,12 @@ import { TRPCError } from "@trpc/server";
 import { router, posProcedure, protectedProcedure } from "../trpc";
 import { posOperatorSessions } from "@rabbitty/database-core/schema";
 import {
+  menuItems,
   orders,
   orderItems,
   staff as staffTable,
   staffShifts,
+  stations,
   tables,
 } from "@rabbitty/database-restaurant/schema";
 import { verifyPin } from "../services/crypto";
@@ -190,6 +192,46 @@ export const comanderoRouter = router({
     }
 
     return { success: true };
+  }),
+
+  /**
+   * ── Notificador de "listo" (ADR-025 D9) ─────────────────────────────────
+   *
+   * Ítems que cocina/barra ya marcaron como listos, de las cuentas de ESTE
+   * mesero. El comandero lo consulta cada pocos segundos y avisa con sonido y
+   * vibración: producto, estación, mesa y a quién va.
+   */
+  readyFeed: posProcedure.query(async ({ ctx }) => {
+    const staffId = ctx.posOperator?.staffId;
+    if (!staffId) return [];
+
+    const rows = await ctx.restaurantDb
+      .select({
+        itemId: orderItems.id,
+        orderId: orders.id,
+        quantity: orderItems.quantity,
+        name: menuItems.name,
+        guestName: orderItems.guestName,
+        allergies: orderItems.allergies,
+        stationName: stations.name,
+        tableNumber: tables.number,
+        orderType: orders.orderType,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .leftJoin(tables, eq(tables.id, orders.tableId))
+      .leftJoin(stations, eq(stations.id, orderItems.stationId))
+      .leftJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+      .where(
+        and(
+          eq(orders.branchId, ctx.branchId),
+          eq(orders.staffId, staffId),
+          eq(orderItems.status, "READY"),
+        ),
+      )
+      .limit(20);
+
+    return rows;
   }),
 
   /**

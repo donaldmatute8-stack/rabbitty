@@ -210,6 +210,38 @@ function Comandero({ onExit }: { onExit: () => void }) {
   const [panel, setPanel] = useState<"menu" | "ticket">("menu");
 
   const board = trpc.comandero.board.useQuery(undefined, { refetchInterval: 20_000 });
+
+  // ── Aviso de "listo" (D9): sondeo corto + sonido y vibración ──
+  const ready = trpc.comandero.readyFeed.useQuery(undefined, { refetchInterval: 10_000 });
+  const readyItems = ready.data ?? [];
+  const prevReady = useRef(0);
+  useEffect(() => {
+    if (readyItems.length > prevReady.current) {
+      // Beep sin asset: oscilador corto (funciona en PWA instalada).
+      try {
+        const Ctx = (window.AudioContext || (window as any).webkitAudioContext);
+        const ctx = new Ctx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 880;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.22);
+      } catch {}
+      try { navigator.vibrate?.([120, 60, 120]); } catch {}
+    }
+    prevReady.current = readyItems.length;
+  }, [readyItems.length]);
+
+  const markPicked = trpc.kds.updateOrderItemStatus.useMutation({
+    onSuccess: () => {
+      utils.comandero.readyFeed.invalidate();
+      toast.success("Entregado");
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const categories = trpc.pos.getCategories.useQuery(undefined, { staleTime: 5 * 60_000 });
   const menu = trpc.pos.getMenuItems.useQuery({ categoryId: categoryId ?? undefined }, { staleTime: 60_000 });
   const openOrder = trpc.comandero.openOrder.useMutation();
@@ -261,6 +293,47 @@ function Comandero({ onExit }: { onExit: () => void }) {
   const filtered = (menu.data ?? []).filter((i: any) =>
     search.trim() ? i.name.toLowerCase().includes(search.trim().toLowerCase()) : true,
   );
+
+  // Aviso compartido por las dos vistas (tablero y cuenta abierta).
+  const readyBanner = readyItems.length > 0 ? (
+    <>
+        <div className="border-b border-emerald-500/40 bg-emerald-500/15 px-3 py-2">
+          <p className="m-0 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-emerald-300">
+            <Check className="h-4 w-4" /> Listo para entregar ({readyItems.length})
+          </p>
+          <div className="mt-1.5 space-y-1.5">
+            {readyItems.map((r: any) => (
+              <div
+                key={r.itemId}
+                className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-black/30 px-2.5 py-1.5"
+              >
+                <div className="min-w-0">
+                  <p className="m-0 truncate text-sm font-bold">
+                    {r.quantity}× {r.name}
+                  </p>
+                  <p className="m-0 text-[10px] text-emerald-200/80">
+                    {r.stationName ?? "Cocina"} ·{" "}
+                    {r.tableNumber ? `Mesa ${r.tableNumber}` : r.orderType === "TO_GO" ? "Para llevar" : "Mostrador"}
+                    {r.guestName ? ` · para ${r.guestName}` : ""}
+                  </p>
+                  {r.allergies && (
+                    <p className="m-0 text-[10px] font-bold text-red-300">⚠ {r.allergies}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => markPicked.mutate({ orderItemId: r.itemId, status: "SERVED" })}
+                  disabled={markPicked.isPending}
+                  className="shrink-0 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[11px] font-black text-gray-950 disabled:opacity-50"
+                >
+                  Entregado
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      
+    </>
+  ) : null;
 
   /* ── Sin mesa: tablero ── */
   if (!tableId && !orderId) {
@@ -335,6 +408,7 @@ function Comandero({ onExit }: { onExit: () => void }) {
   /* ── Con cuenta abierta ── */
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {readyBanner}
       <header className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
         <button onClick={exitTable} className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-300 hover:bg-white/5">
           <ArrowLeft className="h-4 w-4" /> Mesas
