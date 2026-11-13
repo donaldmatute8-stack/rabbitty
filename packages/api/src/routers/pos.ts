@@ -1701,6 +1701,8 @@ export const posRouter = router({
         menuItemId: z.string(),
         quantity: z.number().int().min(1),
         notes: z.string().optional(),
+        /** Alergias del comensal (kiosko y comandero). */
+        allergies: z.string().trim().max(300).optional(),
       })).min(1),
       orderType: z.enum(["DINE_IN", "TO_GO", "DELIVERY"]).default("DINE_IN"),
       tableId: z.string().optional(),
@@ -1733,7 +1735,7 @@ export const posRouter = router({
             if (!unit) throw new TRPCError({ code: "BAD_REQUEST", message: "Item de menú no válido para esta sucursal" });
             const lineTotal = r2(unit * it.quantity);
             itemsTotal += lineTotal;
-            return { menuItemId: it.menuItemId, quantity: it.quantity, unitPrice: unit, totalPrice: lineTotal, notes: it.notes ?? null, sortOrder: 0 };
+            return { menuItemId: it.menuItemId, quantity: it.quantity, unitPrice: unit, totalPrice: lineTotal, notes: it.notes ?? null, allergies: it.allergies ?? null, sortOrder: 0 };
           });
           itemsTotal = r2(itemsTotal);
           const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(itemsTotal);

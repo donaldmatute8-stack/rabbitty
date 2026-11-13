@@ -432,3 +432,27 @@ sí solo no puede.
 **Pendiente real**: que el comandero se empaquete con Capacitor para recibir el
 push con la pantalla bloqueada (hoy el aviso es sondeo en primer plano + push
 cuando el usuario está en la app nativa).
+
+---
+
+## 19. Kiosko: notas y alergias (13-nov-2026)
+
+El kiosko de autoservicio (`/kiosk`) no se tocó durante el comandero, pero sí
+necesitaba lo mismo para que cocina reciba la información completa:
+
+- La hoja del platillo ahora tiene **alergias** (catálogo + texto libre) y
+  **nota para cocina**, y el carrito las muestra.
+- `pos.createStripeChargeIntent` acepta `allergies` por ítem y las guarda en
+  `order_items`.
+- El carrito separa líneas cuando cambian las notas/alergias (mismo platillo,
+  distinta indicación = líneas distintas).
+
+**Bug encontrado y corregido**: el checkout del kiosko mandaba `menuItemId:
+i.id`, que es la clave aleatoria de la **línea** del carrito, no el platillo.
+El servidor lo rechazaba con "Item de menú no válido". Ahora manda
+`i.menuItemId`.
+
+**Los "modificadores" eran decorativos**: la hoja mostraba "Leche de Almendra
++$15" y "Extra Shot +$10" fijos, sin relación con el menú ni con el cobro. Se
+retiraron. Si se quieren extras reales en el kiosko, falta pasar
+`priceAdjust` al intent y sumarlo al total.

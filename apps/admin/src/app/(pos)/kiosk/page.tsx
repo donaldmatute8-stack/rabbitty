@@ -17,6 +17,10 @@ export default function KioskPage() {
   const [intent, setIntent] = useState<{ orderId: string; intentId: string; payUrl: string; total: number; claimToken?: string } | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  // Notas y alergias del comensal en el kiosko (ADR-025).
+  const [itemNotes, setItemNotes] = useState("");
+  const [itemAllergens, setItemAllergens] = useState<string[]>([]);
+  const [itemAllergyNote, setItemAllergyNote] = useState("");
   const [adminPinModal, setAdminPinModal] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [pinError, setPinError] = useState(false);
@@ -134,14 +138,35 @@ export default function KioskPage() {
 
   const addToCart = (item: any) => {
     resetIdleTimer();
+    const notes = itemNotes.trim() || undefined;
+    const allergies = [...itemAllergens, itemAllergyNote.trim()].filter(Boolean).join(", ") || undefined;
+
     setCart((prev) => {
-      const existing = prev.find((i) => i.menuItemId === item.id);
+      // Misma línea solo si coincide el platillo Y sus notas/alergias.
+      const existing = prev.find(
+        (i) => i.menuItemId === item.id && (i.notes ?? "") === (notes ?? "") && (i.allergies ?? "") === (allergies ?? ""),
+      );
       if (existing) {
-        return prev.map((i) => (i.menuItemId === item.id ? { ...i, quantity: i.quantity + 1 } : i));
+        return prev.map((i) => (i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i));
       }
-      return [...prev, { id: Math.random().toString(36).substr(2, 9), menuItemId: item.id, name: item.name, price: item.price, quantity: 1 }];
+      return [
+        ...prev,
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          menuItemId: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+          notes,
+          allergies,
+        },
+      ];
     });
+
     setSelectedItem(null);
+    setItemNotes("");
+    setItemAllergens([]);
+    setItemAllergyNote("");
   };
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -404,7 +429,7 @@ export default function KioskPage() {
               {filteredItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setSelectedItem(item)} // Opens Item Modal
+                  onClick={() => { setSelectedItem(item); setItemNotes(""); setItemAllergens([]); setItemAllergyNote(""); }} // Opens Item Modal
                   className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-gray-900/90 backdrop-blur-md text-left transition-all active:scale-95 active:border-purple-500/50 hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)] hover:-translate-y-2 hover:border-white/20"
                 >
                   <div className="relative aspect-4/3 w-full overflow-hidden bg-black/60 flex items-center justify-center">
@@ -470,17 +495,46 @@ export default function KioskPage() {
               <h2 className="text-5xl font-black mb-2">{selectedItem.name}</h2>
               <p className="text-2xl text-emerald-400 font-black mb-8">${selectedItem.price.toFixed(2)}</p>
 
-              <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 space-y-8">
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 space-y-6">
                 <div>
-                  <h3 className="text-xl font-bold mb-4">Modificadores</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border border-purple-500/50 bg-purple-500/20 p-4 font-bold text-purple-400 flex justify-between">
-                      <span>Leche de Almendra</span> <span>+$15</span>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-4 font-bold text-gray-300 flex justify-between opacity-50">
-                      <span>Extra Shot</span> <span>+$10</span>
-                    </div>
+                  <h3 className="text-xl font-bold mb-3">¿Tienes alguna alergia?</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {["Gluten", "Lactosa", "Nuez", "Mariscos", "Huevo", "Soya", "Cacahuate"].map((a) => {
+                      const on = itemAllergens.includes(a);
+                      return (
+                        <button
+                          key={a}
+                          onClick={() =>
+                            setItemAllergens((prev) => (on ? prev.filter((x) => x !== a) : [...prev, a]))
+                          }
+                          className={
+                            "rounded-full border px-4 py-2 text-sm font-bold transition-all active:scale-95 " +
+                            (on
+                              ? "border-rose-400/60 bg-rose-500/20 text-rose-200"
+                              : "border-white/10 bg-white/5 text-gray-300")
+                          }
+                        >
+                          {on ? "✓ " : ""}{a}
+                        </button>
+                      );
+                    })}
                   </div>
+                  <input
+                    value={itemAllergyNote}
+                    onChange={(e) => setItemAllergyNote(e.target.value)}
+                    placeholder="Otra alergia (escríbela)…"
+                    className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-rose-400/60"
+                  />
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold mb-3">Nota para cocina</h3>
+                  <input
+                    value={itemNotes}
+                    onChange={(e) => setItemNotes(e.target.value)}
+                    placeholder="Sin cebolla, sin hielo, término medio…"
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-purple-400/60"
+                  />
                 </div>
               </div>
 
@@ -521,6 +575,12 @@ export default function KioskPage() {
                   <div className="flex-1 pr-4">
                     <h3 className="text-xl lg:text-2xl font-bold text-white leading-tight">{item.name}</h3>
                     <p className="text-purple-400 text-lg font-black mt-1">${item.price.toFixed(2)} c/u</p>
+                    {item.allergies && (
+                      <p className="m-0 mt-1 text-sm font-bold text-rose-300">⚠ Alergias: {item.allergies}</p>
+                    )}
+                    {item.notes && (
+                      <p className="m-0 mt-1 text-sm text-yellow-200/80">Nota: {item.notes}</p>
+                    )}
                   </div>
                   
                   {/* Quantity Stepper */}
@@ -649,7 +709,14 @@ export default function KioskPage() {
                 onClick={async () => {
                   try {
                     const res = await kioskIntentMutation.mutateAsync({
-                      items: cart.map((i) => ({ menuItemId: i.id, quantity: i.quantity })),
+                      // `menuItemId` (no `id`, que es la clave de la línea) y los
+                      // datos que el comensal capturó para cocina.
+                      items: cart.map((i) => ({
+                        menuItemId: i.menuItemId,
+                        quantity: i.quantity,
+                        notes: i.notes,
+                        allergies: i.allergies,
+                      })),
                       ...(pairCustomer ? { customerId: pairCustomer.id, customerName: pairCustomer.name } : {}),
                     });
                     setIntent({ orderId: res.orderId, intentId: res.intentId, payUrl: res.payUrl, total: res.total, claimToken: (res as unknown as { claimToken?: string }).claimToken });
