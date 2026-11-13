@@ -452,7 +452,7 @@ el libro Bunz y las cuotas de membresía.
 | **C-01** efectivo | ✅ **PASA** | orden `229bf3a1` total 270 = subtotal 232.76 + IVA 37.24 · **1** pago CASH 270 · evento `CHECKOUT_PAID` · v2 |
 | **C-03** split Bunz+efectivo | ✅ **PASA** | orden `8d3a5ff6` total 240 · **2** pagos (BUNZ 120 + CASH 120 = 240) · H-4 ya no duplica |
 | **C-04** Bunz 100 % | ✅ **PASA** | orden `fc96116d` 185 · pago BUNZ 185 · libro `user_wallet −185` / `redemption_capacity +185` · aprobación `CHARGED` |
-| **C-10** anular cobrada | ⚠️ **HUECO → CORREGIDO** | Antes: orden `VOIDED` con el pago CASH 185 **intacto** y sin asiento. Ver H-5 |
+| **C-10** anular cobrada | ✅ **PASA tras corregir H-5** | Antes: `VOIDED` con el pago CASH 185 intacto. Ahora: `412 PRECONDITION_FAILED` y la orden sigue `COMPLETED`. Orden sin cobro se anula sin problema (regresión verificada) |
 | **C-11** membresía + cobro | ✅ **PASA** | orden `ca5630ad`: 185 + 145 con producto incluido → total 145 · descuento 185 exacto · cuota 1/2 · **1** uso con idempotencyKey único |
 | **C-02 / C-07 / C-08** | ⛔ **BLOQUEADO** | Sin llaves `sk_test_` (H-1 las eliminó de staging, por diseño) |
 | **C-05 / C-06** | ✅ ya validado / no ejecutado | C-05 en la ventana anterior; C-06 parcial sigue pendiente |
@@ -477,3 +477,12 @@ reverso, sin asiento y sin aviso — justo el "silencio" que el caso C-10 prohí
 `COMPLETED`, `voidOrder` responde `PRECONDITION_FAILED` y pide reembolsar
 primero (`Reembolsos → nueva devolución`). No se inventa un reverso automático:
 el reembolso ya tiene su propio camino con asiento y permiso `POS_REFUND`.
+
+### Verificación del arreglo de H-5 (misma ventana, tras desplegar)
+
+```
+venta CASH 125            → 200
+voidOrder sobre cobrada   → 412 "Esta orden tiene un cobro registrado: reembólsalo…"
+estado final              → COMPLETED · CASH:COMPLETED=125 (sin cambios)
+voidOrder sobre orden sin cobro → 200 success (sin regresión)
+```

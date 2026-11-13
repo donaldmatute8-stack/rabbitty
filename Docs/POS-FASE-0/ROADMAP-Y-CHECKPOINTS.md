@@ -94,7 +94,12 @@ SIGUIENTE:                P-01 credenciales sandbox de Facturama (bloqueante)
                           Ver Docs/POS-FASE-0/PENDIENTES-CFDI.md
 BLOQUEADO POR:            cuenta de PAC del tenant (no hay credenciales aún)
 
+PRUEBAS DE COBRO:         C-01 · C-03 · C-04 · C-05 · C-09 · C-10 · C-11 PASAN
+                          C-02/C-07/C-08 bloqueados (sin llaves sk_test_)
+                          C-06 reembolso parcial pendiente
+
 PREGUNTAS ABIERTAS:
+  - H-3: ¿una orden 100 % reembolsada debe pasar a REFUNDED/VOIDED?
   - ¿Cuándo se retira el polling del KDS? (hoy es red de seguridad)
   - ¿Cuándo se encienden los servicios apagados? (KDS)
   - Dictamen fiscal de Bunz (D-12, requiere contador)
