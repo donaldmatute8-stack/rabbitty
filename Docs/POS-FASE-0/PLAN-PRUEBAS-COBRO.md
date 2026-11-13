@@ -438,3 +438,42 @@ que es la garantía que buscaba el ADR-018.
 
 `directCheckout` cableado **no cambió el comportamiento esperado**: cobra igual y
 además deja rastro, versión y bloqueo. La ventana se cerró con staging apagado.
+
+---
+
+## 14. Segunda ventana (13-nov-2026) — API con terminal de staging
+
+Arnés: `posOperators.startShift` (PIN 1234) + `cashShifts.open` (ya abierto) +
+`pos.directCheckout`, contra staging. Verificación por SQL sobre los pagos,
+el libro Bunz y las cuotas de membresía.
+
+| Caso | Resultado | Evidencia |
+|---|---|---|
+| **C-01** efectivo | ✅ **PASA** | orden `229bf3a1` total 270 = subtotal 232.76 + IVA 37.24 · **1** pago CASH 270 · evento `CHECKOUT_PAID` · v2 |
+| **C-03** split Bunz+efectivo | ✅ **PASA** | orden `8d3a5ff6` total 240 · **2** pagos (BUNZ 120 + CASH 120 = 240) · H-4 ya no duplica |
+| **C-04** Bunz 100 % | ✅ **PASA** | orden `fc96116d` 185 · pago BUNZ 185 · libro `user_wallet −185` / `redemption_capacity +185` · aprobación `CHARGED` |
+| **C-10** anular cobrada | ⚠️ **HUECO → CORREGIDO** | Antes: orden `VOIDED` con el pago CASH 185 **intacto** y sin asiento. Ver H-5 |
+| **C-11** membresía + cobro | ✅ **PASA** | orden `ca5630ad`: 185 + 145 con producto incluido → total 145 · descuento 185 exacto · cuota 1/2 · **1** uso con idempotencyKey único |
+| **C-02 / C-07 / C-08** | ⛔ **BLOQUEADO** | Sin llaves `sk_test_` (H-1 las eliminó de staging, por diseño) |
+| **C-05 / C-06** | ✅ ya validado / no ejecutado | C-05 en la ventana anterior; C-06 parcial sigue pendiente |
+| **C-09** concurrencia | ✅ validado antes | 10/10 mutaciones, versión 11 |
+
+### Invariante de totales (2 días, staging)
+
+```
+órdenes COMPLETED con deriva de pagos: 1
+  → 3f694630 (350) pagado neto 0 — es H-3, la orden reembolsada al 100 %
+    que sigue COMPLETED (hallazgo conocido, decisión pendiente)
+Ninguna deriva nueva.
+```
+
+### H-5 · Anular una orden cobrada no hacía nada (crítico, corregido)
+
+`voidOrder` ponía `status = VOIDED` sin mirar los pagos. Resultado: el turno de
+caja y los reportes seguían contando el dinero de una orden anulada, sin
+reverso, sin asiento y sin aviso — justo el "silencio" que el caso C-10 prohíbe.
+
+**Política adoptada (rechazo explícito):** si la orden tiene algún pago
+`COMPLETED`, `voidOrder` responde `PRECONDITION_FAILED` y pide reembolsar
+primero (`Reembolsos → nueva devolución`). No se inventa un reverso automático:
+el reembolso ya tiene su propio camino con asiento y permiso `POS_REFUND`.

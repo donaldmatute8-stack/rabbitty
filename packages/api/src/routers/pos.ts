@@ -1805,6 +1805,21 @@ export const posRouter = router({
         .limit(1);
       if (!orderRow) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
 
+      // ── C-10: anular una orden cobrada exige reverso, no silencio ──
+      // Antes quedaba VOIDED con el pago COMPLETED: el turno y los reportes
+      // seguían contando el dinero de una orden anulada, sin asiento ni aviso.
+      const [charged] = await ctx.restaurantDb
+        .select({ count: sql<number>`count(*)` })
+        .from(payments)
+        .where(and(eq(payments.orderId, input.orderId), eq(payments.status, "COMPLETED")));
+      if (Number(charged?.count ?? 0) > 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Esta orden tiene un cobro registrado: reembólsalo antes de anularla (Reembolsos → nueva devolución).",
+        });
+      }
+
       // ── Multi-tenant guard: solo staff de plataforma, dueño del negocio,
       //    o staff de la misma sucursal pueden anular la orden ──
       if (orderRow.branchId) {
