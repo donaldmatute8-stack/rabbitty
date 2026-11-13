@@ -322,6 +322,10 @@ export const orderItems = pgTable("order_items", {
   notes: text("notes"),
   status: text("status").default("PENDING").notNull(),
   sortOrder: integer("sortOrder").default(0).notNull(),
+  /** Alergias del comensal (catálogo + nota libre) — ADR-025. */
+  allergies: text("allergies"),
+  /** Nombre del comensal: el mesero entrega por nombre, no por platillo. */
+  guestName: text("guestName"),
   /** Snapshot de destino al enviar la comanda; nunca se recalcula (ADR-023). */
   stationId: text("stationId"),
   printerId: text("printerId"),

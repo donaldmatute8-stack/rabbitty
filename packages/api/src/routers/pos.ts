@@ -1048,6 +1048,10 @@ export const posRouter = router({
         quantity: z.number().min(1),
         modifiers: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
         notes: z.string().optional(),
+        /** Alergias del comensal (catálogo + nota libre) — ADR-025. */
+        allergies: z.string().trim().max(300).optional(),
+        /** Nombre con el que se entrega el platillo. */
+        guestName: z.string().trim().max(60).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1072,14 +1076,45 @@ export const posRouter = router({
               { menuItemId: input.menuItemId },
             ]);
             const dest = stationMap.get(input.menuItemId);
+            // Extras: SOLO los del menú de este platillo y su precio real.
+            // El cliente manda ids; el monto lo decide el servidor (ADR-025).
+            let extraPrice = 0;
+            let validatedModifiers: Array<{ id: string; name: string; priceAdjust: number }> | null = null;
+            if (input.modifiers?.length) {
+              const ids = input.modifiers.map((m) => m.id);
+              const rows = await tx
+                .select({
+                  id: menuItemModifiers.id,
+                  name: menuItemModifiers.name,
+                  priceAdjust: menuItemModifiers.priceAdjust,
+                })
+                .from(menuItemModifiers)
+                .where(and(eq(menuItemModifiers.itemId, input.menuItemId), inArray(menuItemModifiers.id, ids)));
+              if (rows.length !== new Set(ids).size) {
+                throw new TRPCError({
+                  code: "BAD_REQUEST",
+                  message: "Uno de los extras no pertenece a este platillo.",
+                });
+              }
+              validatedModifiers = rows.map((r: any) => ({
+                id: r.id,
+                name: r.name,
+                priceAdjust: Number(r.priceAdjust) || 0,
+              }));
+              extraPrice = (validatedModifiers ?? []).reduce((sum, m) => sum + m.priceAdjust, 0);
+            }
+            const unitPrice = r2(Number(menuItem.price) + extraPrice);
+
             const [orderItem] = await tx.insert(orderItems).values({
               orderId: input.orderId,
               menuItemId: input.menuItemId,
               quantity: input.quantity,
-              unitPrice: menuItem.price,
-              totalPrice: menuItem.price * input.quantity,
+              unitPrice,
+              totalPrice: r2(unitPrice * input.quantity),
               sortOrder: existingItems.length,
-              modifiers: input.modifiers ?? null,
+              modifiers: validatedModifiers,
+              allergies: input.allergies || null,
+              guestName: input.guestName || null,
               notes: input.notes ?? null,
               stationId: dest?.stationId ?? null,
               printerId: dest?.printerId ?? null,

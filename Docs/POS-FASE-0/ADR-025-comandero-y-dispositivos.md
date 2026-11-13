@@ -192,3 +192,105 @@ G7: cola local de ítems y reintento (el mesero no puede perder la comanda).
 - Realtime: `packages/api/src/services/realtimeOutbox.ts` + ADR-017
 - Menú y modificadores: `menuItems`, `menuItemModifiers` (`priceAdjust`, `maxSelect`)
 - Ítems de orden: `orderItems` (hoy con `notes` y `modifiers`, sin `allergies`)
+
+---
+
+## 10. Decisiones cerradas (13-nov-2026)
+
+| # | Decisión |
+|---|---|
+| D1 | **Envío por tanda**: el mesero arma la orden y la manda a cocina/bar. Se puede seguir editando (agregar, quitar, cambiar notas) **mientras la orden no se cierre**. La comanda va en cola **a su mesa**. |
+| D2 | **Nombre por comensal**: cada ítem lleva `guestName` ("para Luis", "para la señora del fondo"). El mesero entrega por nombre, no por platillo. |
+| D3 | **Alergias**: catálogo fijo (gluten, lactosa, nuez, mariscos, huevo, soya, cacahuate) **+ nota libre**. Se guarda como texto legible para cocina. |
+| D4 | **Extras**: solo los del menú (`priceAdjust`); el mesero no inventa montos. |
+| D5 | **La cuenta se cobra en caja**. "Pedir la cuenta" desde el comandero queda para otra fase. |
+| D6 | **Dispositivo**: PWA en celular del mesero **y** tablet del restaurante. |
+| D7 | **Reloj checador dentro del comandero**: al entrar, el mesero escanea un código que muestra el admin (o un dispositivo de la sucursal) y abre su turno; sin checar, el comandero no opera. |
+| D8 | **Modo operativo restringido**: sin notificaciones del móvil y solo con Wi-Fi. |
+| D9 | **Notificador al mesero** cuando cocina/barra marca un ítem como listo, con detalle: producto, estación y a quién va. |
+
+---
+
+## 11. Requisitos nuevos y cómo se cubren
+
+### 11.1 Reloj checador (D7)
+
+Ya existe el modelo (`staff_shifts`, `staff.clockIn/clockOut`) y el PIN del
+empleado. El comandero lo usa así:
+
+```
+Admin / dispositivo de la sucursal        Comandero (celular del mesero)
+   muestra QR rotativo  ─── escanea ───►  detecta sucursal + vigencia
+                                          pide PIN del mesero
+                                          abre turno (staff_shifts) y sesión
+                                          de operador → entra al comandero
+```
+
+- El QR rota (p. ej. cada 60 s) y va firmado: prueba **presencia física**.
+- El PIN prueba **identidad**.
+- Al cerrar el comandero se registra la salida (`clockOut`).
+- Sin chequeo vigente, el comandero se queda en la pantalla de acceso.
+
+### 11.2 "Sin notificaciones / solo Wi-Fi" (D8) — qué es posible de verdad
+
+Un PWA **no puede** activar modo avión ni silenciar las notificaciones del
+sistema. Sería deshonesto prometerlo. Lo que sí se puede, y es lo que se
+implementará:
+
+| Quiero | Cómo se logra |
+|---|---|
+| Pantalla completa sin distracciones | PWA `display: standalone` + WakeLock |
+| Evitar salir por accidente | confirmación al cerrar y reentrada por chequeo |
+| Detectar datos móviles | `navigator.connection.type` (Android/Chrome) → bloquear si no es Wi-Fi |
+| Bloquear en iOS (no expone el tipo de red) | aviso + regla de negocio (no bloqueo técnico) |
+| Bloqueo **real** del sistema | **Guided Access** (iOS) o **Screen Pinning** (Android); con MDM, modo kiosco |
+
+Se implementa el bloqueo cuando el navegador informa la red y, cuando no,
+un aviso persistente. El bloqueo duro del dispositivo queda documentado como
+configuración del equipo (Guided Access / MDM), no como código.
+
+### 11.3 Notificador al mesero (D9)
+
+Cuando el KDS marca un ítem `READY`, se publica al canal del mesero:
+
+```
+order.item.ready {
+  orderId, tableNumber, guestName,
+  itemName, quantity, stationName,
+  waiterStaffId
+}
+```
+
+El comandero lo muestra como aviso grande ("Listo: 2× Tacos · Barra · para
+Luis · Mesa 4") y vibra. En nativo (Capacitor) además se manda push por APNs;
+en PWA se usa el mismo canal de Centrifugo (tiempo real) y, si la pantalla está
+bloqueada, la notificación del sistema solo donde el navegador lo permita.
+
+---
+
+## 12. Fases actualizadas
+
+| Fase | Contenido | Estado |
+|---|---|---|
+| **1** | Alergias, nombre del comensal, extras con precio, `pos_terminals.kind`, KDS muestra alergias | **en curso** |
+| **2** | Comandero: mesas → menú → ítem (extras/notas/alergias/nombre) → tanda → enviar | siguiente |
+| **3** | Chequeo con QR + PIN, candado de Wi-Fi, bloqueo de salida | después |
+| **4** | Notificador de "listo" al mesero (canal + push nativo) | después |
+| **5** | Pedir la cuenta desde el comandero (avisa a caja) | otra fase |
+| **6** | Cola local sin conexión | al final |
+
+---
+
+## 13. Estado de la Fase 1 (implementado)
+
+```
+order_items.allergies          catálogo + nota libre
+order_items.guestName          entrega por nombre
+pos_terminals.kind             CASHIER | COMANDERO | KDS
+pos.addToCart                  valida extras contra el menú y suma su precio
+                               acepta allergies y guestName
+kds.loadKdsQueue               devuelve allergies y guestName
+KDS (app)                      alergias en rojo y "Para <nombre>"
+```
+
+Migración `0056` (aditiva).

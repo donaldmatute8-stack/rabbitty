@@ -34,6 +34,8 @@ export interface KdsQueueItem {
   printerId: string | null;
   sentToStationAt: Date | null;
   name: string;
+  allergies?: string | null;
+  guestName?: string | null;
 }
 
 /** Comanda en la cola del KDS. */
@@ -126,6 +128,8 @@ async function loadKdsQueue(
         quantity: orderItems.quantity,
         status: orderItems.status,
         notes: orderItems.notes,
+        allergies: orderItems.allergies,
+        guestName: orderItems.guestName,
         unitPrice: orderItems.unitPrice,
         totalPrice: orderItems.totalPrice,
         modifiers: orderItems.modifiers,

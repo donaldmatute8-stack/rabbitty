@@ -320,9 +320,19 @@ export default function KdsPage() {
                             <span className="text-sm font-medium">
                               {item.quantity}x {item.name}
                             </span>
+                            {(item as any).guestName && (
+                              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/80">
+                                Para {(item as any).guestName}
+                              </span>
+                            )}
                           </div>
                           <span className="text-xs text-gray-400">{config.label}</span>
                         </div>
+                        {(item as any).allergies && (
+                          <p className="mt-1 rounded-lg bg-red-500/20 px-2 py-1 text-xs font-bold text-red-300">
+                            ⚠ Alergias: {(item as any).allergies}
+                          </p>
+                        )}
                         {item.notes && (
                           <p className="mt-1 text-xs text-yellow-400/80">Nota: {item.notes}</p>
                         )}
