@@ -2180,6 +2180,15 @@ export const posRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // ── Un COMANDERO no cobra (ADR-025) ──
+      // El dispositivo está limitado por diseño: abre cuentas, no las cierra.
+      // Un admin con sesión sí puede (no es terminal).
+      if (ctx.posAuth?.method === "terminal" && String(ctx.posAuth.kind ?? "CASHIER") === "COMANDERO" && !ctx.userId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Este dispositivo es un comandero: la cuenta se cobra en caja.",
+        });
+      }
       if (input.paymentMethod === "CASH") {
         await assertOpenShiftForCash(ctx.restaurantDb, ctx.branchId);
       }

@@ -37,6 +37,7 @@ export interface Context {
     branchId?: string;
     /** Estación fija de la terminal (0C-4b). */
     stationId?: string | null;
+    kind?: string | null;
     businessId?: string | null;
     terminalName?: string;
   };

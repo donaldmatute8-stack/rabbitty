@@ -26,6 +26,7 @@ export type KdsPosAuth = {
   sessionId?: string;
   branchId?: string;
   stationId?: string | null;
+  kind?: string | null;
   businessId?: string | null;
   terminalName?: string;
 };
@@ -158,6 +159,7 @@ export async function resolveKdsCaller(params: {
           sessionId: posTerminal.sessionId,
           branchId: posTerminal.branchId,
           stationId: posTerminal.stationId,
+          kind: posTerminal.kind,
           businessId: posTerminal.businessId,
           terminalName: posTerminal.terminalName,
         }

@@ -325,6 +325,10 @@ Migración `0056` (aditiva).
 - `/academy` → *Comandero digital y reloj checador*
 - `Docs/POS-FASE-0/GUIA-COMANDERO.md`
 
+**Guarda de `kind` (hecha)**: `directCheckout` rechaza el cobro cuando la
+sesión es de una terminal `COMANDERO` sin usuario. El admin elige el tipo en
+*Ajustes → Terminales* (Caja / Comandero / Pantalla de cocina).
+
 **Pendiente**: notificador de "listo" al mesero (fase 4), pedir la cuenta desde
 el comandero (5), cola local sin conexión (6) y el candado de Wi-Fi (depende del
 navegador).

@@ -244,6 +244,7 @@ export const posTerminalsRouter = router({
         platform: posTerminals.platform,
         status: posTerminals.status,
         stationId: posTerminals.stationId,
+        kind: posTerminals.kind,
         authorizedAt: posTerminals.authorizedAt,
         expiresAt: posTerminals.expiresAt,
         lastSeenAt: posTerminals.lastSeenAt,
@@ -367,6 +368,26 @@ export const posTerminalsRouter = router({
       await ctx.coreDb.update(posTerminals).set({ lastSeenAt: new Date() }).where(eq(posTerminals.id, row.id));
 
       return { sessionToken: token, expiresAt };
+    }),
+
+  /** Tipo de dispositivo: CASHIER | COMANDERO | KDS (ADR-025). */
+  setKind: adminOnlyProcedure
+    .input(z.object({ terminalId: z.string(), kind: z.enum(["CASHIER", "COMANDERO", "KDS"]) }))
+    .mutation(async ({ ctx, input }) => {
+      const [row] = await ctx.coreDb
+        .select({ id: posTerminals.id, branchId: posTerminals.branchId })
+        .from(posTerminals)
+        .where(eq(posTerminals.id, input.terminalId))
+        .limit(1);
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Terminal no encontrada" });
+      if (row.branchId && row.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "La terminal es de otra sucursal" });
+      }
+      await ctx.coreDb
+        .update(posTerminals)
+        .set({ kind: input.kind })
+        .where(eq(posTerminals.id, input.terminalId));
+      return { success: true };
     }),
 
   /** Revoca una terminal de mi sucursal (bloquea nuevas sesiones). */
@@ -634,6 +655,7 @@ export const posTerminalsRouter = router({
         platform: posTerminals.platform,
         status: posTerminals.status,
         stationId: posTerminals.stationId,
+        kind: posTerminals.kind,
         authorizedAt: posTerminals.authorizedAt,
         expiresAt: posTerminals.expiresAt,
         lastSeenAt: posTerminals.lastSeenAt,

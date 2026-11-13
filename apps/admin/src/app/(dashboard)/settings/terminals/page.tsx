@@ -51,6 +51,11 @@ export default function PosTerminalsPage() {
   const utils = trpc.useUtils();
 
   const { data: stationsData } = trpc.stations.list.useQuery();
+  const setKind = trpc.posTerminals.setKind.useMutation({
+    onSuccess: () => { utils.posTerminals.overview.invalidate(); toast.success("Tipo de dispositivo actualizado"); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const setStation = trpc.posTerminals.setStation.useMutation({
     onSuccess: () => { utils.posTerminals.list.invalidate(); toast.success("Estación de la terminal actualizada"); },
     onError: (e: { message: string }) => toast.error(e.message),
@@ -199,6 +204,21 @@ export default function PosTerminalsPage() {
                     <p className="m-0 font-bold uppercase text-gray-400">Autorización vence</p>
                     <p className="m-0 mt-0.5 font-bold">{fmt(t.expiresAt)}</p>
                   </div>
+                </div>
+
+                <div className="mt-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    Tipo de dispositivo
+                  </label>
+                  <select
+                    value={(t as { kind?: string }).kind ?? "CASHIER"}
+                    onChange={(e) => setKind.mutate({ terminalId: t.id, kind: e.target.value as "CASHIER" | "COMANDERO" | "KDS" })}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white outline-none"
+                  >
+                    <option value="CASHIER">Caja (cobra)</option>
+                    <option value="COMANDERO">Comandero (solo toma pedidos)</option>
+                    <option value="KDS">Pantalla de cocina</option>
+                  </select>
                 </div>
 
                 <div className="mt-3">

@@ -24,6 +24,8 @@ export interface PosTerminalPrincipal {
   branchId: string;
   /** Estación fija de la terminal (null = elige el cliente). */
   stationId: string | null;
+  /** CASHIER | COMANDERO | KDS: qué puede hacer este dispositivo. */
+  kind: string;
   businessId: string | null;
   terminalName: string;
   sessionExpiresAt: Date;
@@ -66,6 +68,7 @@ export async function resolvePosTerminalSession(
       terminalExpiresAt: posTerminals.expiresAt,
       branchId: posTerminals.branchId,
       stationId: posTerminals.stationId,
+      kind: posTerminals.kind,
       businessId: posTerminals.businessId,
     })
     .from(posTerminalSessions)
@@ -86,6 +89,7 @@ export async function resolvePosTerminalSession(
     sessionId: row.sessionId,
     branchId: row.branchId,
     stationId: row.stationId ?? null,
+    kind: String(row.kind ?? "CASHIER"),
     businessId: row.businessId ?? null,
     terminalName: row.terminalName,
     sessionExpiresAt: new Date(row.sessionExpiresAt),
