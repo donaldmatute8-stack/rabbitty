@@ -10,6 +10,7 @@ import BunzyLaunchOverlay from "@/components/bunzy/BunzyLaunchOverlay";
 import ProximityEngine from "@/components/ProximityEngine";
 import ConsentGate from "@/components/ConsentGate";
 import AutoReadNotifications from "@/components/AutoReadNotifications";
+import { NativeGestures } from "@/components/NativeGestures";
 
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('rabbitty_theme')||'dark';var r=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;var d=document.documentElement;d.setAttribute('data-theme',r);d.classList.toggle('dark',r==='dark');d.classList.toggle('light',r==='light');d.style.colorScheme=r;}catch(e){}})();`;
 
@@ -49,6 +50,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased" suppressHydrationWarning>
+        <NativeGestures />
         <ThemeProvider>
           <BunzyLaunchOverlay />
         <AppOpener />

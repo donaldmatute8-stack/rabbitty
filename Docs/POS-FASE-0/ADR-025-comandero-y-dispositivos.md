@@ -517,3 +517,34 @@ que el POS:
 
 Detalle: `directCheckout` ahora acepta `allergies` y `modifiers` por ítem, para
 que el cierre por membresía no pierda lo que el comensal capturó.
+
+---
+
+## 22. Corrección de app (App Store 2.5.4) y gestos nativos — 13-nov-2026
+
+**La app rechazada era la miniapp (`telegram-miniapp`), no el POS.**
+
+Apple (Guideline 2.5.4): el binario declaraba `UIBackgroundModes = location` sin
+una función que requiera ubicación persistente.
+
+Lo que se corrigió en `telegram-miniapp/ios/App/App/Info.plist`:
+
+- se quitó `location` de `UIBackgroundModes` (queda solo `remote-notification`,
+  que sí se usa para push);
+- se quitó `NSLocationAlwaysAndWhenInUseUsageDescription`;
+- se conserva `NSLocationWhenInUseUsageDescription`, porque la app **sí** usa
+  ubicación en primer plano (mapa, comercios cercanos, check-in);
+- se retiró el aviso `LocationAlwaysNudge` de `ProximityEngine`, que invitaba a
+  conceder "Siempre": un WKWebView no puede consumir ubicación en segundo plano
+  sin un plugin nativo, así que prometerlo era incorrecto.
+
+Build de la miniapp: iOS `2.5 (18)`.
+
+**Gestos nativos**
+
+- Swipe desde el borde izquierdo → atrás, en la miniapp y en el POS.
+- Swipe hacia abajo para cerrar modales, en el `Dialog` compartido (aplica a
+  ambas apps).
+
+Nota: los bumps de versión del POS que hice por error quedaron revertidos
+(`1.2 (3)` y Android `1.0 (1)`).

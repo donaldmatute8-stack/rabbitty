@@ -69,8 +69,6 @@
 	<string>Rabbitty requiere acceso a la cámara para escanear tu Rabbitty Code y tickets de recompensa Bunz.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Rabbitty usa tu ubicación para mostrarte comercios cercanos, avisarte de ofertas y registrar tu check-in cuando llegas a un local afiliado.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Rabbitty usa tu ubicación para avisarte de recompensas y ofertas, y registrar tu check-in automáticamente al visitar negocios afiliados.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Rabbitty utiliza el micrófono para permitirte hablar y hacer preguntas por voz a Bunzy.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -89,7 +87,6 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
-		<string>location</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Rabbitty usa tus fotos solo cuando eliges una para enviarla en un chat.</string>
