@@ -290,22 +290,78 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
 
   if (bioGate === 'locked') {
     return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center gap-4 p-8 text-center"
-        style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
-      >
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E91E63]/15 text-2xl">🔒</div>
-        <h1 className="m-0 text-xl font-black">Portal de negocio</h1>
-        <p className="m-0 max-w-xs text-sm" style={{ color: 'var(--text-muted)' }}>
-          Protegido con {bioLabel}. Confirma tu identidad para ver ventas, clientes y ajustes.
-        </p>
-        <button
-          type="button"
-          onClick={unlockPortal}
-          className="rounded-2xl bg-[#E91E63] px-6 py-3 text-sm font-black text-white active:scale-95 transition-transform"
-        >
-          Desbloquear con {bioLabel}
-        </button>
+      <div className="relative min-h-screen overflow-hidden" style={{ background: '#08060d', color: '#fff' }}>
+        {/* Fondo de marca */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(110% 80% at 50% -10%, rgba(233,30,99,0.35) 0%, rgba(8,6,13,0) 58%), radial-gradient(80% 60% at 90% 110%, rgba(139,92,246,0.30) 0%, rgba(8,6,13,0) 60%)',
+          }}
+        />
+
+        <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-8 text-center">
+          {/* Identidad del negocio */}
+          <div className="mb-10 flex flex-col items-center">
+            <div
+              className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[26px] border"
+              style={{ borderColor: 'rgba(233,30,99,0.45)', background: 'rgba(255,255,255,0.06)', boxShadow: '0 20px 50px -20px rgba(233,30,99,0.8)' }}
+            >
+              {business?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={business.logoUrl as string} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-3xl">🏪</span>
+              )}
+            </div>
+            <p className="m-0 mt-3 text-[11px] font-black uppercase tracking-[0.25em] text-white/45">
+              Portal de negocio
+            </p>
+            <h1 className="m-0 mt-1 text-xl font-black">{business?.name || 'Tu negocio'}</h1>
+          </div>
+
+          {/* Candado biométrico con halo animado */}
+          <div className="relative mb-8">
+            <div className="absolute inset-0 animate-ping rounded-full bg-[#E91E63]/25" />
+            <div
+              className="relative flex h-24 w-24 items-center justify-center rounded-full"
+              style={{
+                background: 'linear-gradient(150deg, rgba(233,30,99,0.30) 0%, rgba(139,92,246,0.22) 100%)',
+                border: '1px solid rgba(255,255,255,0.16)',
+                boxShadow: '0 0 60px -12px rgba(233,30,99,0.75)',
+              }}
+            >
+              <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M4 7V5a1 1 0 0 1 1-1h2M20 7V5a1 1 0 0 0-1-1h-2M4 17v2a1 1 0 0 0 1 1h2M20 17v2a1 1 0 0 1-1 1h-2" />
+                <path d="M9 10v.01M15 10v.01M9.5 14.5a3.5 3.5 0 0 0 5 0" />
+              </svg>
+            </div>
+          </div>
+
+          <p className="m-0 max-w-[260px] text-[13px] leading-snug text-white/55">
+            Confirma con {bioLabel} para ver ventas, clientes y ajustes de tu negocio.
+          </p>
+
+          <button
+            type="button"
+            onClick={unlockPortal}
+            className="mt-7 w-full max-w-[280px] rounded-2xl py-4 text-sm font-black text-white active:scale-[0.98] transition-transform"
+            style={{
+              background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)',
+              boxShadow: '0 18px 40px -16px rgba(233,30,99,0.85)',
+            }}
+          >
+            Desbloquear con {bioLabel}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="mt-3 text-[12px] font-semibold text-white/40 underline-offset-4 hover:underline"
+          >
+            Volver
+          </button>
+        </div>
       </div>
     );
   }
@@ -391,6 +447,78 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
       </div>
 
       <div className="px-4 pt-4 max-w-xl mx-auto">
+        {/* ── Hero: identidad del negocio (una sola pieza, no bloques sueltos) ── */}
+        <div
+          className="relative mb-4 overflow-hidden rounded-3xl p-4"
+          style={{
+            background: 'color-mix(in srgb, var(--bg-elevated) 70%, transparent)',
+            backdropFilter: 'blur(22px) saturate(170%)',
+            WebkitBackdropFilter: 'blur(22px) saturate(170%)',
+            border: '1px solid var(--border-subtle)',
+            boxShadow: '0 18px 44px -24px rgba(233,30,99,0.55)',
+          }}
+        >
+          <div
+            className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full"
+            style={{ background: 'radial-gradient(circle, rgba(233,30,99,0.28), transparent 70%)' }}
+          />
+
+          <div className="relative flex items-center gap-3">
+            <div
+              className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border"
+              style={{ borderColor: 'rgba(233,30,99,0.35)', background: 'var(--bg-pressed)' }}
+            >
+              {business?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={business.logoUrl as string} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-2xl">🏪</span>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="m-0 truncate text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>
+                {business?.name || 'Tu negocio'}
+              </p>
+              <p className="m-0 mt-0.5 truncate text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                {business?.category || 'Afiliado'} · {business?.startTime || '00:00'}–{business?.endTime || '23:59'}
+              </p>
+              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-emerald-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> En la red
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { PlatformBridge.hapticFeedback('light'); setShowCodeModal(true); }}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-[#E91E63] active:scale-95 transition-transform"
+              style={{ background: 'rgba(233,30,99,0.12)', border: '1px solid rgba(233,30,99,0.30)' }}
+              aria-label="Mi código QR"
+            >
+              <QrCode size={19} />
+            </button>
+          </div>
+
+          <div className="relative mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => { PlatformBridge.hapticFeedback('medium'); router.push('/business/scan'); }}
+              className="rounded-2xl py-2.5 text-[12px] font-black text-white active:scale-[0.98] transition-transform"
+              style={{ background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)' }}
+            >
+              Escanear consumo
+            </button>
+            <button
+              type="button"
+              onClick={() => { PlatformBridge.hapticFeedback('light'); setShowCodeModal(true); }}
+              className="rounded-2xl py-2.5 text-[12px] font-black active:scale-[0.98] transition-transform"
+              style={{ background: 'var(--bg-pressed)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }}
+            >
+              Mi código
+            </button>
+          </div>
+        </div>
+
         {/* ── Novedades (solo afiliados) ── */}
         {(updates.unread > 0 || updates.items.length > 0) && (
           <button
