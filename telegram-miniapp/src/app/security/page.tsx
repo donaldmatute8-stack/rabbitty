@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { toast } from '@rabbitty/ui';
 import {
   User,
   ShieldCheck,
@@ -673,11 +674,9 @@ export default function SecurityPage() {
         {currentSection === 'account' && (
           <div className="flex flex-col">
             <p className="text-xs px-1 mb-2" style={{ color: 'var(--text-muted)' }}>
-              Consulta o administra los detalles asociados a tu cuenta de Telegram y perfil Rabbitty.
+              Edita tu nombre y usuario aquí mismo. El resto de tus datos es privado.
             </p>
-            <KeyValue k="Nombre">{user?.firstName || 'Explorador'}</KeyValue>
-            <KeyValue k="Usuario">@{user?.username || 'explorador'}</KeyValue>
-            <KeyValue k="ID de Telegram"><span className="font-mono">{user?.id || '—'}</span></KeyValue>
+            <AccountEditable />
             <KeyValue k="Rol de cuenta">
               <span className="text-xs font-black uppercase px-2 py-0.5 rounded-full bg-[#E91E63]/15 text-[#E91E63]">{user?.role || 'EXPLORADOR'}</span>
             </KeyValue>
@@ -734,5 +733,114 @@ export default function SecurityPage() {
 
       </div>
     </ProfileSubpageLayout>
+  );
+}
+
+/* ───────────── Edición inline de la cuenta (B6) ───────────── */
+
+function AccountEditable() {
+  const { user } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [username, setUsername] = useState(user?.username || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const start = () => {
+    setFirstName(user?.firstName || '');
+    setUsername(user?.username || '');
+    setError(null);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName, username }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || 'No se pudo guardar');
+        return;
+      }
+      PlatformBridge.hapticFeedback('medium');
+      toast.success('Perfil actualizado');
+      setEditing(false);
+    } catch {
+      setError('Error de conexión');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex flex-col">
+        <KeyValue k="Nombre">{user?.firstName || 'Explorador'}</KeyValue>
+        <KeyValue k="Usuario">@{user?.username || 'explorador'}</KeyValue>
+        <button
+          type="button"
+          onClick={start}
+          className="mx-1 mt-2 mb-3 self-start rounded-xl border border-[#E91E63]/30 bg-[#E91E63]/10 px-3 py-2 text-[12px] font-black text-[#E91E63] active:scale-95 transition-transform"
+        >
+          Editar perfil
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-1 my-2 rounded-2xl border p-3 flex flex-col gap-2" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+      <label className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Nombre</label>
+      <input
+        value={firstName}
+        onChange={(e) => setFirstName(e.target.value.slice(0, 40))}
+        className="rounded-xl border px-3 py-2 text-sm outline-none"
+        style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+        placeholder="Tu nombre"
+      />
+
+      <label className="text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Usuario</label>
+      <div className="flex items-center gap-1 rounded-xl border px-3" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-primary)' }}>
+        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>@</span>
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 20))}
+          className="flex-1 bg-transparent py-2 text-sm outline-none"
+          style={{ color: 'var(--text-primary)' }}
+          placeholder="usuario"
+        />
+      </div>
+      <p className="m-0 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+        3–20 caracteres: letras, números, punto o guion bajo. Debe ser único.
+      </p>
+
+      {error && <p className="m-0 text-[11px] font-bold text-rose-500">{error}</p>}
+
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          disabled={saving}
+          className="flex-1 rounded-xl border py-2 text-[12px] font-bold"
+          style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !username}
+          className="flex-1 rounded-xl bg-[#E91E63] py-2 text-[12px] font-black text-white disabled:opacity-50"
+        >
+          {saving ? 'Guardando…' : 'Guardar'}
+        </button>
+      </div>
+    </div>
   );
 }
