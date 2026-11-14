@@ -520,31 +520,50 @@ que el cierre por membresía no pierda lo que el comensal capturó.
 
 ---
 
-## 22. Corrección de app (App Store 2.5.4) y gestos nativos — 13-nov-2026
+## 22. App Store 2.5.4 (miniapp) y gestos nativos — 13-nov-2026
 
 **La app rechazada era la miniapp (`telegram-miniapp`), no el POS.**
 
-Apple (Guideline 2.5.4): el binario declaraba `UIBackgroundModes = location` sin
-una función que requiera ubicación persistente.
+### Qué pasó realmente
 
-Lo que se corrigió en `telegram-miniapp/ios/App/App/Info.plist`:
+En un primer momento quité `location` de `UIBackgroundModes` creyendo que no se
+usaba. **Fue un error**: la app sí usa el watcher nativo
+(`@capacitor-community/background-geolocation`, `addWatcher` con
+`background: true`) para avisar cuando el usuario pasa cerca de un negocio
+afiliado. Sin ese modo iOS suspende el watcher al cerrar la app.
 
-- se quitó `location` de `UIBackgroundModes` (queda solo `remote-notification`,
-  que sí se usa para push);
-- se quitó `NSLocationAlwaysAndWhenInUseUsageDescription`;
-- se conserva `NSLocationWhenInUseUsageDescription`, porque la app **sí** usa
-  ubicación en primer plano (mapa, comercios cercanos, check-in);
-- se retiró el aviso `LocationAlwaysNudge` de `ProximityEngine`, que invitaba a
-  conceder "Siempre": un WKWebView no puede consumir ubicación en segundo plano
-  sin un plugin nativo, así que prometerlo era incorrecto.
+Por eso se **restauró**:
 
-Build de la miniapp: iOS `2.5 (18)`.
+- `UIBackgroundModes` = `remote-notification` + `location`;
+- `NSLocationAlwaysAndWhenInUseUsageDescription` con texto que explica el uso en
+  segundo plano;
+- `NSLocationWhenInUseUsageDescription` para el uso en primer plano;
+- el aviso que invita a conceder “Siempre”.
 
-**Gestos nativos**
+### Por qué Apple no lo encontró
+
+La función existía pero **no había ninguna pantalla que la explicara**: el
+watcher se registraba en segundo plano sin un control visible. El revisor no
+tenía cómo descubrirla.
+
+Se agregó una tarjeta **“Alertas de proximidad”** en *Configuración*:
+
+- explica para qué se usa la ubicación en segundo plano;
+- muestra el estado del permiso;
+- botón **“Revisar permiso”** que abre los ajustes de iOS.
+
+Y las cadenas de propósito se reescribieron para mencionar el segundo plano de
+forma explícita.
+
+### Material para el revisor
+
+`telegram-miniapp/APP-REVIEW-NOTES-BACKGROUND-LOCATION.md`: pasos exactos,
+guion del video, texto de respuesta y checklist previo a subir.
+
+### Gestos nativos
 
 - Swipe desde el borde izquierdo → atrás, en la miniapp y en el POS.
-- Swipe hacia abajo para cerrar modales, en el `Dialog` compartido (aplica a
-  ambas apps).
+- Swipe hacia abajo para cerrar modales, en el `Dialog` compartido.
 
-Nota: los bumps de versión del POS que hice por error quedaron revertidos
-(`1.2 (3)` y Android `1.0 (1)`).
+Los bumps de versión del POS que hice por error quedaron revertidos
+(`1.2 (3)` y Android `1.0 (1)`). Build de la miniapp: iOS `2.5 (18)`.

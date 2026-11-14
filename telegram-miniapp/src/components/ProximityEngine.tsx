@@ -254,6 +254,139 @@ export default function ProximityEngine() {
           </div>
         </motion.div>
       )}
+      <ProximityNudgeHost visible={!presenceConfirm} />
     </AnimatePresence>
+  );
+}
+
+// ── H20: nudge de permiso "Siempre" (iOS Background) ──
+// El proximity push con app cerrada requiere permiso de ubicación "Siempre".
+// iOS no ofrece "Always" en el primer prompt; esta ALERTA flotante lo invita con
+// deep-link a Settings. Se muestra UNA vez (dismiss persistido), solo nativo,
+// con retardo para no chocar con la carga inicial, animación de entrada/salida
+// y auto-ocultado transitorio a los 18s (sin persistir: reaparece en la
+// siguiente sesión si nunca respondió).
+function ProximityNudgeHost({ visible }: { visible: boolean }) {
+  return (
+    <AnimatePresence>
+      {visible && <LocationAlwaysNudge />}
+    </AnimatePresence>
+  );
+}
+
+function LocationAlwaysNudge() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!PlatformBridge.isNative()) return;
+    try {
+      if (localStorage.getItem('loc_always_nudge_ok') === '1') return;
+    } catch {}
+    // Retardo: deja respirar el primer render del layout y evita competir con
+    // el contenido crítico o con el modal de presencia que ya está en bottom.
+    const t = setTimeout(() => setVisible(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    // Auto-ocultado transitorio: se retira solo (no persiste) para no ser
+    // un molde pegado eterno; sin respuesta reaparece en la próxima sesión.
+    const t = setTimeout(() => setVisible(false), 18000);
+    return () => clearTimeout(t);
+  }, [visible]);
+
+  if (!visible) return null;
+  const dismiss = (persist: boolean) => {
+    if (persist) {
+      try { localStorage.setItem('loc_always_nudge_ok', '1'); } catch {}
+    }
+    setVisible(false);
+  };
+  const openSettings = () => {
+    PlatformBridge.hapticFeedback('light');
+    void (async () => {
+      try {
+        const { App } = await import('@capacitor/app');
+        // @ts-expect-error launchUrl está disponible en runtime del AppPlugin
+        await App.launchUrl({ url: 'app-settings:' });
+      } catch {
+        window.location.href = 'app-settings:';
+      }
+      dismiss(true);
+    })();
+  };
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 120 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 120 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+      role="status"
+      className="fixed bottom-0 left-0 right-0 z-9996 px-3"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)' }}
+    >
+      <div
+        className="mx-auto max-w-md rounded-3xl overflow-hidden shadow-2xl"
+        style={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid rgba(233,30,99,0.3)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.35), 0 0 0 1px rgba(233,30,99,0.08)',
+        }}
+      >
+        {/* Barra de "notificación": bandera de origen + cierre */}
+        <div className="flex items-center justify-between px-4 pt-3">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#E91E63] animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-[1.6px]" style={{ color: '#E91E63' }}>
+              Rabbitty · Radar de cercanía
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => { PlatformBridge.hapticFeedback('light'); dismiss(true); }}
+            aria-label="Cerrar"
+            className="h-6 w-6 flex items-center justify-center rounded-full border-none cursor-pointer transition-transform active:scale-90"
+            style={{ background: 'var(--bg-pressed)', color: 'var(--text-muted)' }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        <div className="flex items-start gap-3 px-4 pt-2">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border"
+            style={{ background: 'rgba(233,30,99,0.12)', borderColor: 'rgba(233,30,99,0.3)' }}
+          >
+            <MapPin size={18} strokeWidth={2.4} style={{ color: '#E91E63' }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-black leading-snug m-0" style={{ color: 'var(--text-primary)' }}>
+              ¿Alertas de cercanía con la app cerrada?
+            </p>
+            <p className="text-[11px] leading-snug m-0 mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              Elige <strong style={{ color: 'var(--text-primary)' }}>Rabbitty → Ubicación → Siempre</strong> en Ajustes de iOS.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 px-4 pt-3 pb-4">
+          <button
+            type="button"
+            onClick={openSettings}
+            className="flex-1 rounded-xl py-2.5 text-[12px] font-black cursor-pointer active:scale-[0.98] transition-transform border-none flex items-center justify-center gap-1.5"
+            style={{ background: 'linear-gradient(135deg, #E91E63 0%, #FF2E93 100%)', color: 'white', boxShadow: '0 4px 14px rgba(233,30,99,0.35)' }}
+          >
+            Abrir Ajustes de iOS
+          </button>
+          <button
+            type="button"
+            onClick={() => { PlatformBridge.hapticFeedback('light'); dismiss(false); }}
+            className="rounded-xl px-3.5 py-2.5 text-[11px] font-black cursor-pointer active:scale-[0.98] transition-transform"
+            style={{ background: 'var(--bg-pressed)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+          >
+            Ahora no
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 }

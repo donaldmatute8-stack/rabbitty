@@ -218,6 +218,8 @@ export default function SettingsPage() {
             <PushDiagnosticsRow />
           </div>
 
+          <ProximitySettingsCard />
+
           <BunzyConnectRows />
 
           {/* ── Accesos rápidos ── */}
@@ -570,5 +572,90 @@ function LinkRow({ icon: Icon, label, href }: { icon: typeof ShieldCheck; label:
       <span className="text-sm font-bold flex-1 text-left">{label}</span>
       <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
     </button>
+  );
+}
+
+/**
+ * ── Proximidad en segundo plano (App Store 2.5.4) ──────────────────────────
+ *
+ * La app registra un watcher de ubicación nativo para avisar cuando el usuario
+ * está cerca de un negocio afiliado (check-in y recompensas) incluso con la app
+ * cerrada. Esta tarjeta hace la función VISIBLE y explicada: es lo que el
+ * revisor de Apple necesita encontrar, y lo que el usuario necesita para
+ * entender por qué se le pide "Siempre".
+ */
+function ProximitySettingsCard() {
+  const [native, setNative] = useState(false);
+  const [permission, setPermission] = useState<string>("unknown");
+
+  useEffect(() => {
+    setNative(PlatformBridge.isNative());
+    if (!PlatformBridge.isNative()) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { Geolocation } = await import("@capacitor/geolocation");
+        const status = await Geolocation.checkPermissions();
+        if (alive) setPermission(String(status.location || "unknown"));
+      } catch { /* plugin no disponible en web */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const openSettings = async () => {
+    PlatformBridge.hapticFeedback("light");
+    try {
+      const { App } = await import("@capacitor/app");
+      // @ts-expect-error launchUrl existe en runtime del AppPlugin
+      await App.launchUrl({ url: "app-settings:" });
+    } catch {
+      window.location.href = "app-settings:";
+    }
+  };
+
+  const label =
+    permission === "granted" ? "Permiso concedido" :
+    permission === "denied" ? "Permiso denegado" :
+    permission === "prompt" ? "Sin permiso todavía" : "Estado desconocido";
+
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
+    >
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <span className="text-[15px]">📍</span>
+        <span className="text-[10px] font-black uppercase tracking-[1.5px]" style={{ color: "var(--text-muted)" }}>
+          Alertas de proximidad
+        </span>
+      </div>
+
+      <p className="m-0 px-1 text-[12px] leading-snug" style={{ color: "var(--text-muted)" }}>
+        Con la ubicación en <strong>“Siempre”</strong>, Rabbitty te avisa cuando pasas cerca de un
+        negocio afiliado para que ganes Bunz con tu check-in, incluso si la app está cerrada.
+        Si eliges “Al usar la app”, el aviso solo funciona con la app abierta.
+      </p>
+
+      <div className="mt-3 flex items-center justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <p className="m-0 text-[11px] font-bold" style={{ color: "var(--text-primary)" }}>
+            {native ? label : "Disponible solo en la app móvil"}
+          </p>
+          <p className="m-0 text-[10px]" style={{ color: "var(--text-muted)" }}>
+            Puedes cambiarlo cuando quieras.
+          </p>
+        </div>
+        {native && (
+          <button
+            type="button"
+            onClick={openSettings}
+            className="shrink-0 rounded-xl px-3 py-2 text-[11px] font-black cursor-pointer active:scale-95"
+            style={{ background: "#E91E63", color: "#fff", border: "none" }}
+          >
+            Revisar permiso
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
