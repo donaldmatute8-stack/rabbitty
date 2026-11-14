@@ -55,14 +55,33 @@ export async function createLeafletEngine(opts: MapEngineOptions): Promise<MapEn
   let businesses: MapBusiness[] = [];
   let selectedId: string | null = null;
 
-  const map = L.map(container, {
-    center: [25.7275, -100.312],
-    zoom: 15,
-    minZoom: 4,
-    maxZoom: 19,
-    zoomControl: false,
-    attributionControl: false,
-  });
+  // En desarrollo React monta el efecto dos veces; Leaflet no admite dos
+  // mapas sobre el mismo nodo. Si ya está inicializado, limpiamos y reintentamos.
+  const createLeafletMap = (): L.Map => {
+    try {
+      return L.map(container, {
+        center: [25.7275, -100.312],
+        zoom: 15,
+        minZoom: 4,
+        maxZoom: 19,
+        zoomControl: false,
+        attributionControl: false,
+      });
+    } catch {
+      container.innerHTML = '';
+      delete (container as unknown as { _leaflet_id?: number })._leaflet_id;
+      return L.map(container, {
+        center: [25.7275, -100.312],
+        zoom: 15,
+        minZoom: 4,
+        maxZoom: 19,
+        zoomControl: false,
+        attributionControl: false,
+      });
+    }
+  };
+
+  const map = createLeafletMap();
 
   const spotLayer = L.layerGroup().addTo(map);
   const userLayer = L.layerGroup().addTo(map);

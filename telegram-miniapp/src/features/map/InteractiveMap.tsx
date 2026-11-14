@@ -37,6 +37,7 @@ export default function InteractiveMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MapEngine | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [engineKind, setEngineKind] = useState<'maplibre' | 'leaflet'>('leaflet');
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -448,6 +449,7 @@ export default function InteractiveMap({
           return;
         }
         engineRef.current = engine;
+        setEngineKind(engine.kind);
         if (engine.kind === 'leaflet') setMapReady(true);
       })
       .catch((err) => {
@@ -562,7 +564,9 @@ export default function InteractiveMap({
       />
 
       {/* Atribución mínima de los tiles (OpenFreeMap sirve datos de OSM) */}
-      <span className="rabbitty-map-credit">© OpenStreetMap · OpenFreeMap</span>
+      <span className="rabbitty-map-credit">
+        {engineKind === 'maplibre' ? '© OpenStreetMap · OpenFreeMap' : '© OpenStreetMap'}
+      </span>
 
       {/* Lienzo del motor de mapa (oculto solo si MapKit nativo está activo) */}
       <div 
