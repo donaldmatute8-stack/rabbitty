@@ -3,24 +3,27 @@
 /**
  * ── Rabbitty Pass ───────────────────────────────────────────────────────────
  *
- * Tarjeta principal del inicio. Tres cosas viven aquí:
- *
- * 1. El pase: saldo, nivel, nombre y el botón “Ver QR”.
+ * 1. El pase: saldo, nivel, nombre y dos acciones en línea — “Mi Membresía” y
+ *    “Ver QR”. Una sola puerta a membresías: la que esté marcada por defecto
+ *    (si no hay ninguna configurada, abre el hub).
  * 2. El código: por defecto el **QR estándar** (BrandQR, cualquier cámara lo
  *    lee); el Rabbitty Code neón queda como secundario, a un toque.
- * 3. Las caras del pase: se desliza a la izquierda/derecha para pasar del Pass
- *    a las membresías del usuario (swipe se puede apagar en Opciones).
+ * 3. Las caras del pase: deslizar izquierda/derecha pasa del Pass a las
+ *    membresías. Al arrastrar aparecen flechas con el nombre de la cara; la
+ *    primera vez se insinúa con un “Desliza”.
  *
- * El engranaje (esquina superior derecha, solo con el pase extendido) abre
- * “Opciones del Pass”: qué código abrir, qué membresía abre el acceso directo,
- * si el swipe está activo y si el saldo se ve en la tarjeta comprimida.
+ * El engranaje (arriba a la derecha, solo con el pase extendido) abre
+ * “Opciones del Pass”.
  */
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QrCode, ChevronRight, X, ShieldCheck, Settings2, Ticket, Check, ArrowRight, Sparkles } from 'lucide-react';
+import {
+  QrCode, ChevronRight, ChevronLeft, X, ShieldCheck, Settings2, Ticket,
+  Check, ArrowRight, Sparkles, SlidersHorizontal,
+} from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import BrandQR from '@/components/ui/BrandQR';
@@ -55,16 +58,27 @@ interface PassMembership {
   badgeColor: string | null;
 }
 
+type PassThemeId = 'classic' | 'fire' | 'mint' | 'neon';
+type CollapsedView = 'balance' | 'level' | 'name';
+
 interface PassSettings {
   /** Código que se abre con “Ver QR”. */
   code: 'standard' | 'neon';
   swipe: boolean;
-  /** Muestra el botón de acceso directo a membresías. */
-  showDirect: boolean;
   /** 'memberships' = hub; o el id de una membresía concreta. */
   defaultTarget: string;
-  /** Saldo visible con la tarjeta comprimida. */
-  collapsedBalance: boolean;
+  /** Qué muestra la tarjeta comprimida. */
+  collapsedView: CollapsedView;
+  /** Tema visual del pase (mismos 4 del código). */
+  theme: PassThemeId;
+  /** Ocultar membresías que no estén activas. */
+  activeOnly: boolean;
+  /** Mantener la pantalla encendida mientras se muestra el código. */
+  wakeLock: boolean;
+  /** Aviso de vencimiento en el pase (si hay fechas). */
+  expiryNotice: boolean;
+  /** Vibración del pase. */
+  haptics: boolean;
 }
 
 const SETTINGS_KEY = 'rabbitty_pass_settings';
@@ -73,10 +87,51 @@ const COLLAPSED_KEY = 'rabbitty_pass_collapsed';
 const DEFAULT_SETTINGS: PassSettings = {
   code: 'standard',
   swipe: true,
-  showDirect: true,
   defaultTarget: 'memberships',
-  collapsedBalance: true,
+  collapsedView: 'balance',
+  theme: 'classic',
+  activeOnly: false,
+  wakeLock: true,
+  expiryNotice: true,
+  haptics: true,
 };
+
+/** Paleta del pase: cambia tarjeta, botones, puntos y finders del código. */
+const PASS_THEMES: Record<PassThemeId, {
+  label: string;
+  from: string;
+  to: string;
+  accent: string;
+  bgDark: string;
+  bgLight: string;
+}> = {
+  classic: {
+    label: 'Clásico',
+    from: '#E91E63', to: '#8B5CF6', accent: '#E91E63',
+    bgDark: 'linear-gradient(135deg, #18181B 0%, #111113 45%, #240C1A 100%)',
+    bgLight: 'linear-gradient(135deg, #FFFFFF 0%, #FFF5F8 50%, #FFE4EE 100%)',
+  },
+  fire: {
+    label: 'Fuego',
+    from: '#F97316', to: '#EF4444', accent: '#F97316',
+    bgDark: 'linear-gradient(135deg, #1B1310 0%, #120C0A 45%, #2A1108 100%)',
+    bgLight: 'linear-gradient(135deg, #FFFFFF 0%, #FFF7F2 50%, #FFE8DA 100%)',
+  },
+  mint: {
+    label: 'Menta',
+    from: '#10B981', to: '#22D3EE', accent: '#10B981',
+    bgDark: 'linear-gradient(135deg, #0F1A17 0%, #0B1210 45%, #07301F 100%)',
+    bgLight: 'linear-gradient(135deg, #FFFFFF 0%, #F2FBF7 50%, #DFF6EC 100%)',
+  },
+  neon: {
+    label: 'Neón',
+    from: '#A855F7', to: '#EC4899', accent: '#A855F7',
+    bgDark: 'linear-gradient(135deg, #191024 0%, #0F0A18 45%, #2A0B33 100%)',
+    bgLight: 'linear-gradient(135deg, #FFFFFF 0%, #FAF3FF 50%, #F3E4FF 100%)',
+  },
+};
+
+const THEME_IDS = Object.keys(PASS_THEMES) as PassThemeId[];
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Activa',
@@ -92,12 +147,22 @@ function readSettings(): PassSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<PassSettings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const parsed = JSON.parse(raw) as Partial<PassSettings> & { collapsedBalance?: boolean };
+    // Migración: la versión anterior guardaba un booleano.
+    const collapsedView =
+      parsed.collapsedView ?? (parsed.collapsedBalance === false ? 'name' : 'balance');
+    return { ...DEFAULT_SETTINGS, ...parsed, collapsedView };
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
+
+const daysUntil = (iso: string | null): number | null => {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return null;
+  return Math.ceil((ms - Date.now()) / 86_400_000);
+};
 
 const emptySubscribe = () => () => {};
 
@@ -111,9 +176,12 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
   const [codeMode, setCodeMode] = useState<'standard' | 'neon'>('standard');
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<PassSettings>(DEFAULT_SETTINGS);
-  const [memberships, setMemberships] = useState<PassMembership[]>([]);
+  const [allMemberships, setAllMemberships] = useState<PassMembership[]>([]);
   const [slide, setSlide] = useState(0);
-  const draggedRef = useRef(false);
+  const [dragX, setDragX] = useState(0);
+  const [teachSwipe, setTeachSwipe] = useState(false);
+  const dragDistanceRef = useRef(0);
+  const taughtRef = useRef(false);
 
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
   const qrIdentifier = user?.id || user?.telegramId || 'rabbitty_guest';
@@ -121,6 +189,13 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
 
   const memberName = user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Explorador Rabbitty';
   const username = user?.username ? `@${user.username}` : '@miembro';
+
+  const palette = PASS_THEMES[settings.theme] ?? PASS_THEMES.classic;
+
+  /** Vibración del pase (respeta la preferencia). */
+  const haptic = (style: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' = 'light') => {
+    if (settings.haptics) PlatformBridge.hapticFeedback(style);
+  };
 
   // ── Preferencias (localStorage) ──
   useEffect(() => {
@@ -140,7 +215,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
     if (patch.code) setCodeMode(patch.code);
   };
 
-  // ── Membresías para las caras del pase ──
+  // ── Membresías (se guardan todas; la vista filtra) ──
   useEffect(() => {
     let alive = true;
     void PlatformBridge.getAuthHeaders()
@@ -148,13 +223,28 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
       .then((r) => r.json())
       .then((d) => {
         if (!alive || !d?.success || !Array.isArray(d.memberships)) return;
-        setMemberships(
+        setAllMemberships(
           (d.memberships as PassMembership[]).filter((m) => m.status !== 'REVOKED' && m.status !== 'EXPIRED'),
         );
       })
       .catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  const memberships = useMemo(
+    () => (settings.activeOnly ? allMemberships.filter((m) => m.status === 'ACTIVE') : allMemberships),
+    [allMemberships, settings.activeOnly],
+  );
+
+  // ── Vencimiento próximo (solo si el usuario lo pide y hay fechas) ──
+  const expiring = useMemo(() => {
+    const list = allMemberships
+      .filter((m) => !m.noExpiration && m.currentPeriodEnd)
+      .map((m) => ({ m, days: daysUntil(m.currentPeriodEnd) }))
+      .filter((x): x is { m: PassMembership; days: number } => x.days !== null && x.days >= 0 && x.days <= 30)
+      .sort((a, b) => a.days - b.days);
+    return list[0] ?? null;
+  }, [allMemberships]);
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   useEffect(() => {
@@ -165,7 +255,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
 
   const toggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation();
-    PlatformBridge.hapticFeedback('light');
+    haptic('light');
     setIsCollapsed((prev) => {
       const next = !prev;
       try { localStorage.setItem(COLLAPSED_KEY, String(next)); } catch {}
@@ -179,79 +269,104 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
     [memberships],
   );
   const current = slides[Math.min(slide, slides.length - 1)];
+  const canSwipe = settings.swipe && slides.length > 1;
+
+  // Insinuación de swipe: una sola vez por sesión.
+  useEffect(() => {
+    if (!canSwipe || isCollapsed || taughtRef.current) return;
+    const t = window.setTimeout(() => {
+      setTeachSwipe(true);
+      taughtRef.current = true;
+      window.setTimeout(() => setTeachSwipe(false), 2600);
+    }, 1400);
+    return () => window.clearTimeout(t);
+  }, [canSwipe, isCollapsed]);
 
   const goto = (dir: 1 | -1) => {
     setSlide((prev) => {
       const next = Math.min(Math.max(prev + dir, 0), slides.length - 1);
-      if (next !== prev) PlatformBridge.hapticFeedback('light');
+      if (next !== prev) haptic('light');
       return next;
     });
+    setDragX(0);
   };
 
   const onDragEnd = (_e: unknown, info: { offset: { x: number } }) => {
+    setDragX(0);
     if (Math.abs(info.offset.x) < 55) return;
-    draggedRef.current = true;
-    setTimeout(() => { draggedRef.current = false; }, 220);
     goto(info.offset.x < 0 ? 1 : -1);
   };
 
+  // ── Pantalla encendida mientras se muestra el código ──
+  useEffect(() => {
+    if (!showQrModal || !settings.wakeLock) return;
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+    let sentinel: { release: () => Promise<void> } | null = null;
+    let cancelled = false;
+
+    const request = async () => {
+      try {
+        const wakeLock = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock;
+        if (!wakeLock) return;
+        sentinel = await wakeLock.request('screen');
+      } catch { /* el dispositivo lo niega (batería baja) */ }
+    };
+    void request();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !sentinel) void request();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      if (!cancelled) return;
+      void sentinel?.release().catch(() => {});
+    };
+  }, [showQrModal, settings.wakeLock]);
+
   const openQr = () => {
-    if (draggedRef.current) return;
-    PlatformBridge.hapticFeedback('medium');
+    // Si el gesto fue un arrastre, no abrimos el código.
+    if (dragDistanceRef.current > 8) return;
+    haptic('medium');
     setCodeMode(settings.code);
     setShowQrModal(true);
   };
 
   const openMemberships = (target: string) => {
-    PlatformBridge.hapticFeedback('medium');
+    haptic('medium');
     router.push(target === 'memberships' ? '/memberships' : `/memberships?focus=${encodeURIComponent(target)}`);
   };
 
-  const defaultMembership = memberships.find((m) => m.id === settings.defaultTarget);
-  const directLabel = defaultMembership?.planName || defaultMembership?.businessName || 'Mi membresía';
+  /** A dónde va “Mi Membresía”: la predeterminada o el hub. */
+  const membershipTarget = useMemo(() => {
+    if (settings.defaultTarget === 'memberships') return 'memberships';
+    return memberships.some((m) => m.id === settings.defaultTarget) ? settings.defaultTarget : 'memberships';
+  }, [settings.defaultTarget, memberships]);
 
-  const cardShell = (
-    <div className="flex items-center justify-between w-full relative z-10">
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="text-[10px] font-black uppercase tracking-[1.5px] text-[#E91E63]">
-          {current.kind === 'pass' ? 'RABBITTY PASS' : 'MEMBRESÍA'}
-        </span>
-        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
-          {current.kind === 'pass' ? `Lvl. ${levelName}` : STATUS_LABEL[current.m.status] || current.m.status}
-        </span>
-      </div>
+  const nextSlide = slides[Math.min(slide + 1, slides.length - 1)];
+  const prevSlide = slides[Math.max(slide - 1, 0)];
+  const labelOf = (s: { kind: 'pass' } | { kind: 'membership'; m: PassMembership }) =>
+    s.kind === 'pass' ? 'Rabbitty Pass' : s.m.planName || s.m.businessName || 'Membresía';
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        {slides.length > 1 && (
-          <span className="flex items-center gap-1 mr-1" aria-hidden>
-            {slides.map((_, i) => (
-              <span
-                key={i}
-                className="rounded-full transition-all"
-                style={{
-                  width: i === slide ? 12 : 4,
-                  height: 4,
-                  background: i === slide ? '#E91E63' : isDark ? 'rgba(255,255,255,0.22)' : 'rgba(15,10,20,0.18)',
-                }}
-              />
-            ))}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            PlatformBridge.hapticFeedback('light');
-            setShowSettings(true);
-          }}
-          aria-label="Opciones del Rabbitty Pass"
-          className={`flex h-7 w-7 items-center justify-center rounded-full active:scale-90 transition-transform border ${isDark ? 'border-white/10 text-white/60 bg-white/5' : 'border-slate-900/10 text-slate-500 bg-slate-900/[0.03]'}`}
-        >
-          <Settings2 size={13} />
-        </button>
-      </div>
-    </div>
-  );
+  const collapsedValue =
+    settings.collapsedView === 'balance' ? (
+      <span className="flex items-baseline gap-1">
+        <AnimatedBunz
+          value={bunzBalance}
+          className={`text-sm font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}
+        />
+        <span className="text-[10px] font-black" style={{ color: palette.accent }}>BUNZ</span>
+      </span>
+    ) : settings.collapsedView === 'level' ? (
+      <span className={`text-sm font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>Nivel {levelName}</span>
+    ) : (
+      <span className={`text-sm font-black truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</span>
+    );
+
+  const smallBtn = (extra = '') =>
+    `flex items-center gap-1 rounded-full font-black active:scale-95 transition-transform shrink-0 text-[10.5px] px-2.5 py-1.5 border-none ${extra}`;
 
   return (
     <>
@@ -259,29 +374,29 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        drag={settings.swipe && slides.length > 1 ? 'x' : false}
+        drag={canSwipe ? 'x' : false}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.16}
         dragDirectionLock
+        onPointerDown={() => { dragDistanceRef.current = 0; }}
+        onDrag={(_e, info) => { dragDistanceRef.current = Math.abs(info.offset.x); setDragX(info.offset.x); }}
         onDragEnd={onDragEnd}
         className="w-full relative overflow-hidden rounded-3xl mb-5 cursor-pointer select-none"
         style={{
           transition: 'padding 0.3s ease',
-          padding: isCollapsed && current.kind === 'pass' ? '12px 16px 18px' : '20px 20px 26px',
-          background: isDark
-            ? 'linear-gradient(135deg, #18181B 0%, #111113 45%, #240C1A 100%)'
-            : 'linear-gradient(135deg, #FFFFFF 0%, #FFF5F8 50%, #FFE4EE 100%)',
-          border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(233, 30, 99, 0.15)',
+          padding: isCollapsed && current.kind === 'pass' ? '12px 16px 18px' : '18px 18px 24px',
+          background: isDark ? palette.bgDark : palette.bgLight,
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : `${palette.accent}26`}`,
           boxShadow: isDark
-            ? '0 12px 36px -10px rgba(0, 0, 0, 0.7), 0 0 24px -6px rgba(233, 30, 99, 0.15)'
-            : '0 12px 30px -10px rgba(233, 30, 99, 0.15), 0 4px 12px rgba(0, 0, 0, 0.04)',
+            ? `0 12px 36px -10px rgba(0, 0, 0, 0.7), 0 0 24px -6px ${palette.accent}26`
+            : `0 12px 30px -10px ${palette.accent}26, 0 4px 12px rgba(0, 0, 0, 0.04)`,
         }}
-        onClick={() => { if (!draggedRef.current && current.kind === 'pass') openQr(); }}
+        onClick={() => { if (dragDistanceRef.current <= 8 && current.kind === 'pass') openQr(); }}
       >
-        {/* Halo de marca */}
+        {/* Halo del tema */}
         <div
           className="absolute -right-8 -top-8 w-44 h-44 rounded-full pointer-events-none blur-3xl opacity-30"
-          style={{ background: 'radial-gradient(circle, #E91E63 0%, transparent 70%)' }}
+          style={{ background: `radial-gradient(circle, ${palette.accent} 0%, transparent 70%)` }}
         />
 
         <Image
@@ -293,6 +408,57 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           className="pointer-events-none select-none absolute bottom-0 right-4 sm:right-8 opacity-[0.11] object-contain object-bottom"
         />
 
+        {/* Flechas de swipe: aparecen mientras arrastras */}
+        {canSwipe && (
+          <>
+            <AnimatePresence>
+              {dragX < -12 && slide < slides.length - 1 && (
+                <motion.div
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-30 flex items-center gap-1 rounded-full px-2 py-1 text-[9.5px] font-black uppercase tracking-wide backdrop-blur-md"
+                  style={{ background: isDark ? 'rgba(12,8,18,0.82)' : 'rgba(255,255,255,0.92)', color: palette.accent, border: `1px solid ${palette.accent}66` }}
+                >
+                  {labelOf(nextSlide)}
+                  <ChevronRight size={12} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {dragX > 12 && slide > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-30 flex items-center gap-1 rounded-full px-2 py-1 text-[9.5px] font-black uppercase tracking-wide backdrop-blur-md"
+                  style={{ background: isDark ? 'rgba(12,8,18,0.82)' : 'rgba(255,255,255,0.92)', color: palette.accent, border: `1px solid ${palette.accent}66` }}
+                >
+                  <ChevronLeft size={12} />
+                  {labelOf(prevSlide)}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Insinuación inicial: el contenido se corre solo una vez */}
+            <AnimatePresence>
+              {teachSwipe && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="pointer-events-none absolute inset-y-0 right-0 z-20 w-7"
+                  style={{
+                    background: `linear-gradient(90deg, transparent 0%, ${palette.accent}22 100%)`,
+                    borderRight: `1px solid ${palette.accent}44`,
+                  }}
+                />
+              )}
+            </AnimatePresence>
+          </>
+        )}
+
+        <motion.div animate={teachSwipe ? { x: [0, -14, 0] } : { x: 0 }} transition={{ duration: 0.85, repeat: 1, ease: 'easeInOut' }}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={current.kind === 'pass' ? 'pass' : current.m.id}
@@ -304,40 +470,70 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
           >
             {current.kind === 'pass' ? (
               isCollapsed ? (
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 truncate">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-[#E91E63]">RABBITTY PASS</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: palette.accent }}>RABBITTY PASS</span>
                       <span className={`px-1.5 py-0.2 rounded-full text-[8.5px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
                         Lvl. {levelName}
                       </span>
                     </div>
-                    {settings.collapsedBalance ? (
-                      <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo:</span>
-                        <AnimatedBunz
-                          value={bunzBalance}
-                          className={`text-sm font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}
-                        />
-                        <span className="text-[10px] font-black text-[#E91E63]">BUNZ</span>
-                      </div>
-                    ) : (
-                      <p className={`text-[11px] font-bold m-0 mt-0.5 ${isDark ? 'text-white/50' : 'text-slate-500'}`}>{username}</p>
-                    )}
+                    <div className="mt-0.5 min-w-0">{collapsedValue}</div>
                   </div>
 
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openQr(); }}
-                    className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-[11px] font-black px-3 py-1.5 rounded-full shadow-[0_4px_12px_rgba(233,30,99,0.35)] cursor-pointer border-none shrink-0"
+                    className={smallBtn('text-white shadow-[0_4px_12px_rgba(0,0,0,0.18)]')}
+                    style={{ background: `linear-gradient(135deg, ${palette.from} 0%, ${palette.to} 100%)` }}
                   >
-                    <QrCode size={13} />
+                    <QrCode size={12} />
                     <span>Ver QR</span>
                   </button>
                 </div>
               ) : (
                 <>
-                  <div className="mb-4">{cardShell}</div>
+                  {/* Cabecera: marca + nivel + puntos + engranaje */}
+                  <div className="mb-3 flex items-center justify-between w-full">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-[1.5px]" style={{ color: palette.accent }}>
+                        RABBITTY PASS
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
+                        Lvl. {levelName}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {slides.length > 1 && (
+                        <span className="flex items-center gap-1 mr-1" aria-hidden>
+                          {slides.map((_, i) => (
+                            <span
+                              key={i}
+                              className="rounded-full transition-all"
+                              style={{
+                                width: i === slide ? 12 : 4,
+                                height: 4,
+                                background: i === slide ? palette.accent : isDark ? 'rgba(255,255,255,0.22)' : 'rgba(15,10,20,0.18)',
+                              }}
+                            />
+                          ))}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          haptic('light');
+                          setShowSettings(true);
+                        }}
+                        aria-label="Opciones del Rabbitty Pass"
+                        className={`flex h-7 w-7 items-center justify-center rounded-full active:scale-90 transition-transform border ${isDark ? 'border-white/10 text-white/60 bg-white/5' : 'border-slate-900/10 text-slate-500 bg-slate-900/[0.03]'}`}
+                      >
+                        <Settings2 size={13} />
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="my-2">
                     <span className={`text-[11px] font-bold uppercase tracking-wider block mb-0.5 ${isDark ? 'text-white/45' : 'text-slate-500'}`}>Saldo acumulado</span>
@@ -346,70 +542,90 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                         value={bunzBalance}
                         className={`text-4xl font-black tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}
                       />
-                      <span className="text-lg font-black text-[#E91E63] tracking-wide">BUNZ</span>
+                      <span className="text-lg font-black tracking-wide" style={{ color: palette.accent }}>BUNZ</span>
                     </div>
                   </div>
 
-                  {/* Miembro + Ver QR */}
-                  <div className={`flex items-center justify-between pt-3 border-t mt-3 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
-                    <div className="truncate max-w-50">
-                      <p className={`text-[13px] font-extrabold truncate m-0 ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</p>
-                      <p className={`text-[11px] m-0 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>{username}</p>
-                    </div>
-
+                  {/* Aviso de vencimiento (si hay fecha y está activado) */}
+                  {settings.expiryNotice && expiring && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); openQr(); }}
-                      className="flex items-center gap-1.5 bg-[#E91E63] hover:bg-[#D81B60] active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-full shadow-[0_4px_14px_rgba(233,30,99,0.35)] transition-all cursor-pointer border-none"
+                      onClick={(e) => { e.stopPropagation(); openMemberships(expiring.m.id); }}
+                      className="mb-2 flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left active:scale-[0.99] transition-transform"
+                      style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)' }}
                     >
-                      <QrCode size={14} />
-                      <span>Ver QR</span>
-                      <ChevronRight size={12} />
-                    </button>
-                  </div>
-
-                  {/* Accesos: hub de membresías y, si hay, la predeterminada */}
-                  <div
-                    className={`mt-3 grid gap-2 ${memberships.length > 0 && settings.showDirect ? 'grid-cols-2' : 'grid-cols-1'}`}
-                  >
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); openMemberships('memberships'); }}
-                      className={`flex items-center justify-between gap-1.5 rounded-2xl px-3 py-2.5 text-left active:scale-[0.98] transition-transform border ${isDark ? 'border-white/10 bg-white/5' : 'border-slate-900/10 bg-white/70'}`}
-                    >
-                      <span className="flex items-center gap-1.5 min-w-0">
-                        <Ticket size={13} className="text-[#E91E63] shrink-0" />
-                        <span className={`text-[11.5px] font-black truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                          Membresías
-                        </span>
+                      <span className="text-[11px]">⏳</span>
+                      <span className="min-w-0 flex-1 truncate text-[10.5px] font-bold text-amber-500">
+                        {expiring.m.planName || expiring.m.businessName}: {expiring.days === 0 ? 'vence hoy' : `vence en ${expiring.days} día${expiring.days === 1 ? '' : 's'}`}
                       </span>
-                      <ArrowRight size={12} className={isDark ? 'text-white/35' : 'text-slate-400'} />
+                      <ArrowRight size={11} className="text-amber-500 shrink-0" />
                     </button>
+                  )}
 
-                    {memberships.length > 0 && settings.showDirect && (
+                  {/* Miembro + acciones en línea */}
+                  <div className={`flex items-center justify-between gap-2 pt-3 border-t mt-2 ${isDark ? 'border-white/10' : 'border-slate-200'}`}>
+                    <div className="truncate min-w-0">
+                      <p className={`text-[13px] font-extrabold truncate m-0 ${isDark ? 'text-white' : 'text-slate-900'}`}>{memberName}</p>
+                      <p className={`text-[10.5px] m-0 ${isDark ? 'text-white/40' : 'text-slate-500'}`}>{username}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openMemberships(settings.defaultTarget); }}
-                        className={`flex items-center justify-between gap-1.5 rounded-2xl px-3 py-2.5 text-left active:scale-[0.98] transition-transform border ${isDark ? 'border-white/10 bg-white/5' : 'border-slate-900/10 bg-white/70'}`}
+                        onClick={(e) => { e.stopPropagation(); openMemberships(membershipTarget); }}
+                        className={smallBtn(isDark ? 'text-white bg-white/8 border border-white/12' : 'text-slate-900 bg-white/80 border border-slate-900/10')}
                       >
-                        <span className="flex items-center gap-1.5 min-w-0">
-                          {defaultMembership?.businessLogoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={defaultMembership.businessLogoUrl} alt="" className="h-4 w-4 rounded object-cover shrink-0" />
-                          ) : (
-                            <Sparkles size={13} className="text-[#E91E63] shrink-0" />
-                          )}
-                          <span className={`text-[11.5px] font-black truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{directLabel}</span>
-                        </span>
-                        <ArrowRight size={12} className={isDark ? 'text-white/35' : 'text-slate-400'} />
+                        <Ticket size={12} style={{ color: palette.accent }} />
+                        <span>Mi Membresía</span>
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openQr(); }}
+                        className={smallBtn('text-white')}
+                        style={{ background: `linear-gradient(135deg, ${palette.from} 0%, ${palette.to} 100%)`, boxShadow: `0 4px 12px ${palette.accent}40` }}
+                      >
+                        <QrCode size={12} />
+                        <span>Ver QR</span>
+                      </button>
+                    </div>
                   </div>
                 </>
               )
             ) : (
               <>
-                <div className="mb-4">{cardShell}</div>
+                <div className="mb-3 flex items-center justify-between w-full">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[10px] font-black uppercase tracking-[1.5px]" style={{ color: palette.accent }}>MEMBRESÍA</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
+                      {STATUS_LABEL[current.m.status] || current.m.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {slides.length > 1 && (
+                      <span className="flex items-center gap-1 mr-1" aria-hidden>
+                        {slides.map((_, i) => (
+                          <span
+                            key={i}
+                            className="rounded-full transition-all"
+                            style={{
+                              width: i === slide ? 12 : 4,
+                              height: 4,
+                              background: i === slide ? palette.accent : isDark ? 'rgba(255,255,255,0.22)' : 'rgba(15,10,20,0.18)',
+                            }}
+                          />
+                        ))}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); haptic('light'); setShowSettings(true); }}
+                      aria-label="Opciones del Rabbitty Pass"
+                      className={`flex h-7 w-7 items-center justify-center rounded-full active:scale-90 transition-transform border ${isDark ? 'border-white/10 text-white/60 bg-white/5' : 'border-slate-900/10 text-slate-500 bg-slate-900/[0.03]'}`}
+                    >
+                      <Settings2 size={13} />
+                    </button>
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-3">
                   <div
@@ -446,7 +662,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openMemberships(current.m.id); }}
                     className="rounded-2xl py-2.5 text-[11.5px] font-black text-white active:scale-[0.98] transition-transform"
-                    style={{ background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)' }}
+                    style={{ background: `linear-gradient(135deg, ${palette.from} 0%, ${palette.to} 100%)` }}
                   >
                     Abrir membresía
                   </button>
@@ -454,8 +670,8 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      updateSettings({ defaultTarget: current.m.id, showDirect: true });
-                      PlatformBridge.hapticFeedback('success');
+                      updateSettings({ defaultTarget: current.m.id });
+                      haptic('success');
                     }}
                     className={`rounded-2xl py-2.5 text-[11.5px] font-black active:scale-[0.98] transition-transform border ${isDark ? 'border-white/12 bg-white/5 text-white' : 'border-slate-900/10 bg-white/70 text-slate-900'}`}
                   >
@@ -466,6 +682,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
             )}
           </motion.div>
         </AnimatePresence>
+        </motion.div>
 
         {/* Pill triangular para comprimir/expandir (solo en el pase) */}
         {current.kind === 'pass' && (
@@ -481,7 +698,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
               className="flex items-center justify-center px-3.5 py-0.5 rounded-t-lg transition-transform active:scale-90"
               style={{
                 background: isDark ? 'rgba(36, 36, 44, 0.95)' : 'rgba(255, 235, 242, 0.95)',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(233, 30, 99, 0.25)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : `1px solid ${palette.accent}40`,
                 borderBottom: 'none',
                 boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.15)',
               }}
@@ -493,7 +710,13 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                 fill="none"
                 style={{ transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s ease' }}
               >
-                <path d="M1 1L5 5L9 1" stroke="#E91E63" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M1 1L5 5L9 1"
+                  stroke={palette.accent}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </div>
           </button>
@@ -509,7 +732,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-10000 bg-black/85 backdrop-blur-xl flex flex-col items-center justify-center p-5 select-none"
-              onClick={() => { setShowQrModal(false); PlatformBridge.hapticFeedback('light'); }}
+              onClick={() => { setShowQrModal(false); haptic('light'); }}
             >
               <motion.div
                 initial={{ scale: 0.9, y: 20 }}
@@ -520,7 +743,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  onClick={() => { setShowQrModal(false); PlatformBridge.hapticFeedback('light'); }}
+                  onClick={() => { setShowQrModal(false); haptic('light'); }}
                   aria-label="Cerrar"
                   className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white/70 active:scale-90 transition-transform cursor-pointer"
                 >
@@ -528,7 +751,10 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                 </button>
 
                 <div className="text-center mb-3">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E91E63]/15 text-[#E91E63] text-[10px] font-black uppercase tracking-[1.5px] border border-[#E91E63]/30 mb-2">
+                  <div
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[1.5px] border mb-2"
+                    style={{ color: palette.accent, borderColor: `${palette.accent}4d`, background: `${palette.accent}26` }}
+                  >
                     <ShieldCheck size={12} /> Membresía Oficial
                   </div>
                   <h3 className="text-xl font-black text-white m-0">
@@ -546,12 +772,12 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                     <div
                       className="w-full max-w-[248px] rounded-[26px] p-3"
                       style={{
-                        background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFFFF 55%, #FFE6F0 100%)',
-                        border: '1px solid rgba(233,30,99,0.30)',
-                        boxShadow: '0 18px 40px -22px rgba(233,30,99,0.9)',
+                        background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFFFF 55%, #FFF0F6 100%)',
+                        border: `1px solid ${palette.accent}4d`,
+                        boxShadow: `0 18px 40px -22px ${palette.accent}`,
                       }}
                     >
-                      <BrandQR value={qrValue} size={224} />
+                      <BrandQR value={qrValue} size={224} from={palette.from} to={palette.to} />
                     </div>
                   ) : (
                     <RabbittyCode
@@ -570,14 +796,15 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                 </div>
 
                 <button
-                    type="button"
-                    onClick={() => {
-                      PlatformBridge.hapticFeedback('light');
-                      setCodeMode(codeMode === 'standard' ? 'neon' : 'standard');
-                    }}
-                    className="mt-3 text-[11px] font-black text-[#E91E63] underline-offset-4 hover:underline"
-                  >
-                    {codeMode === 'standard' ? 'Ver mi Rabbitty Code (neón)' : 'Volver al QR estándar'}
+                  type="button"
+                  onClick={() => {
+                    haptic('light');
+                    setCodeMode(codeMode === 'standard' ? 'neon' : 'standard');
+                  }}
+                  className="mt-3 text-[11px] font-black underline-offset-4 hover:underline"
+                  style={{ color: palette.accent }}
+                >
+                  {codeMode === 'standard' ? 'Ver mi Rabbitty Code (neón)' : 'Volver al QR estándar'}
                 </button>
               </motion.div>
             </motion.div>
@@ -637,62 +864,97 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => { PlatformBridge.hapticFeedback('light'); updateSettings({ code: opt.id }); }}
+                      onClick={() => { haptic('light'); updateSettings({ code: opt.id }); }}
                       className="rounded-2xl px-3 py-2.5 text-left active:scale-[0.98] transition-transform"
                       style={{
-                        background: settings.code === opt.id ? 'rgba(233,30,99,0.14)' : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,10,20,0.04)',
-                        border: `1px solid ${settings.code === opt.id ? 'rgba(233,30,99,0.45)' : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,10,20,0.08)'}`,
+                        background: settings.code === opt.id ? `${palette.accent}24` : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,10,20,0.04)',
+                        border: `1px solid ${settings.code === opt.id ? `${palette.accent}73` : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,10,20,0.08)'}`,
                       }}
                     >
                       <span className="flex items-center justify-between">
                         <span className="text-[12px] font-black" style={{ color: 'var(--text-primary)' }}>{opt.label}</span>
-                        {settings.code === opt.id && <Check size={14} className="text-[#E91E63]" />}
+                        {settings.code === opt.id && <Check size={14} style={{ color: palette.accent }} />}
                       </span>
                       <span className="mt-0.5 block text-[10px]" style={{ color: 'var(--text-muted)' }}>{opt.hint}</span>
                     </button>
                   ))}
                 </div>
 
-                {/* Acceso directo */}
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="m-0 text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Acceso directo</p>
-                  <button
-                    type="button"
-                    onClick={() => { PlatformBridge.hapticFeedback('light'); updateSettings({ showDirect: !settings.showDirect }); }}
-                    role="switch"
-                    aria-checked={settings.showDirect}
-                    className="relative h-6 w-11 rounded-full transition-colors"
-                    style={{ background: settings.showDirect ? '#E91E63' : isDark ? 'rgba(255,255,255,0.14)' : 'rgba(15,10,20,0.12)' }}
-                  >
-                    <span
-                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform"
-                      style={{ left: 2, transform: settings.showDirect ? 'translateX(20px)' : 'translateX(0)' }}
-                    />
-                  </button>
+                {/* Tema del pass */}
+                <p className="m-0 mb-2 text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Tema del Pass</p>
+                <div className="mb-4 flex items-center gap-2">
+                  {THEME_IDS.map((id) => {
+                    const t = PASS_THEMES[id];
+                    const active = settings.theme === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => { haptic('light'); updateSettings({ theme: id }); }}
+                        aria-label={`Tema ${t.label}`}
+                        className="flex h-9 w-9 items-center justify-center rounded-full active:scale-90 transition-transform"
+                        style={{
+                          background: `linear-gradient(135deg, ${t.from} 0%, ${t.to} 100%)`,
+                          border: active ? `2px solid ${isDark ? '#fff' : '#0f0a14'}` : '2px solid transparent',
+                          boxShadow: active ? `0 0 0 2px ${t.accent}55` : 'none',
+                        }}
+                      >
+                        {active && <Check size={14} className="text-white" />}
+                      </button>
+                    );
+                  })}
+                  <span className="ml-1 text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>{PASS_THEMES[settings.theme].label}</span>
                 </div>
+
+                {/* Membresía predeterminada */}
+                <p className="m-0 mb-2 text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Membresía predeterminada</p>
                 <p className="m-0 mb-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  Qué abre el botón de membresía en el pase.
+                  Es la que abre “Mi Membresía” en el pase.
                 </p>
                 <div className="mb-4 flex flex-col gap-1.5">
-                  {[{ id: 'memberships', label: 'Rabbitty Memberships (hub)' },
+                  {[{ id: 'memberships', label: 'Rabbitty Memberships (todas)' },
                     ...memberships.map((m) => ({ id: m.id, label: m.planName || m.businessName || 'Membresía' }))].map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => { PlatformBridge.hapticFeedback('light'); updateSettings({ defaultTarget: opt.id, showDirect: true }); }}
+                      onClick={() => { haptic('light'); updateSettings({ defaultTarget: opt.id }); }}
                       className="flex items-center justify-between rounded-xl px-3 py-2 active:scale-[0.99] transition-transform"
                       style={{
-                        background: settings.defaultTarget === opt.id ? 'rgba(233,30,99,0.12)' : 'transparent',
-                        border: `1px solid ${settings.defaultTarget === opt.id ? 'rgba(233,30,99,0.35)' : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,10,20,0.06)'}`,
+                        background: settings.defaultTarget === opt.id ? `${palette.accent}1f` : 'transparent',
+                        border: `1px solid ${settings.defaultTarget === opt.id ? `${palette.accent}59` : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,10,20,0.06)'}`,
                       }}
                     >
                       <span className="truncate text-[12px] font-bold" style={{ color: 'var(--text-primary)' }}>{opt.label}</span>
-                      {settings.defaultTarget === opt.id && <Check size={14} className="text-[#E91E63] shrink-0" />}
+                      {settings.defaultTarget === opt.id && <Check size={14} style={{ color: palette.accent }} className="shrink-0" />}
                     </button>
                   ))}
                 </div>
 
-                {/* Swipe */}
+                {/* Tarjeta comprimida */}
+                <p className="m-0 mb-2 text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>Tarjeta comprimida</p>
+                <div className="mb-4 grid grid-cols-3 gap-1.5">
+                  {([
+                    { id: 'balance' as const, label: 'Saldo' },
+                    { id: 'level' as const, label: 'Nivel' },
+                    { id: 'name' as const, label: 'Nombre' },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => { haptic('light'); updateSettings({ collapsedView: opt.id }); }}
+                      className="rounded-xl py-2 text-[11.5px] font-black active:scale-[0.98] transition-transform"
+                      style={{
+                        background: settings.collapsedView === opt.id ? `${palette.accent}24` : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(15,10,20,0.04)',
+                        border: `1px solid ${settings.collapsedView === opt.id ? `${palette.accent}73` : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(15,10,20,0.08)'}`,
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Interruptores */}
                 <SettingRow
                   isDark={isDark}
                   title="Deslizar entre tarjetas"
@@ -700,14 +962,35 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                   value={settings.swipe}
                   onChange={(v) => updateSettings({ swipe: v })}
                 />
-
-                {/* Saldo comprimido */}
                 <SettingRow
                   isDark={isDark}
-                  title="Saldo con la tarjeta comprimida"
-                  hint="Si se apaga, muestra tu usuario"
-                  value={settings.collapsedBalance}
-                  onChange={(v) => updateSettings({ collapsedBalance: v })}
+                  title="Solo membresías activas"
+                  hint="Oculta vencidas y en gracia"
+                  value={settings.activeOnly}
+                  onChange={(v) => updateSettings({ activeOnly: v })}
+                />
+                <SettingRow
+                  isDark={isDark}
+                  title="Pantalla encendida"
+                  hint="Mientras se muestra el código"
+                  value={settings.wakeLock}
+                  onChange={(v) => updateSettings({ wakeLock: v })}
+                />
+                {expiring && (
+                  <SettingRow
+                    isDark={isDark}
+                    title="Aviso de vencimiento"
+                    hint={`${expiring.m.planName || 'Membresía'} vence en ${expiring.days} día${expiring.days === 1 ? '' : 's'}`}
+                    value={settings.expiryNotice}
+                    onChange={(v) => updateSettings({ expiryNotice: v })}
+                  />
+                )}
+                <SettingRow
+                  isDark={isDark}
+                  title="Hápticos del pase"
+                  hint="Vibración al deslizar y abrir"
+                  value={settings.haptics}
+                  onChange={(v) => updateSettings({ haptics: v })}
                 />
               </motion.div>
             </motion.div>
@@ -740,7 +1023,7 @@ function SettingRow({
       </div>
       <button
         type="button"
-        onClick={() => { PlatformBridge.hapticFeedback('light'); onChange(!value); }}
+        onClick={() => onChange(!value)}
         role="switch"
         aria-checked={value}
         className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
