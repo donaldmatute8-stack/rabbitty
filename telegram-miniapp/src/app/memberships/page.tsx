@@ -467,7 +467,7 @@ export default function MembershipsPage() {
 
             {/* Contenido desplazable; el wrapper con my-auto centra cuando cabe */}
             <div className="relative h-full overflow-y-auto overscroll-contain">
-              <div className="min-h-full flex flex-col items-center px-4 pt-20 pb-[max(2rem,env(safe-area-inset-bottom))]">
+              <div className="min-h-full flex flex-col items-center px-4 pt-16 pb-[calc(env(safe-area-inset-bottom)+140px)]">
                 <div className="flex w-full flex-col items-center">
               <motion.div
                 drag="y"
@@ -486,11 +486,14 @@ export default function MembershipsPage() {
                 className="w-[min(82vw,370px)]"
               >
                 <div
-                  className="mb-2 flex cursor-grab touch-none justify-center px-8 py-1 active:cursor-grabbing"
+                  className="mb-2 flex cursor-grab touch-none justify-center px-8 py-2 active:cursor-grabbing"
                   onPointerDown={(e) => dragControls.start(e)}
                 >
-                  <span className="h-1 w-10 rounded-full bg-white/25" />
+                  <span className="h-1.5 w-12 rounded-full bg-white/30" />
                 </div>
+                {/* También se puede arrastrar desde la tarjeta (un toque sigue
+                    volteándola; el arrastre cancela el tap). */}
+                <div onPointerDown={(e) => dragControls.start(e)} className="touch-none">
                 <MembershipCard
                   data={activeCard}
                   flipped={flipped}
@@ -505,6 +508,7 @@ export default function MembershipsPage() {
                     )
                   }
                 />
+                </div>
               </motion.div>
 
               <button

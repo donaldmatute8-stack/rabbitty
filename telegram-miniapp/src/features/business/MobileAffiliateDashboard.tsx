@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2, Zap } from 'lucide-react';
+import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2, Zap, Megaphone, ChevronRight } from 'lucide-react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import QRDiscovery from '@/components/QRDiscovery';
 import { PlatformBridge } from '@/lib/platform';
@@ -187,6 +187,22 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
     };
   }, [business?.id]);
 
+  // ── Novedades para afiliados (comunicados oficiales de la plataforma) ──
+  const [updates, setUpdates] = useState<{ unread: number; items: Array<{ deliveryId: string; title: string; createdAt: string; readAt?: string | null }> }>({ unread: 0, items: [] });
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch('/api/chat/bunzy-comunicados?audience=business', { headers });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (alive) setUpdates({ unread: Number(data.unread || 0), items: (data.items || []).slice(0, 3) });
+      } catch { /* silencioso: no bloquea el dashboard */ }
+    })();
+    return () => { alive = false; };
+  }, [business?.id]);
+
   const handleReservationStatus = async (id: string, status: string) => {
     try {
       const headers = await PlatformBridge.getAuthHeaders();
@@ -224,7 +240,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           }}
           aria-label="Volver"
           className="absolute top-4 left-4 w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+          style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
         >
           <ArrowLeft size={18} />
         </button>
@@ -270,7 +286,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           aria-label="Volver"
           className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer border-none shrink-0"
           style={{
-            background: 'var(--bg-elevated)',
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
             border: '1px solid var(--border-subtle)',
             color: 'var(--text-primary)',
             boxShadow: 'var(--shadow-sm)',
@@ -285,7 +301,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         <div 
           className="flex items-center gap-2 px-3 py-1.5 rounded-full max-w-55"
           style={{
-            background: 'var(--bg-elevated)',
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-sm)',
           }}
@@ -310,7 +326,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           aria-label="Código QR"
           className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-transform cursor-pointer border-none shrink-0"
           style={{
-            background: 'var(--bg-elevated)',
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
             border: '1px solid var(--border-subtle)',
             color: '#E91E63',
             boxShadow: 'var(--shadow-sm)',
@@ -321,6 +337,42 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
       </div>
 
       <div className="px-4 pt-4 max-w-xl mx-auto">
+        {/* ── Novedades (solo afiliados) ── */}
+        {(updates.unread > 0 || updates.items.length > 0) && (
+          <button
+            onClick={() => {
+              PlatformBridge.hapticFeedback('light');
+              router.push('/comunicados?audience=business');
+            }}
+            className="w-full text-left mb-4 rounded-2xl p-4 active:scale-[0.99] transition-transform cursor-pointer"
+            style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-sm)' }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                <Megaphone size={14} className="text-[#E91E63]" /> Novedades
+              </span>
+              <span className="flex items-center gap-1">
+                {updates.unread > 0 && (
+                  <span className="rounded-full bg-[#E91E63] px-2 py-0.5 text-[10px] font-black text-white">
+                    {updates.unread}
+                  </span>
+                )}
+                <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+              </span>
+            </div>
+            {updates.items.slice(0, 2).map((u) => (
+              <p key={u.deliveryId} className="m-0 text-[12px] font-bold leading-snug truncate" style={{ color: 'var(--text-primary)' }}>
+                {u.readAt ? '' : '• '}{u.title}
+              </p>
+            ))}
+            {updates.items.length === 0 && (
+              <p className="m-0 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                Sin novedades por ahora.
+              </p>
+            )}
+          </button>
+        )}
+
         {/* Metric Cards */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -329,7 +381,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           <div 
             className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
-              background: 'var(--bg-elevated)', 
+              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
@@ -340,7 +392,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           <div 
             className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
-              background: 'var(--bg-elevated)', 
+              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
@@ -351,7 +403,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           <div 
             className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
-              background: 'var(--bg-elevated)', 
+              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
@@ -362,7 +414,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           <div 
             className="rounded-2xl p-2.5 text-center transition-all"
             style={{ 
-              background: 'var(--bg-elevated)', 
+              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
               border: '1px solid var(--border-subtle)',
               boxShadow: 'var(--shadow-sm)'
             }}
@@ -438,7 +490,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
           className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
           style={{
-            background: 'var(--bg-elevated)',
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-sm)',
           }}
@@ -500,7 +552,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="rounded-2xl p-4 mb-4"
           style={{ 
-            background: 'var(--bg-elevated)', 
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-sm)'
           }}
@@ -549,7 +601,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="rounded-2xl p-4 mb-4"
           style={{ 
-            background: 'var(--bg-elevated)', 
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-sm)'
           }}
@@ -596,7 +648,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
           className="rounded-2xl p-4 mb-4"
           style={{ 
-            background: 'var(--bg-elevated)', 
+            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-sm)'
           }}
@@ -842,7 +894,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                   aria-label="Cerrar modal"
                   className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer border-none"
                   style={{
-                    background: 'var(--bg-elevated)',
+                    background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
                     border: '1px solid var(--border-subtle)',
                     color: 'var(--text-secondary)'
                   }}
@@ -875,7 +927,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                       {loadingCampaigns ? (
                         <div className="p-6 text-center text-xs text-(--text-muted)">Analizando señales de consumo...</div>
                       ) : growthSignals.length === 0 ? (
-                        <div className="p-4 rounded-2xl text-center text-xs text-(--text-muted)" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="p-4 rounded-2xl text-center text-xs text-(--text-muted)" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                           No hay señales críticas hoy. ¡Tus clientes están acudiendo con normalidad!
                         </div>
                       ) : (
@@ -883,7 +935,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                           <div 
                             key={sig.id}
                             className="p-4 rounded-2xl space-y-3"
-                            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                            style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
@@ -938,7 +990,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                       </div>
 
                       {affiliateCampaigns.length === 0 ? (
-                        <div className="p-4 rounded-2xl text-center text-xs text-(--text-muted)" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="p-4 rounded-2xl text-center text-xs text-(--text-muted)" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                           Aún no has creado campañas comerciales. Pídele a Bunzy en el chat: &ldquo;Quiero crear una campaña de reactivación&rdquo;.
                         </div>
                       ) : (
@@ -946,7 +998,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                           <div 
                             key={camp.id}
                             className="p-4 rounded-2xl space-y-2.5"
-                            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                            style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}
                           >
                             <div className="flex items-center justify-between">
                               <h4 className="text-sm font-black text-(--text-primary) m-0 truncate pr-2">{camp.title}</h4>
@@ -1013,7 +1065,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                 {activeSubTab === 'analytics' && (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                         <p className="text-[11px] font-bold text-(--text-muted) uppercase m-0">Ticket Promedio</p>
                         <p className="text-2xl font-black text-[#E91E63] m-0 mt-1">
                           ${txCount > 0 ? (totalBunz / txCount * 10).toFixed(0) : 0} <span className="text-xs font-bold text-(--text-muted)">MXN</span>
@@ -1021,7 +1073,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                         <p className="text-[10px] text-(--text-muted) m-0 mt-1">Por visita registrada</p>
                       </div>
 
-                      <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                         <p className="text-[11px] font-bold text-(--text-muted) uppercase m-0">Retorno de Visita</p>
                         <p className="text-2xl font-black text-emerald-400 m-0 mt-1">
                           {clientCount > 0 ? (txCount / clientCount).toFixed(1) : 0}x
@@ -1030,7 +1082,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                       <h4 className="text-xs font-black uppercase text-(--text-muted) m-0 tracking-wider">Desglose de Operaciones</h4>
                       <div className="flex justify-between items-center py-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         <span className="text-xs text-(--text-secondary)">Total Bunz Distribuidos</span>
@@ -1047,7 +1099,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                     </div>
 
                     {/* Telemetría y Métricas Sociales del Comercio (Hops, Madriguera, Shares) */}
-                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="p-4 rounded-2xl space-y-3" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-black uppercase text-pink-400 m-0 tracking-wider">Descubrimiento & Tracción Social</h4>
                         <span className="text-[10px] font-mono text-zinc-400">En vivo</span>
@@ -1093,14 +1145,14 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                     ) : (
                       <>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="p-3.5 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                             <p className="text-[10px] uppercase font-bold text-(--text-muted) m-0">Bunz Otorgados</p>
                             <p className="text-lg font-black text-rose-400 m-0 mt-0.5">
                               -{ledgerData?.audit.totalRewarded.toLocaleString() || 0} B
                             </p>
                             <p className="text-[10px] text-(--text-muted) m-0 mt-0.5">{ledgerData?.audit.countRewarded || 0} emisiones</p>
                           </div>
-                          <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="p-3.5 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                             <p className="text-[10px] uppercase font-bold text-(--text-muted) m-0">Bunz Canjeados</p>
                             <p className="text-lg font-black text-emerald-400 m-0 mt-0.5">
                               +{ledgerData?.audit.totalRedeemed.toLocaleString() || 0} B
@@ -1109,7 +1161,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                           </div>
                         </div>
 
-                        <div className="p-4 rounded-2xl space-y-2" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="p-4 rounded-2xl space-y-2" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                           <div className="flex justify-between items-center">
                             <span className="text-xs text-(--text-secondary)">Balance Inventario:</span>
                             <span className="text-xs font-black text-(--text-primary)">
@@ -1138,7 +1190,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                                 <div
                                   key={row.id}
                                   className="flex items-center justify-between p-3 rounded-xl text-xs"
-                                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                                  style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}
                                 >
                                   <div className="min-w-0 pr-2">
                                     <p className="font-bold text-(--text-primary) m-0 truncate">
@@ -1181,7 +1233,7 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                           <div 
                             key={i} 
                             className="flex justify-between items-center p-3.5 rounded-2xl text-xs" 
-                            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                            style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}
                           >
                             <div>
                               <p className="font-bold text-(--text-primary) m-0 text-sm">
@@ -1200,19 +1252,19 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
                 {/* SUBTAB: SETTINGS */}
                 {activeSubTab === 'settings' && (
                   <div className="space-y-3">
-                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                       <p className="font-bold text-xs uppercase text-(--text-muted) m-0 mb-1">Horario de Operación / Happy Hour</p>
                       <p className="text-sm font-black text-(--text-primary) m-0">
                         {business?.startTime || '00:00'} - {business?.endTime || '23:59'}
                       </p>
                     </div>
-                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                       <p className="font-bold text-xs uppercase text-(--text-muted) m-0 mb-1">Dirección de la Sucursal</p>
                       <p className="text-sm font-semibold text-(--text-primary) m-0">
                         {business?.address || 'Sin dirección registrada'}
                       </p>
                     </div>
-                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="p-4 rounded-2xl" style={{ background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', border: '1px solid var(--border-subtle)' }}>
                       <p className="font-bold text-xs uppercase text-(--text-muted) m-0 mb-1">Estado de Afiliación</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1235,10 +1287,26 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         >
           <div className="flex flex-col items-center animate-in fade-in zoom-in duration-200">
             <QRDiscovery value={`rc:${business?.scanCode ?? ''}`} variant="affiliate" size={220} revealMode="discovery" surfaceKey="biz-portal" />
-            <p className="text-white/80 font-bold text-sm mt-6 bg-white/10 backdrop-blur-md px-6 py-2 rounded-full border border-white/10">
-              Escanea para registrar consumo
+
+            {/* Esto era un <p> que parecía botón y no hacía nada. Ahora es la
+                acción real: abrir el escáner del negocio. */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                PlatformBridge.hapticFeedback('medium');
+                setShowCodeModal(false);
+                router.push('/business/scan');
+              }}
+              className="mt-6 flex items-center gap-2 rounded-full border border-white/20 bg-white/15 px-6 py-2.5 text-sm font-black text-white backdrop-blur-md active:scale-95 transition-transform cursor-pointer"
+            >
+              <QrCode size={16} /> Escanear un consumo
+            </button>
+
+            <p className="mt-3 max-w-[240px] text-center text-[11px] leading-snug text-white/50">
+              O muestra este código al cliente para que te identifique en su app.
             </p>
-            <p className="text-white/40 text-xs mt-2">Toca en cualquier lugar para cerrar</p>
+            <p className="mt-2 text-[11px] text-white/35">Toca fuera para cerrar</p>
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ import {
   chatEventOutbox,
   conversations,
   messages,
+  notificationsOutbox,
   ownedBusinesses,
   users,
 } from "@rabbitty/database-core";
@@ -497,6 +498,49 @@ async function deliverOne(
             updatedAt: new Date(),
           },
         });
+
+      // ── Push a los dispositivos del destinatario (ambas apps) ──
+      // El fan-out del outbox manda a TODOS sus dispositivos activos, así que
+      // llega igual a la app del cliente y a la app del POS/admin si el dueño
+      // tiene sesión ahí.
+      try {
+        const pushUserId =
+          recipient.type === "USER"
+            ? recipient.id
+            : (
+                await tx
+                  .select({ ownerId: ownedBusinesses.ownerId })
+                  .from(ownedBusinesses)
+                  .where(eq(ownedBusinesses.id, recipient.id))
+                  .limit(1)
+              )[0]?.ownerId ?? null;
+
+        if (pushUserId) {
+          const isAffiliateScope = broadcast.audienceScope === "BUSINESS" || broadcast.audienceScope === "ALL_AFFILIATES";
+          await tx
+            .insert(notificationsOutbox)
+            .values({
+              userId: pushUserId,
+              type: "BUNZY_BROADCAST",
+              title: broadcast.title,
+              message: String(broadcast.body || "").slice(0, 180),
+              // La app del negocio abre la bandeja de comunicados de afiliados.
+              route: isAffiliateScope ? "/comunicados?audience=business" : "/comunicados?audience=user",
+              data: {
+                broadcastId: broadcast.id,
+                deliveryId,
+                category: broadcast.category,
+                adminRoute: "/",
+              },
+              dedupeKey: `broadcast-${broadcast.id}-${pushUserId}`,
+              priority: broadcast.category === "SYSTEM" ? "high" : "normal",
+            })
+            .onConflictDoNothing();
+        }
+      } catch (pushErr) {
+        // Nunca romper la publicación por el push: la entrega in-app ya quedó.
+        console.error("[BUNZY_PUSH]", pushErr);
+      }
 
       await tx
         .insert(chatEventOutbox)

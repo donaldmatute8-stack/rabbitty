@@ -367,6 +367,18 @@ export const PlatformBridge = {
           });
         }
 
+        // Al volver a la app, limpiar los avisos ya entregados: si no, el icono
+        // de Apple sigue mostrando notificaciones que ya no aplican.
+        void (async () => {
+          try {
+            const { App } = await import('@capacitor/app');
+            await PushNotifications.removeAllDeliveredNotifications();
+            App.addListener('appStateChange', ({ isActive }) => {
+              if (isActive) void PushNotifications.removeAllDeliveredNotifications();
+            });
+          } catch { /* plugin no disponible en web */ }
+        })();
+
         // Kick off registration AFTER listeners are attached, otherwise the
         // 'registration' event can fire before we are listening and the token
         // would be dropped.

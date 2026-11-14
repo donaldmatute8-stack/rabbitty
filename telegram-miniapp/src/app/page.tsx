@@ -1135,7 +1135,7 @@ export default function FeedPage() {
               className="relative w-8 h-8 rounded-full flex items-center justify-center active:scale-95 transition-transform" 
               style={{ background: 'var(--bg-pressed)' }}
             >
-              <Bell size={16} strokeWidth={2.3} style={{ color: 'var(--text-primary)' }} />
+              <Bell size={18} strokeWidth={2.5} style={{ color: 'var(--text-primary)' }} />
               <div className="absolute top-1.5 right-1.75 w-1.25 h-1.25 bg-[#E91E63] rounded-full" />
             </Link>
 

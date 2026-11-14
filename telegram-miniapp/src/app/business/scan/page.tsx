@@ -122,7 +122,7 @@ export default function BusinessScanPage() {
       // Se sondea la captura: el endpoint responde 409 mientras no apruebe.
       const started = Date.now();
       const timer = setInterval(async () => {
-        if (Date.now() - started > 5 * 60_000) {
+        if (Date.now() - started > 10 * 60_000) {
           clearInterval(timer);
           setChargeStage("idle");
           toast.error("La solicitud expiró. Vuelve a intentar.");

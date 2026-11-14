@@ -51,7 +51,7 @@ export default function BunzyLaunchOverlay() {
           }}
         >
           <motion.img
-            src="/logo_conejo.png"
+            src="/bunzy-avatar.png"
             alt="Bunzy"
             initial={{ scale: 0.6, y: 24, opacity: 0 }}
             animate={{ scale: [0.6, 1.12, 1], y: [24, -8, 0], opacity: 1 }}
@@ -65,7 +65,15 @@ export default function BunzyLaunchOverlay() {
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
           >
             <span style={{ fontSize: 15, fontWeight: 900, color: '#fff', letterSpacing: '-0.2px' }}>Abriendo Bunzy…</span>
-            <RabbittyContourLoader size={44} label="" />
+            {/* Un solo logo: antes convivían la imagen y este loader (doble). */}
+            <div className="mt-1 h-1 w-24 overflow-hidden rounded-full bg-white/10">
+              <motion.div
+                className="h-full w-1/3 rounded-full"
+                style={{ background: 'linear-gradient(90deg,#E91E63,#8B5CF6)' }}
+                animate={{ x: ['-100%', '300%'] }}
+                transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+              />
+            </div>
           </motion.div>
         </motion.div>
       )}

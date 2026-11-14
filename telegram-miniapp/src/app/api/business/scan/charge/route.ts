@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
       businessName: business.name,
       status: "PENDING",
       orderId: order.id,
-      expiresAt: new Date(Date.now() + 5 * 60_000),
+      expiresAt: new Date(Date.now() + 10 * 60_000),
     })
     .returning({ id: posChargeRequests.id });
   if (!approval) return NextResponse.json({ error: "No se pudo pedir la aprobación" }, { status: 500 });
@@ -182,6 +182,6 @@ export async function POST(req: NextRequest) {
     amount: total,
     balance,
     customerName: customer.name ?? customer.username ?? "Rabbitter",
-    expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
   });
 }

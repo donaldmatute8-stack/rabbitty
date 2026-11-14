@@ -6,24 +6,20 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { 
   Crosshair, Mic, MicOff, Sparkles, Navigation, 
-  Flame, Gift, Compass, X 
+  Flame, Gift, Compass, X, ChevronRight 
 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
 
 // High-performance OpenStreetMap raster tiles (Zero API key watermark, styled via dark filter)
-const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
-const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const DARK_MATTER_URL = cartoKey 
-  ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
-  : OSM_TILE_URL;
-const LIGHT_POSITRON_URL = cartoKey
-  ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
-  : OSM_TILE_URL;
-const MAP_TILE_ATTR = cartoKey
-  ? '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+// CARTO publica dark_all/light_all sin API key (el `?key=` es opcional y solo
+// para cuentas con límites). Antes, si no había key, se caía a OSM *claro* en
+// ambos temas: por eso el mapa nunca se veía oscuro.
+const DARK_MATTER_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const LIGHT_POSITRON_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const MAP_TILE_ATTR =
+  '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 export interface MapBusiness {
   id: string;
@@ -97,6 +93,10 @@ function markerHTML(a: MapBusiness, selected: boolean, isDark: boolean) {
     : `0 0 0 2px ${isDark ? '#0D0914' : '#FFFFFF'}, 0 0 10px ${r.color}88, 0 0 18px ${r.color}33`;
   const scale = selected ? "scale(1.15)" : "scale(1)";
   const icon = isStockOnly ? '🎁' : getIcon(a.category || a.device);
+  // Si el afiliado tiene logo, el pin lo muestra en vez del emoji.
+  const inner = a.logoUrl
+    ? `<img src="${a.logoUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" />`
+    : icon;
   
   const badgeHtml = isStockOnly 
     ? `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:#E91E63;color:#fff;font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;letter-spacing:.3px;box-shadow:0 2px 10px rgba(233,30,99,0.5)">STOCK</div>`
@@ -105,8 +105,8 @@ function markerHTML(a: MapBusiness, selected: boolean, isDark: boolean) {
   return `
     <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.25s cubic-bezier(.34,1.56,.64,1)">
       ${badgeHtml}
-      <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${isDark ? 'linear-gradient(145deg,#1E142B,#0F0A18)' : '#FFFFFF'};display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s">
-        ${icon}
+      <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${isDark ? 'linear-gradient(145deg,#1E142B,#0F0A18)' : '#FFFFFF'};display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s;overflow:hidden">
+        ${inner}
       </div>
       <div style="width:2px;height:9px;background:linear-gradient(${r.color},transparent);margin-top:-1px"></div>
       <div style="width:6px;height:6px;border-radius:50%;background:${r.color};box-shadow:0 0 8px ${r.color};margin-top:-2px"></div>
@@ -431,6 +431,18 @@ export default function InteractiveMap({
         } else {
           console.warn('[SpeechRec] plugin nativo falló, cae a Web Speech:', speechErr);
         }
+        // Diagnóstico visible: sin esto el usuario veía "escribe aquí" y no sabía
+        // si era permiso, idioma o que el micrófono no estaba en el binario.
+        if (msg && !msg.includes('SPEECH_PLUGIN_NOT_IN_BUILD')) {
+          setCopilotReply(
+            msg.includes('PERMISSION') || msg.includes('MIC_PERMISSION')
+              ? 'Activa micrófono y dictado en Ajustes de iOS, o escribe aquí ✍️'
+              : msg.includes('SPEECH_NOT_AVAILABLE')
+              ? 'El dictado no está disponible ahora; escribe aquí ✍️'
+              : 'No pude escucharte; escribe aquí ✍️'
+          );
+          setTimeout(() => setCopilotReply(null), 4500);
+        }
         // continúa al fallback Web Speech / escritura
       }
     }
@@ -582,13 +594,13 @@ export default function InteractiveMap({
     }
     const layer = isDark
       ? L.tileLayer(DARK_MATTER_URL, {
-          subdomains: cartoKey ? 'abcd' : 'abc',
+          subdomains: 'abcd',
           maxZoom: 19,
           className: 'rabbitty-dark-tiles',
           attribution: MAP_TILE_ATTR,
         })
       : L.tileLayer(LIGHT_POSITRON_URL, {
-          subdomains: cartoKey ? 'abcd' : 'abc',
+          subdomains: 'abcd',
           maxZoom: 19,
           className: 'rabbitty-light-tiles',
           attribution: MAP_TILE_ATTR,
@@ -872,7 +884,15 @@ export default function InteractiveMap({
               }`}
               title={speechSupported ? 'Hablar con Bunzy Copilot' : 'Escribir comando para Bunzy'}
             >
-              {isListening ? <MicOff size={15} /> : <Mic size={15} className="text-[#E91E63]" />}
+              {/* Nunca mostrar "micrófono tachado" mientras escucha: parecía muteado.
+                  MicOff solo cuando la plataforma no tiene voz disponible. */}
+              {isListening ? (
+                <Mic size={15} className="animate-pulse" />
+              ) : speechSupported ? (
+                <Mic size={15} className="text-[#E91E63]" />
+              ) : (
+                <MicOff size={15} className="opacity-60" />
+              )}
             </button>
           </div>
 
@@ -958,8 +978,8 @@ export default function InteractiveMap({
       {/* Selected Business Action Card (Positioned cleanly ABOVE the bottom filter dock) */}
       {selected && (
         <div 
-          className="absolute inset-x-3 z-30 max-w-md mx-auto pointer-events-auto animate-fadeIn transition-all duration-300"
-          style={{ bottom: PlatformBridge.isTelegram() ? 116 : 108 }}
+          className="absolute inset-x-4 z-30 max-w-lg mx-auto pointer-events-auto animate-fadeIn transition-all duration-300"
+          style={{ bottom: PlatformBridge.isTelegram() ? 28 : 22 }}
         >
           <div
             onClick={() => router.push(`/affiliate/${selected.id}`)}
@@ -1060,18 +1080,19 @@ export default function InteractiveMap({
                 onClick={(e) => {
                   e.stopPropagation();
                   PlatformBridge.hapticFeedback('medium');
-                  const query = encodeURIComponent(`${selected.name || ''} ${selected.address || ''}`);
-                  window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                  // In-app: la ficha del afiliado, no un mapa externo con una
+                  // dirección que puede no existir.
+                  router.push(`/affiliate/${selected.id}`);
                 }}
-                title="Abrir en Google Maps"
+                title="Ver el negocio"
                 className="shrink-0 h-10 pl-3 pr-3.5 rounded-full flex items-center gap-1.5 text-white font-black text-[11px] tracking-wide active:scale-95 transition-transform cursor-pointer border-none"
                 style={{
                   background: 'linear-gradient(135deg, #E91E63 0%, #FF2E93 100%)',
                   boxShadow: '0 6px 18px rgba(233,30,99,0.4), inset 0 1px 0 rgba(255,255,255,0.25)',
                 }}
               >
-                <Navigation size={14} className="rotate-45" strokeWidth={2.6} />
-                <span>Ir</span>
+                <ChevronRight size={15} strokeWidth={3} />
+                <span>Ver</span>
               </button>
             </div>
 
@@ -1094,7 +1115,9 @@ export default function InteractiveMap({
 
       {/* Bottom Floating Filter Dock (Always Stays in Place at the Bottom) */}
       <div 
-        className="absolute z-20 inset-x-4 flex flex-col gap-2 pointer-events-none transition-all duration-300"
+        className={`absolute z-20 inset-x-4 flex flex-col gap-2 pointer-events-none transition-all duration-300 ${
+          selected ? 'opacity-0 translate-y-6 pointer-events-none' : 'opacity-100'
+        }`}
         style={{ 
           bottom: PlatformBridge.isTelegram() ? 24 : 18,
         }}

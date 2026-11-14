@@ -561,15 +561,15 @@ function TwoFactorRows() {
 /* ───────────── Contenido informativo ───────────── */
 
 const FEATURES: { icon: LucideIcon; color: string; title: string; desc: string }[] = [
-  { icon: Key, color: '#10B981', title: 'Llaves Privadas Locales', desc: 'Tus llaves de TON se generan y protegen localmente con cifrado AES-256. Nunca tocan nuestros servidores.' },
-  { icon: ShieldCheck, color: '#6366F1', title: 'Smart Contracts Auditados', desc: 'Contratos inteligentes en TON blockchain verificados por firmas de seguridad independientes.' },
+  { icon: Key, color: '#10B981', title: 'Datos cifrados en el dispositivo', desc: 'Tu sesión y tus credenciales se guardan cifradas con AES-256 en el almacenamiento seguro del teléfono. Nunca viajan en claro.' },
+  { icon: ShieldCheck, color: '#6366F1', title: 'Verificación en cada cobro', desc: 'Cada cargo con Bunz exige tu autorización explícita en la app; el comercio no puede cobrarte por su cuenta.' },
   { icon: Smartphone, color: '#F59E0B', title: 'Cripto-Biometría Nativa', desc: 'Soporte integrado para Secure Enclave, Face ID y Touch ID en tu dispositivo.' },
   { icon: EyeOff, color: '#E91E63', title: 'Zero-Knowledge Protocol', desc: 'Privacidad asegurada: comercios y terceros solo reciben datos esenciales de validación de pago.' },
 ];
 
 const STATS = [
   { val: '0', label: 'Incidentes', color: '#10B981' },
-  { val: '100%', label: 'Uptime TON', color: '#6366F1' },
+  { val: '100%', label: 'Cobros verificados', color: '#6366F1' },
   { val: '256b', label: 'AES Enclave', color: '#F59E0B' },
 ];
 
@@ -598,7 +598,6 @@ export default function SecurityPage() {
     { id: 'account' as const, icon: User, title: 'Tu cuenta', desc: 'Consulta los datos de tu cuenta, ID de Telegram y estado de la sesión.' },
     { id: 'security_access' as const, icon: Lock, title: 'Seguridad y acceso a la cuenta', desc: 'Administra la seguridad de tu cuenta: Face ID, PIN de 4 dígitos y verificación en dos pasos.' },
     { id: 'privacy' as const, icon: EyeOff, title: 'Privacidad y transacciones', desc: 'Controla la visibilidad de tu saldo Bunz, pagos y protocolos Zero-Knowledge.' },
-    { id: 'audit' as const, icon: Database, title: 'Auditoría y arquitectura TON', desc: 'Verifica los Smart Contracts, auditorías de seguridad y cifrado descentralizado.' },
   ];
 
   const q = searchQuery.trim().toLowerCase();
@@ -653,11 +652,11 @@ export default function SecurityPage() {
             <div className="px-1 pt-6">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500">Sistema protegido · TON Network</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-500">Sistema protegido · cifrado local</span>
               </div>
-              <h4 className="text-[15px] font-black m-0 mb-1" style={{ color: 'var(--text-primary)' }}>Criptografía Descentralizada</h4>
+              <h4 className="text-[15px] font-black m-0 mb-1" style={{ color: 'var(--text-primary)' }}>Seguridad en tu dispositivo</h4>
               <p className="text-xs leading-relaxed m-0" style={{ color: 'var(--text-secondary)' }}>
-                Rabbitty opera sobre protocolos no-custodiales en la blockchain de TON y cifrado de hardware en tu dispositivo.
+                Tus datos viven cifrados en el teléfono (Secure Enclave cuando existe) y cada operación sensible se confirma con biometría o tu código.
               </p>
               <div className="grid grid-cols-3 gap-2 mt-4">
                 {STATS.map(({ val, label, color }) => (

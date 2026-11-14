@@ -473,12 +473,14 @@ export default function ProfilePage() {
             >
               <LogOut size={16} /> Cerrar sesión
             </button>
+            {/* Discreto a propósito: es irreversible, no debe parecer una acción
+                más del perfil. */}
             <button
               type="button"
-              onClick={() => { PlatformBridge.hapticFeedback('medium'); setShowDeleteModal(true); }}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/10 py-3 text-[11px] font-bold text-rose-400 active:scale-[0.98] transition-transform"
+              onClick={() => { PlatformBridge.hapticFeedback('light'); setShowDeleteModal(true); }}
+              className="mx-auto mt-1 block cursor-pointer border-none bg-transparent p-2 text-[11px] font-semibold text-(--text-muted) underline-offset-4 hover:underline active:opacity-70 transition-opacity"
             >
-              <Trash2 size={14} /> Eliminar cuenta permanentemente
+              Eliminar cuenta permanentemente
             </button>
           </div>
         </div>

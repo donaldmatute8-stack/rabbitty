@@ -36,13 +36,32 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         "APPLE_WALLET_WWDR_PEM",
       ];
       const missing = required.filter((k) => !process.env[k] || !String(process.env[k]).trim());
+
+      // Diagnóstico de forma: el valor existe pero no parece un PEM válido
+      // (p. ej. pegaron solo el base64, o el certificado equivocado). Nunca se
+      // exponen valores, solo el nombre de la variable.
+      const has = (k: string) => String(process.env[k] || "").replace(/\\n/g, "\n");
+      const malformed: string[] = [];
+      if (process.env.APPLE_WALLET_CERT_PEM && !has("APPLE_WALLET_CERT_PEM").includes("BEGIN CERTIFICATE")) {
+        malformed.push("APPLE_WALLET_CERT_PEM (falta el encabezado BEGIN CERTIFICATE)");
+      }
+      if (process.env.APPLE_WALLET_KEY_PEM && !has("APPLE_WALLET_KEY_PEM").includes("BEGIN")) {
+        malformed.push("APPLE_WALLET_KEY_PEM (falta el encabezado BEGIN … PRIVATE KEY)");
+      }
+      if (process.env.APPLE_WALLET_WWDR_PEM && !has("APPLE_WALLET_WWDR_PEM").includes("BEGIN CERTIFICATE")) {
+        malformed.push("APPLE_WALLET_WWDR_PEM (falta el encabezado BEGIN CERTIFICATE)");
+      }
+
       return NextResponse.json(
         {
           error: "APPLE_WALLET_NOT_CONFIGURED",
           message: missing.length
             ? `Falta configurar: ${missing.join(", ")}`
+            : malformed.length
+            ? `Credenciales mal formadas: ${malformed.join(" · ")}`
             : "Las credenciales de Wallet están incompletas o mal formadas.",
           missing,
+          malformed,
         },
         { status: 501 },
       );
