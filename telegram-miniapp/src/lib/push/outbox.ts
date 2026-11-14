@@ -173,6 +173,41 @@ export async function processOutboxBatch(limit = 20): Promise<{
       continue;
     }
 
+    // 1.5) Email (Resend): canal independiente del push. Solo avisos que el
+    // usuario marcó como importantes y si activó el correo en Configuración.
+    if (!pushMuted) {
+      try {
+        const [recipient] = await db
+          .select({ email: users.email, emailOn: users.emailNotifications })
+          .from(users)
+          .where(eq(users.id, item.userId))
+          .limit(1);
+        if (recipient?.emailOn && recipient.email) {
+          const { sendEmail } = await import('@/lib/email');
+          const result = await sendEmail({
+            to: recipient.email,
+            subject: item.title,
+            html: `<div style="font-family:system-ui,sans-serif;line-height:1.5">
+              <h2 style="margin:0 0 8px">${item.title}</h2>
+              <p style="margin:0 0 16px;color:#444">${item.message}</p>
+              ${item.route ? `<a href="https://app.rabbitty.me${item.route}" style="display:inline-block;background:#E91E63;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:700">Abrir en Rabbitty</a>` : ''}
+              <p style="margin:24px 0 0;font-size:12px;color:#888">Recibes este correo porque activaste los avisos por email en Rabbitty.</p>
+            </div>`,
+          });
+          if (notificationId) {
+            await db.insert(notificationDeliveries).values({
+              notificationId,
+              channel: 'email',
+              status: result.ok ? 'SENT' : 'FAILED',
+              reason: result.ok ? null : String(result.error ?? 'send_failed'),
+            });
+          }
+        }
+      } catch (emailErr) {
+        console.warn('[OUTBOX_EMAIL]', emailErr);
+      }
+    }
+
     // H17-badge: iOS badge sincronizado con el unread in-app real al momento
     // del envío (antes badge:1 fijo dejaba ícono activo con 0 sin leer).
     let unreadBadge = 1;

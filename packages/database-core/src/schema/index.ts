@@ -46,6 +46,8 @@ export const users = pgTable("users", {
   // el usuario no quiere campana, pero el push nativo SÍ llega y marca el badge
   // iOS (semántica tipo Facebook). El plano CATEGORÍA (pushMutedCategories) es
   // independiente y sí apaga ambos. CRITICAL/SYSTEM nunca se silencian.
+  /** Avisos importantes por correo (Resend). */
+  emailNotifications: boolean("emailNotifications").default(false).notNull(),
   pushInAppEnabled: boolean("pushInAppEnabled").default(true).notNull(),
   // Push v2.1 §2.4: reglas opcionales por Rabbitter (JSON obj — keys opt-in):
   //  proximityAllAlerts  → recibe TODAS las alertas de afiliados al estar cerca

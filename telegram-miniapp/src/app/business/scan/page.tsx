@@ -100,6 +100,19 @@ export default function BusinessScanPage() {
     if (!amount || amount <= 0) return toast.error("Ingresa un monto válido");
     if (onCellular) return toast.error("Conéctate al Wi-Fi del local para cobrar.");
 
+    // Autorización biométrica antes de mover dinero (si el usuario la activó).
+    try {
+      const { isBiometricEnabled, verifyBiometric, biometricGateName } = await import("@/lib/securityVault");
+      if (await isBiometricEnabled()) {
+        const name = await biometricGateName();
+        const auth = await verifyBiometric(`Confirma con ${name} para cobrar en Bunz`);
+        if (!auth.ok) {
+          toast.error(auth.message || "Autorización cancelada");
+          return;
+        }
+      }
+    } catch { /* sin biometría disponible: continúa */ }
+
     setProcessing(true);
     const toastId = toast.loading("Creando cobro…");
     try {

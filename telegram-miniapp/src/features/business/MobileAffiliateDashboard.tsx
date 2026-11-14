@@ -187,6 +187,38 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
     };
   }, [business?.id]);
 
+  // ── Candado biométrico del portal de negocio ──
+  // Solo se muestra si el usuario activó biometría en Seguridad.
+  const [bioGate, setBioGate] = useState<'checking' | 'locked' | 'open'>('checking');
+  const [bioLabel, setBioLabel] = useState('Face ID');
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { isBiometricEnabled, biometricGateName } = await import('@/lib/securityVault');
+        const enabled = await isBiometricEnabled();
+        if (!alive) return;
+        if (!enabled) return setBioGate('open');
+        setBioLabel(await biometricGateName());
+        setBioGate('locked');
+      } catch {
+        if (alive) setBioGate('open');
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const unlockPortal = async () => {
+    try {
+      const { verifyBiometric } = await import('@/lib/securityVault');
+      const res = await verifyBiometric(`Desbloquea tu portal de negocio con ${bioLabel}`);
+      if (res.ok) {
+        PlatformBridge.hapticFeedback('medium');
+        setBioGate('open');
+      }
+    } catch { /* noop */ }
+  };
+
   // ── Novedades para afiliados (comunicados oficiales de la plataforma) ──
   const [updates, setUpdates] = useState<{ unread: number; items: Array<{ deliveryId: string; title: string; createdAt: string; readAt?: string | null }> }>({ unread: 0, items: [] });
   useEffect(() => {
@@ -252,6 +284,28 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
         <p className="text-sm text-(--text-secondary) leading-relaxed max-w-sm mb-8">
           Estamos verificando la información de <strong>{business.name}</strong> para proteger la red. Este proceso toma entre 2 y 24 horas.
         </p>
+      </div>
+    );
+  }
+
+  if (bioGate === 'locked') {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center gap-4 p-8 text-center"
+        style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+      >
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E91E63]/15 text-2xl">🔒</div>
+        <h1 className="m-0 text-xl font-black">Portal de negocio</h1>
+        <p className="m-0 max-w-xs text-sm" style={{ color: 'var(--text-muted)' }}>
+          Protegido con {bioLabel}. Confirma tu identidad para ver ventas, clientes y ajustes.
+        </p>
+        <button
+          type="button"
+          onClick={unlockPortal}
+          className="rounded-2xl bg-[#E91E63] px-6 py-3 text-sm font-black text-white active:scale-95 transition-transform"
+        >
+          Desbloquear con {bioLabel}
+        </button>
       </div>
     );
   }

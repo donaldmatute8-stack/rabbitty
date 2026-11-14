@@ -441,6 +441,20 @@ export async function enableBiometric(): Promise<BioOutcome> {
   }
 }
 
+/**
+ * Nombre real del método de este dispositivo: "Face ID", "Touch ID",
+ * "Huella digital"… Sirve para que los textos no digan Face ID en un Android
+ * con lector de huella.
+ */
+export async function biometricGateName(): Promise<string> {
+  try {
+    const support = await detectBiometric();
+    return support.available ? support.label : 'código del dispositivo';
+  } catch {
+    return 'código del dispositivo';
+  }
+}
+
 export async function verifyBiometric(reason = 'Confirma tu identidad para continuar'): Promise<BioOutcome> {
   const isEnabled = await isBiometricEnabled();
   if (!isEnabled) return { ok: false, message: 'La biometría no está activada.' };

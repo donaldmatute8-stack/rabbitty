@@ -20,7 +20,12 @@ export async function GET(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const [row] = await db
-    .select({ muted: users.pushMutedCategories, rules: users.pushRules, inAppEnabled: users.pushInAppEnabled })
+    .select({
+      muted: users.pushMutedCategories,
+      rules: users.pushRules,
+      inAppEnabled: users.pushInAppEnabled,
+      emailEnabled: users.emailNotifications,
+    })
     .from(users)
     .where(eq(users.id, caller.id))
     .limit(1);
@@ -32,6 +37,7 @@ export async function GET(req: NextRequest) {
     rules,
     // H22 · plano CANAL: false = sin campana, pero el push nativo sí llega.
     inAppEnabled: row?.inAppEnabled !== false,
+    emailEnabled: Boolean(row?.emailEnabled),
     categories: PUSH_CATEGORY_LIST.map((key) => ({ key, ...PUSH_CATEGORY_LABELS[key] })),
     ruleCatalog: PUSH_RULE_KEYS.map((key) => ({ key, ...PUSH_RULE_LABELS[key] })),
   });
@@ -45,14 +51,17 @@ export async function POST(req: NextRequest) {
   const hasMuted = Array.isArray(body?.muted);
   const hasInApp = typeof body?.inAppEnabled === "boolean";
   const hasRules = body?.rules && typeof body.rules === "object";
-  if (!hasMuted && !hasInApp && !hasRules) {
+  const hasEmail = typeof body?.emailEnabled === "boolean";
+  if (!hasMuted && !hasInApp && !hasRules && !hasEmail) {
     return NextResponse.json(
-      { error: "muted (array), inAppEnabled (boolean) o rules (object) requerido" },
+      { error: "muted (array), inAppEnabled (boolean), emailEnabled (boolean) o rules (object) requerido" },
       { status: 400 }
     );
   }
 
   const update: Record<string, unknown> = { updatedAt: new Date() };
+  if (hasEmail) update.emailNotifications = body.emailEnabled;
+  if (hasInApp) update.pushInAppEnabled = body.inAppEnabled;
 
   // Plano CATEGORÍA: solo categorías válidas del catálogo (jamás tipos sueltos)
   let muted: string[] | undefined;

@@ -122,6 +122,14 @@ export default function SettingsPage() {
           headers: { ...headers, 'Content-Type': 'application/json' },
           body: next.nativePush ? JSON.stringify({ rearm: true }) : JSON.stringify({}),
         });
+      } else if (key === 'email') {
+        // Persistimos en la base para que el worker pueda enviar correos
+        // (Resend ya está configurado para los OTP del admin).
+        await fetch('/api/notifications/preferences', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emailEnabled: next.email }),
+        });
       } else if (key === 'inAppBell') {
         // H22 · plano CANAL: apagar la campana NO apaga el push nativo — el
         // worker deja de insertar la campana pero el push sí sale y marca el
@@ -186,7 +194,7 @@ export default function SettingsPage() {
                     key={key}
                     role="button"
                     tabIndex={0}
-                    onClick={() => { if (key !== 'email') void toggle(key); }}
+                    onClick={() => void toggle(key)}
                     onKeyDown={(e) => { if (key !== 'email' && (e.key === 'Enter' || e.key === ' ')) void toggle(key); }}
                     className="flex items-start gap-3 px-3 py-3 rounded-xl cursor-pointer transition-colors hover:bg-(--bg-pressed)"
                   >
@@ -199,7 +207,7 @@ export default function SettingsPage() {
                         {row.desc}
                       </p>
                     </div>
-                    <Switch on={key === 'email' ? false : on} onChange={() => { if (key !== 'email') void toggle(key); }} />
+                    <Switch on={on} onChange={() => void toggle(key)} />
                   </div>
                 );
               })}
