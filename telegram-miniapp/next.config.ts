@@ -45,6 +45,9 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
+              // MapLibre GL crea su worker desde un blob local (tiles vectoriales).
+              "worker-src 'self' blob:",
+              "child-src 'self' blob:",
               "connect-src 'self' https: wss:",
               "frame-src 'self' https://telegram.org https://js.stripe.com https://*.stripe.com",
               "manifest-src 'self'",

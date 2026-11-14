@@ -1,57 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { 
-  Crosshair, Mic, MicOff, Sparkles, Navigation, 
-  Flame, Gift, Compass, X, ChevronRight 
+import {
+  Crosshair, Mic, MicOff, Sparkles, Navigation,
+  Flame, Gift, Compass, X, ChevronRight
 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
+import { createMapEngine, type MapEngine } from './engines';
+import { getIcon } from './markers';
+import type { MapBusiness } from './engines/types';
 
-// High-performance OpenStreetMap raster tiles (Zero API key watermark, styled via dark filter)
-// CARTO exige API key (sin ella devuelve tiles "API KEY Required"). Si no hay
-// key se usa OSM; en tema oscuro se invierte por CSS para que siga viéndose
-// oscuro sin depender de un proveedor con credenciales.
-const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
-const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const DARK_MATTER_URL = cartoKey
-  ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
-  : OSM_TILE_URL;
-const LIGHT_POSITRON_URL = cartoKey
-  ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
-  : OSM_TILE_URL;
-const MAP_TILE_ATTR = cartoKey
-  ? '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-
-export interface MapBusiness {
-  id: string;
-  name?: string;
-  user?: string;
-  category?: string;
-  device?: string;
-  address?: string;
-  lat?: string | number | null;
-  lng?: string | number | null;
-  rewardPercentage?: number;
-  reward_percentage?: number;
-  acceptsBunz?: boolean;
-  accepts_bunz?: boolean;
-  givesBunz?: boolean;
-  gives_bunz?: boolean;
-  hasStockOffer?: boolean;
-  bunzBalance?: number;
-  distance?: number;
-  image?: string;
-  imageUrl?: string;
-  logoUrl?: string;
-  startTime?: string;
-  endTime?: string;
-}
+export type { MapBusiness } from './engines/types';
 
 interface InteractiveMapProps {
   businesses: MapBusiness[];
@@ -61,74 +23,6 @@ interface InteractiveMapProps {
   locationTimestamp?: number | null;
   onRequestLocation?: () => void;
   isLocating?: boolean;
-}
-
-const RARITY = {
-  common:    { color:"#7EC8E3", label:"Común",      ring:"#7EC8E355" },
-  rare:      { color:"#B57BEE", label:"Raro",       ring:"#B57BEE55" },
-  epic:      { color:"#FF4D8D", label:"Épico",      ring:"#FF4D8D66" },
-  legendary: { color:"#FFD166", label:"Legendario", ring:"#FFD16666" },
-} as const;
-
-type RarityKey = keyof typeof RARITY;
-
-function getRarity(bunz: number): RarityKey {
-  if (bunz >= 15) return "legendary";
-  if (bunz >= 10) return "epic";
-  if (bunz >= 5)  return "rare";
-  return "common";
-}
-
-function getIcon(category?: string) {
-  const cat = category?.toLowerCase() || '';
-  if (cat.includes('caf')) return '☕';
-  if (cat.includes('restaurante') || cat.includes('comida') || cat.includes('pizz')) return '🍕';
-  if (cat.includes('fit') || cat.includes('gym')) return '💪';
-  if (cat.includes('tech') || cat.includes('tecno')) return '💻';
-  if (cat.includes('belleza') || cat.includes('spa') || cat.includes('barber')) return '✨';
-  if (cat.includes('bar') || cat.includes('copas')) return '🍸';
-  return '🛍️';
-}
-
-function markerHTML(a: MapBusiness, selected: boolean, isDark: boolean) {
-  const rw = a.rewardPercentage || a.reward_percentage || 0;
-  const isStockOnly = (a.acceptsBunz || a.accepts_bunz) && !(a.givesBunz || a.gives_bunz);
-  const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
-  const sz = selected ? 52 : 44;
-  const glowSize = selected
-    ? `0 0 0 3px ${isDark ? '#0D0914' : '#FFFFFF'}, 0 0 18px ${r.color}, 0 0 32px ${r.color}77`
-    : `0 0 0 2px ${isDark ? '#0D0914' : '#FFFFFF'}, 0 0 10px ${r.color}88, 0 0 18px ${r.color}33`;
-  const scale = selected ? "scale(1.15)" : "scale(1)";
-  const icon = isStockOnly ? '🎁' : getIcon(a.category || a.device);
-  // Si el afiliado tiene logo, el pin lo muestra en vez del emoji.
-  const inner = a.logoUrl
-    ? `<img src="${a.logoUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block" />`
-    : icon;
-  
-  const badgeHtml = isStockOnly 
-    ? `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:#E91E63;color:#fff;font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;letter-spacing:.3px;box-shadow:0 2px 10px rgba(233,30,99,0.5)">STOCK</div>`
-    : `<div style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);background:${r.color};color:${getRarity(rw)==='legendary'?'#111':'#0D0D1A'};font-size:9px;font-weight:900;padding:2px 8px;border-radius:100px;white-space:nowrap;letter-spacing:.3px;box-shadow:0 2px 10px ${r.color}88">+${rw}%</div>`;
-
-  return `
-    <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:${scale};transition:transform 0.25s cubic-bezier(.34,1.56,.64,1)">
-      ${badgeHtml}
-      <div style="width:${sz}px;height:${sz}px;border-radius:50%;background:${isDark ? 'linear-gradient(145deg,#1E142B,#0F0A18)' : '#FFFFFF'};display:flex;align-items:center;justify-content:center;font-size:${selected?22:18}px;box-shadow:${glowSize};border:2px solid ${r.color};transition:all .25s;overflow:hidden">
-        ${inner}
-      </div>
-      <div style="width:2px;height:9px;background:linear-gradient(${r.color},transparent);margin-top:-1px"></div>
-      <div style="width:6px;height:6px;border-radius:50%;background:${r.color};box-shadow:0 0 8px ${r.color};margin-top:-2px"></div>
-    </div>`;
-}
-
-function userMarkerHTML() {
-  return `
-    <div style="position:relative;width:28px;height:28px">
-      <div class="radar-sweep"></div>
-      <div style="position:absolute;inset:0;border-radius:50%;background:#E91E63;border:3px solid #fff;box-shadow:0 0 0 2px #E91E63,0 0 24px #E91E63aa;z-index:2"></div>
-      <div class="rb-pulse rb-pulse-1"></div>
-      <div class="rb-pulse rb-pulse-2"></div>
-      <div class="rb-pulse rb-pulse-3"></div>
-    </div>`;
 }
 
 export default function InteractiveMap({
@@ -141,10 +35,7 @@ export default function InteractiveMap({
   isLocating,
 }: InteractiveMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInst = useRef<L.Map | null>(null);
-  const layerGroup = useRef<L.LayerGroup | null>(null);
-  const userMarkerGroup = useRef<L.LayerGroup | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const engineRef = useRef<MapEngine | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
@@ -176,8 +67,8 @@ export default function InteractiveMap({
   useEffect(() => {
     if (!affiliateParam || businesses.length === 0) return;
     const target = businesses.find(b => b.id === affiliateParam);
-    if (target && target.lat && target.lng && mapInst.current) {
-      mapInst.current.flyTo([Number(target.lat), Number(target.lng)], 16.5, { duration: 1.2 });
+    if (target && target.lat && target.lng && engineRef.current) {
+      engineRef.current?.flyTo(Number(target.lat), Number(target.lng), 16.5, 1200);
     }
   }, [affiliateParam, businesses]);
 
@@ -225,8 +116,8 @@ export default function InteractiveMap({
     RabbittyMap.centerOn({ lat: userLat, lng: userLng, radiusKm: 2.0 }).catch(() => {});
   }, [nativeMapActive, userLat, userLng]);
 
-  // Filter businesses
-  const filteredBusinesses = businesses.filter(b => {
+  // Filter businesses (memoizado: estable para el motor de mapa)
+  const filteredBusinesses = useMemo(() => businesses.filter(b => {
     // Mode Filter:
     // En bunz'in: se muestran todos los negocios que dan recompensas (visita y acumulación)
     // En Stock: SOLO se muestran los negocios que realmente tienen stock fondeado y disponible para canjear
@@ -246,7 +137,7 @@ export default function InteractiveMap({
     }
 
     return modeMatch && categoryMatch;
-  });
+  }), [businesses, activeMode, activeCategory]);
 
 
 
@@ -278,11 +169,11 @@ export default function InteractiveMap({
     if (lower.includes('café') || lower.includes('cafe') || lower.includes('trabaj') || lower.includes('concentr')) {
       setActiveCategory('Cafetería');
       const cafe = businesses.find(b => (b.category || '').toLowerCase().includes('caf'));
-      if (cafe && cafe.lat && cafe.lng && mapInst.current) {
+      if (cafe && cafe.lat && cafe.lng && engineRef.current) {
         const reply = `Encontré ${cafe.name || 'Cafetería'} en tu zona con cashback en Bunz ☕`;
         setCopilotReply(reply);
         speakReply(reply);
-        mapInst.current.flyTo([Number(cafe.lat), Number(cafe.lng)], 16, { duration: 1.2 });
+        engineRef.current?.flyTo(Number(cafe.lat), Number(cafe.lng), 16, 1200);
         setSelected(cafe);
       } else {
         const reply = 'No encontré cafeterías afiliadas activas en esta área ☕';
@@ -293,11 +184,11 @@ export default function InteractiveMap({
     // Command 2: Mayor recompensa / más bunz / cashback alto
     else if (lower.includes('más bunz') || lower.includes('mas bunz') || lower.includes('recompensa') || lower.includes('cashback')) {
       const topBiz = [...businesses].sort((a, b) => (b.rewardPercentage || 0) - (a.rewardPercentage || 0))[0];
-      if (topBiz && topBiz.lat && topBiz.lng && mapInst.current) {
+      if (topBiz && topBiz.lat && topBiz.lng && engineRef.current) {
         const reply = `El spot con más cashback es ${topBiz.name || 'afiliado'} con +${topBiz.rewardPercentage ?? 0}% Bunz 🔥`;
         setCopilotReply(reply);
         speakReply(reply);
-        mapInst.current.flyTo([Number(topBiz.lat), Number(topBiz.lng)], 16.5, { duration: 1.2 });
+        engineRef.current?.flyTo(Number(topBiz.lat), Number(topBiz.lng), 16.5, 1200);
         setSelected(topBiz);
       } else {
         const reply = 'No hay comercios con recompensas registradas en esta zona.';
@@ -309,11 +200,11 @@ export default function InteractiveMap({
     else if (lower.includes('comer') || lower.includes('hambre') || lower.includes('restaurante') || lower.includes('pizza')) {
       setActiveCategory('Restaurante');
       const food = businesses.find(b => (b.category || '').toLowerCase().includes('restaurante') || (b.category || '').toLowerCase().includes('comida'));
-      if (food && food.lat && food.lng && mapInst.current) {
+      if (food && food.lat && food.lng && engineRef.current) {
         const reply = `Filtrando opciones de comida. Te muestro ${food.name || 'restaurante'} 🍕`;
         setCopilotReply(reply);
         speakReply(reply);
-        mapInst.current.flyTo([Number(food.lat), Number(food.lng)], 16, { duration: 1.2 });
+        engineRef.current?.flyTo(Number(food.lat), Number(food.lng), 16, 1200);
         setSelected(food);
       } else {
         const reply = 'No encontré restaurantes afiliados activos en esta área 🍕';
@@ -323,11 +214,11 @@ export default function InteractiveMap({
     }
     // Command 4: Mi ubicación / llévame a donde estoy
     else if (lower.includes('dónde estoy') || lower.includes('mi ubicación') || lower.includes('aqui') || lower.includes('aquí')) {
-      if (userLat && userLng && mapInst.current) {
+      if (userLat && userLng && engineRef.current) {
         const reply = 'Centrando el radar en tu ubicación actual 📍';
         setCopilotReply(reply);
         speakReply(reply);
-        mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
+        engineRef.current?.flyTo(userLat, userLng, 16.5, 1000);
       } else if (onRequestLocation) {
         onRequestLocation();
         const reply = 'Activando señal GPS de tu dispositivo 📍';
@@ -338,12 +229,12 @@ export default function InteractiveMap({
     // Default fallback: search query
     else {
       const match = businesses.find(b => (b.name || '').toLowerCase().includes(lower) || (b.category || '').toLowerCase().includes(lower));
-      if (match && match.lat && match.lng && mapInst.current) {
+      if (match && match.lat && match.lng && engineRef.current) {
         const distText = match.distance ? `a ${match.distance} km` : 'en el mapa';
         const reply = `Encontré ${match.name} ${distText} 🐰`;
         setCopilotReply(reply);
         speakReply(reply);
-        mapInst.current.flyTo([Number(match.lat), Number(match.lng)], 16.5, { duration: 1.2 });
+        engineRef.current?.flyTo(Number(match.lat), Number(match.lng), 16.5, 1200);
         setSelected(match);
       } else {
         const reply = `Buscando "${transcript}" en comercios afiliados cercanos 🐰`;
@@ -533,152 +424,78 @@ export default function InteractiveMap({
     }
   };
 
-  // Map Initialization — runs ONCE on mount
+  // ── Inicialización del motor (una sola vez) ──
+  // maplibre (OpenFreeMap, vectorial) con respaldo automático a leaflet.
   useEffect(() => {
-    if (!mapRef.current || mapInst.current) return;
-    
-    const fallbackLat = businesses.length > 0 && businesses[0].lat ? Number(businesses[0].lat) : 25.7275;
-    const fallbackLng = businesses.length > 0 && businesses[0].lng ? Number(businesses[0].lng) : -100.312;
-
-    const centerLat = userLat != null ? userLat : fallbackLat;
-    const centerLng = userLng != null ? userLng : fallbackLng;
-
-    const map = L.map(mapRef.current, {
-      center: [centerLat, centerLng],
-      zoom: 15,
-      minZoom: 4,
-      maxZoom: 21,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    layerGroup.current = L.layerGroup().addTo(map);
-    userMarkerGroup.current = L.layerGroup().addTo(map);
-    mapInst.current = map;
-    setMapReady(true);
-    
-    map.on('click', () => setSelected(null));
-
-    // Observe container resizing (prevents white screen glitch on tab/view switch)
+    if (!mapRef.current || engineRef.current) return;
+    let cancelled = false;
     let ro: ResizeObserver | null = null;
-    if (mapRef.current && typeof ResizeObserver !== 'undefined') {
-      ro = new ResizeObserver(() => {
-        if (mapInst.current) {
-          mapInst.current.invalidateSize();
+
+    void createMapEngine({
+      container: mapRef.current,
+      isDark,
+      onSelect: (b) => setSelected(b),
+      onDeselect: () => setSelected(null),
+      onReady: () => {
+        if (cancelled) return;
+        setMapReady(true);
+        engineRef.current?.invalidateSize();
+      },
+    })
+      .then((engine) => {
+        if (cancelled) {
+          engine.destroy();
+          return;
         }
+        engineRef.current = engine;
+        if (engine.kind === 'leaflet') setMapReady(true);
+      })
+      .catch((err) => {
+        console.warn('[map] no se pudo crear el motor de mapa:', err);
       });
+
+    // El contenedor cambia de tamaño al abrir paneles o cambiar de pestaña.
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => engineRef.current?.invalidateSize());
       ro.observe(mapRef.current);
     }
 
-    // Leaflet dimension recalculations
-    const t1 = setTimeout(() => map.invalidateSize(), 60);
-    const t2 = setTimeout(() => map.invalidateSize(), 200);
-    const t3 = setTimeout(() => map.invalidateSize(), 500);
-    const t4 = setTimeout(() => map.invalidateSize(), 1000);
+    const t1 = setTimeout(() => engineRef.current?.invalidateSize(), 60);
+    const t2 = setTimeout(() => engineRef.current?.invalidateSize(), 240);
+    const t3 = setTimeout(() => engineRef.current?.invalidateSize(), 600);
 
-    return () => { 
+    return () => {
+      cancelled = true;
       if (ro) ro.disconnect();
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
-      clearTimeout(t4);
-      map.remove(); 
-      mapInst.current = null; 
-      tileLayerRef.current = null;
-      userMarkerGroup.current = null;
+      engineRef.current?.destroy();
+      engineRef.current = null;
       setMapReady(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Basemap switcher: True Cyber Dark Matter vs Crisp Positron Light with Overzooming support
+  // Cambio de tema: el motor repinta el estilo (o los tiles en Leaflet).
   useEffect(() => {
-    const map = mapInst.current;
-    if (!map || !mapReady) return;
-    if (tileLayerRef.current) {
-      map.removeLayer(tileLayerRef.current);
-      tileLayerRef.current = null;
-    }
-    const layer = isDark
-      ? L.tileLayer(DARK_MATTER_URL, {
-          subdomains: cartoKey ? 'abcd' : 'abc',
-          maxZoom: 19,
-          className: 'rabbitty-dark-tiles',
-          attribution: MAP_TILE_ATTR,
-        })
-      : L.tileLayer(LIGHT_POSITRON_URL, {
-          subdomains: cartoKey ? 'abcd' : 'abc',
-          maxZoom: 19,
-          className: 'rabbitty-light-tiles',
-          attribution: MAP_TILE_ATTR,
-        });
-    layer.addTo(map);
-    layer.bringToBack();
-    tileLayerRef.current = layer;
-  }, [isDark, mapReady]);
+    engineRef.current?.setTheme(isDark);
+  }, [isDark]);
 
-  // Reactive user marker and centering
+  // Ubicación del usuario: punto + halo, y centrado cuando llega el GPS.
   useEffect(() => {
-    const map = mapInst.current;
-    const group = userMarkerGroup.current;
-    if (!map || !group) return;
-
-    group.clearLayers();
-
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setUser(userLat ?? null, userLng ?? null);
     if (userLat != null && userLng != null) {
-      const uIcon = L.divIcon({ html: userMarkerHTML(), className: '', iconSize: [28, 28], iconAnchor: [14, 14] });
-      L.marker([userLat, userLng], { icon: uIcon, zIndexOffset: 2000 }).addTo(group);
-
-      L.circle([userLat, userLng], {
-        radius: 90,
-        color: '#E91E63',
-        fillColor: '#E91E63',
-        fillOpacity: isDark ? 0.06 : 0.1,
-        weight: 1.5,
-        dashArray: '3 5',
-      }).addTo(group);
-
-      map.flyTo([userLat, userLng], 15.5, { duration: 1.2 });
+      engine.flyTo(userLat, userLng, 15.5, 1200);
     }
-  }, [userLat, userLng, isDark]);
+  }, [userLat, userLng, mapReady]);
 
-  // Render Business Markers with theme awareness
+  // Spots: el motor decide (clusters + pines visibles).
   useEffect(() => {
-    const map = mapInst.current;
-    const group = layerGroup.current;
-    if (!map || !group) return;
-    group.clearLayers();
-
-    filteredBusinesses.forEach(b => {
-      if (!b.lat || !b.lng) return;
-      const lat = Number(b.lat);
-      const lng = Number(b.lng);
-
-      const isStockOnly = (b.acceptsBunz || b.accepts_bunz) && !(b.givesBunz || b.gives_bunz);
-      const rw = b.rewardPercentage || b.reward_percentage || 0;
-      const r = isStockOnly ? { color: "#E91E63", label: "Stock" } : RARITY[getRarity(rw)];
-      const isSel = selected?.id === b.id;
-
-      L.circle([lat, lng], {
-        radius: isSel ? 100 : 70,
-        color: r.color, 
-        fillColor: r.color,
-        fillOpacity: isSel ? (isDark ? 0.14 : 0.18) : (isDark ? 0.05 : 0.08),
-        weight: isSel ? 1.5 : 1,
-        dashArray: isSel ? undefined : '4 6',
-      }).addTo(group);
-
-      const icon = L.divIcon({ html: markerHTML(b, isSel, isDark), className:'', iconSize:[64,80], iconAnchor:[32,80] });
-      L.marker([lat, lng], { icon, zIndexOffset: isSel ? 1500 : 800 })
-        .addTo(group)
-        .on('click', (e: L.LeafletMouseEvent) => {
-          L.DomEvent.stopPropagation(e.originalEvent);
-          PlatformBridge.hapticFeedback('light');
-          setSelected((prev) => prev?.id === b.id ? null : b);
-          map.panTo([lat - 0.0018, lng], { animate:true, duration:0.5 });
-        });
-    });
-  }, [filteredBusinesses, selected, isDark]);
+    engineRef.current?.setBusinesses(filteredBusinesses, selected?.id ?? null);
+  }, [filteredBusinesses, selected, mapReady, isDark]);
 
   const totalBunzInZone = filteredBusinesses.reduce((sum, b) => sum + (b.rewardPercentage || b.reward_percentage || 0), 0);
 
@@ -688,14 +505,19 @@ export default function InteractiveMap({
       style={{ background: isDark ? '#0D0914' : '#F8FAFC' }}
     >
       <style dangerouslySetInnerHTML={{__html: `
-        .leaflet-container {
-          background: ${isDark ? '#08050E' : '#F8F9FA'} !important;
-          outline: none;
-        }
-        .rabbitty-dark-tiles {
-          filter: ${cartoKey
-            ? 'brightness(0.72) contrast(1.18) saturate(0.78) hue-rotate(-10deg)'
-            : 'invert(1) hue-rotate(180deg) brightness(0.88) contrast(1.05) saturate(0.7)'};
+        .maplibregl-canvas { outline: none; }
+        .rabbitty-map-credit {
+          position: absolute;
+          bottom: 6px;
+          left: 8px;
+          z-index: 3;
+          font-size: 9px;
+          letter-spacing: 0.02em;
+          padding: 2px 6px;
+          border-radius: 6px;
+          pointer-events: none;
+          color: ${isDark ? 'rgba(255,255,255,0.42)' : 'rgba(15,10,20,0.42)'};
+          background: ${isDark ? 'rgba(8,5,14,0.45)' : 'rgba(255,255,255,0.6)'};
         }
         @keyframes radar-spin {
           from { transform: translate(-50%, -50%) rotate(0deg); }
@@ -739,7 +561,10 @@ export default function InteractiveMap({
         }} 
       />
 
-      {/* Leaflet Map Canvas (oculto / transparente solo si MapKit nativo está verdaderamente activo) */}
+      {/* Atribución mínima de los tiles (OpenFreeMap sirve datos de OSM) */}
+      <span className="rabbitty-map-credit">© OpenStreetMap · OpenFreeMap</span>
+
+      {/* Lienzo del motor de mapa (oculto solo si MapKit nativo está activo) */}
       <div 
         ref={mapRef} 
         className={`absolute inset-0 z-0 transition-opacity duration-300 ${nativeMapActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} 
@@ -791,9 +616,7 @@ export default function InteractiveMap({
               type="button"
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
-                if (mapInst.current) {
-                  mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
-                }
+                engineRef.current?.flyTo(userLat, userLng, 16.5, 1000);
                 if (onRequestLocation && locationTimestamp && Date.now() - locationTimestamp > 60_000) {
                   onRequestLocation();
                 }
@@ -935,8 +758,8 @@ export default function InteractiveMap({
           type="button"
           onClick={() => {
             PlatformBridge.hapticFeedback('light');
-            if (userLat && userLng && mapInst.current) {
-              mapInst.current.flyTo([userLat, userLng], 16.5, { duration: 1 });
+            if (userLat && userLng && engineRef.current) {
+              engineRef.current?.flyTo(userLat, userLng, 16.5, 1000);
             } else if (onRequestLocation) {
               onRequestLocation();
             }
@@ -961,15 +784,8 @@ export default function InteractiveMap({
           type="button"
           onClick={() => {
             PlatformBridge.hapticFeedback('light');
-            if (filteredBusinesses.length > 0 && mapInst.current) {
-              const bounds = L.latLngBounds(
-                filteredBusinesses
-                  .filter(b => b.lat != null && b.lng != null)
-                  .map(b => [Number(b.lat), Number(b.lng)] as [number, number])
-              );
-              if (bounds.isValid()) {
-                mapInst.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-              }
+            if (filteredBusinesses.length > 0 && engineRef.current) {
+              engineRef.current.fitBusinesses(filteredBusinesses);
             }
           }}
           className="w-10 h-10 rounded-2xl flex items-center justify-center border cursor-pointer shadow-lg backdrop-blur-xl active:scale-90 transition-transform"
