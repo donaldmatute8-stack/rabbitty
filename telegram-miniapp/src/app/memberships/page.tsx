@@ -147,6 +147,16 @@ export default function MembershipsPage() {
   // Acceso directo desde el Rabbitty Pass: /memberships?focus=<id>
   const [focusId, setFocusId] = useState<string | null>(null);
 
+  // Apertura directa desde el pase: /memberships?open=<id> abre esa membresía,
+  // no la lista. ?focus=<id> (compatibilidad) solo desplaza y resalta.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const openId = params.get('open');
+    if (!openId || memberships.length === 0) return;
+    const match = memberships.find((m) => m.id === openId);
+    if (match) setActive(match);
+  }, [memberships]);
+
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('focus');
     if (!id) return;

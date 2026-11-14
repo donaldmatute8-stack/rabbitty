@@ -25,13 +25,24 @@ export function getRarity(bunz: number): RarityKey {
   return 'common';
 }
 
-/** URL de logo segura: solo http(s), sin comillas ni ángulos. */
+/**
+ * URL de logo segura.
+ *
+ * El backend manda rutas relativas (`/uploads/...`), URLs http(s) y a veces
+ * data URLs base64; las tres deben verse en el pin. Se bloquea cualquier otro
+ * esquema (javascript:, data:text/html…) y los caracteres que romperían el
+ * atributo.
+ */
 export function safeLogoUrl(raw?: string | null): string | null {
   if (!raw) return null;
   const url = raw.trim();
-  if (!/^https?:\/\//i.test(url)) return null;
+  if (!url) return null;
   if (/[\s"'<>]/.test(url)) return null;
-  return url;
+
+  if (url.startsWith('/')) return url;                       // ruta relativa
+  if (/^https?:\/\//i.test(url)) return url;                 // absoluta
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(url)) return url;
+  return null;
 }
 
 export function getIcon(category?: string) {

@@ -336,7 +336,7 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
 
   const openMemberships = (target: string) => {
     haptic('medium');
-    router.push(target === 'memberships' ? '/memberships' : `/memberships?focus=${encodeURIComponent(target)}`);
+    router.push(target === 'memberships' ? '/memberships' : `/memberships?open=${encodeURIComponent(target)}`);
   };
 
   /** A dónde va “Mi Membresía”: la predeterminada o el hub. */

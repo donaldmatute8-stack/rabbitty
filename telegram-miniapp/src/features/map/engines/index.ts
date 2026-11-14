@@ -1,11 +1,10 @@
 /**
  * Fábrica del motor de mapa.
  *
- * Estado actual (decisión conservadora): **Leaflet es el motor por defecto**
- * porque es el que está probado en producción. MapLibre + OpenFreeMap queda
- * disponible con `NEXT_PUBLIC_MAP_ENGINE=maplibre` hasta que se valide en
- * dispositivo; si al activarlo no logra pintar en unos segundos, se cambia solo
- * a Leaflet.
+ * **MapLibre + OpenFreeMap por defecto** (tiles vectoriales, sin key, estilo
+ * propio). Leaflet queda como respaldo: se usa con
+ * `NEXT_PUBLIC_MAP_ENGINE=leaflet` o si MapLibre no logra pintar en unos
+ * segundos (sin WebGL, worker bloqueado, tile server caído).
  *
  * Las dos implementaciones se cargan en diferido: el bundle inicial no lleva
  * ninguna.
@@ -21,7 +20,7 @@ const MAPLIBRE_READY_TIMEOUT_MS = 3500;
 export async function createMapEngine(opts: MapEngineOptions): Promise<MapEngine> {
   const forced = process.env.NEXT_PUBLIC_MAP_ENGINE;
 
-  if (forced !== 'maplibre') {
+  if (forced === 'leaflet') {
     const { createLeafletEngine } = await import('./leafletEngine');
     return createLeafletEngine(opts);
   }

@@ -568,10 +568,14 @@ export default function InteractiveMap({
         {engineKind === 'maplibre' ? '© OpenStreetMap · OpenFreeMap' : '© OpenStreetMap'}
       </span>
 
-      {/* Lienzo del motor de mapa (oculto solo si MapKit nativo está activo) */}
-      <div 
-        ref={mapRef} 
-        className={`absolute inset-0 z-0 transition-opacity duration-300 ${nativeMapActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`} 
+      {/* Lienzo del motor de mapa (oculto solo si MapKit nativo está activo).
+          El tamaño va en línea porque maplibre-gl.css define `.maplibregl-map`
+          como `position: relative` y anula el `absolute` de Tailwind: el
+          contenedor quedaba en 0 px de alto y el canvas no pintaba. */}
+      <div
+        ref={mapRef}
+        className={`z-0 transition-opacity duration-300 ${nativeMapActive ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
       />
 
       {/* Top HUD: Spots Counter & Quick Stats */}
