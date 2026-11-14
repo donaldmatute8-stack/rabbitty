@@ -1,7 +1,14 @@
 'use client';
 
+/**
+ * Toaster de sonner con la identidad de Rabbitty.
+ *
+ * Se monta una sola vez en el layout. Lo usan las pantallas que llaman
+ * `toast.*` directamente (cobro del escáner del negocio, QR del POS); antes el
+ * <Toaster> no estaba montado y esos avisos nunca se veían.
+ */
+
 import { Toaster as Sonner, toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 interface ToastProps {
   position?: 'top-center' | 'top-right' | 'top-left' | 'bottom-center' | 'bottom-right' | 'bottom-left';
@@ -12,29 +19,33 @@ export function Toaster({ position = 'top-center', className }: ToastProps) {
   return (
     <Sonner
       position={position}
+      offset={76}
+      gap={10}
+      duration={4000}
+      visibleToasts={3}
+      closeButton={false}
+      richColors={false}
+      className={className}
       toastOptions={{
+        style: {
+          // Mismo cristal que los toasts de la app (ToastContext).
+          background: 'color-mix(in srgb, var(--bg-elevated, #14101c) 82%, transparent)',
+          backdropFilter: 'blur(26px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(26px) saturate(180%)',
+          border: '1px solid color-mix(in srgb, var(--border-subtle, rgba(255,255,255,0.12)) 85%, transparent)',
+          borderRadius: '20px',
+          boxShadow: '0 18px 40px -22px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04) inset',
+          color: 'var(--text-primary, #ffffff)',
+          padding: '12px 14px',
+        },
         classNames: {
-          toast: cn(
-            'group rounded-[var(--radius-lg)] border border-[var(--border-default)]',
-            'bg-[var(--bg-elevated)] text-[var(--text-primary)]',
-            'shadow-[var(--shadow-lg)] p-4 gap-3',
-            'data-[type=success]:border-l-4 data-[type=success]:border-l-[var(--success)]',
-            'data-[type=error]:border-l-4 data-[type=error]:border-l-[var(--error)]',
-            'data-[type=warning]:border-l-4 data-[type=warning]:border-l-[var(--warning)]',
-            'data-[type=info]:border-l-4 data-[type=info]:border-l-[var(--info)]',
-            className
-          ),
-          title: 'text-[var(--text-body)] font-semibold',
-          description: 'text-[var(--text-caption)] text-[var(--text-muted)]',
-          actionButton: 'bg-[var(--rabbitty-pink)] text-white text-[var(--text-small)] font-medium px-3 py-1.5 rounded-[var(--radius-md)]',
-          cancelButton: 'text-[var(--text-muted)] text-[var(--text-small)] hover:text-[var(--text-primary)]',
-          closeButton: 'text-[var(--text-muted)] hover:text-[var(--text-primary)]',
+          title: 'text-[13.5px] font-semibold leading-snug',
+          description: 'text-[11.5px] text-[var(--text-muted)]',
+          actionButton:
+            'bg-[var(--rabbitty-pink)] text-white text-[12px] font-bold px-3 py-1.5 rounded-xl',
+          cancelButton: 'text-[var(--text-muted)] text-[12px] font-semibold',
         },
       }}
-      duration={4000}
-      closeButton
-      richColors
-      visibleToasts={3}
     />
   );
 }

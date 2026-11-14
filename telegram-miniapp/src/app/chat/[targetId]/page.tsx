@@ -351,21 +351,41 @@ function VoiceNoteBubble({
     };
   }, [src, totalSec]);
 
-  const togglePlay = (e: React.MouseEvent) => {
+  const togglePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
     PlatformBridge.hapticFeedback('light');
     const el = audioRef.current;
     if (!el || !src) return;
-    if (playing) {
-      el.pause();
-    } else {
-      // Pausar cualquier otro audio activo en la página
-      document.querySelectorAll('audio').forEach((other) => {
-        if (other !== el) {
-          try { other.pause(); } catch {}
-        }
-      });
-      el.play().catch(() => void playWithFallbacks(el));
+
+    // Pausa (también corta el fallback por AudioContext, que no usa <audio>).
+    if (!el.paused || playing) {
+      try { el.pause(); } catch { /* noop */ }
+      try { sourceRef.current?.stop?.(); } catch { /* noop */ }
+      sourceRef.current = null;
+      setPlaying(false);
+      return;
+    }
+
+    // Pausar cualquier otro audio activo en la página
+    document.querySelectorAll('audio').forEach((other) => {
+      if (other !== el) {
+        try { other.pause(); } catch {}
+      }
+    });
+
+    // Optimista: el primer tap debe responder ya. Antes el icono esperaba al
+    // evento `play` (que en iOS llega cuando el archivo terminó de cargar), así
+    // que el botón parecía muerto y hacía falta un segundo toque.
+    setPlaying(true);
+    try {
+      await el.play();
+    } catch {
+      // iOS/WKWebView: si el códec nativo falla, se decodifica aparte.
+      try {
+        await playWithFallbacks(el);
+      } catch {
+        setPlaying(false);
+      }
     }
   };
 
@@ -465,7 +485,7 @@ function VoiceNoteBubble({
         userSelect: 'none',
       }}
     >
-      {src && <audio ref={audioRef} src={src} data-raw-src={rawSrc || ''} preload="metadata" style={{ display: 'none' }} />}
+      {src && <audio ref={audioRef} src={src} data-raw-src={rawSrc || ''} preload="auto" style={{ display: 'none' }} />}
 
       {/* Botón circular Play / Pause estilo Telegram */}
       <button
@@ -1631,7 +1651,13 @@ export default function ChatRoomPage() {
       );
       form.append('conversationId', id);
       form.append('durationMs', String(Math.round(durationMs || 0)));
-      const res = await fetch('/api/chat/media', { method: 'POST', headers: clean, body: form });
+      const res = await fetch('/api/chat/media', {
+        method: 'POST',
+        headers: clean,
+        body: form,
+        // Si el bucket no responde, no dejamos al usuario esperando minutos.
+        signal: AbortSignal.timeout(60_000),
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success || !data.key) {
         console.warn('[chat] media upload falló:', res.status, data?.error);

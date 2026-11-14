@@ -13,6 +13,9 @@ import {
 } from '@/lib/media/storage';
 
 export const runtime = 'nodejs';
+// La subida real al bucket es de segundos; si algo se cuelga, falla antes del
+// límite de la plataforma en vez de esperar 300 s.
+export const maxDuration = 60;
 
 /**
  * ── POST /api/chat/media ── sube una nota de voz o una foto al bucket privado.

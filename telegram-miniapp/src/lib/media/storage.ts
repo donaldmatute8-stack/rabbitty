@@ -84,6 +84,13 @@ export function keyBelongsToConversation(key: string, conversationId: string): b
   return !key.includes('..');
 }
 
+/**
+ * Presupuesto de la subida/lectura. Antes, si el bucket no respondía, la
+ * función de Vercel se quedaba colgada hasta el límite de 300 s; ahora falla
+ * rápido y el cliente puede reintentar.
+ */
+const STORAGE_TIMEOUT_MS = 25_000;
+
 export async function uploadObject(
   key: string,
   body: ArrayBuffer,
@@ -91,10 +98,28 @@ export async function uploadObject(
 ): Promise<void> {
   const cfg = getMediaConfig();
   if (!cfg) throw new Error('MEDIA_STORAGE_NOT_CONFIGURED');
-  const res = await client(cfg).fetch(objectUrl(cfg, key), {
+
+  const bytes = body instanceof Uint8Array ? body : new Uint8Array(body);
+
+  // `AwsClient.fetch()` firma y reenvía un `Request` con el cuerpo: en el
+  // runtime de Vercel ese cuerpo se emite como stream (Transfer-Encoding:
+  // chunked) y S3/Tigris responde `411 MissingContentLength`. Firmamos la URL
+  // y hacemos el PUT con el buffer y `Content-Length` explícito: el objeto
+  // llega completo en un solo envío.
+  const signed = await client(cfg).sign(objectUrl(cfg, key), {
     method: 'PUT',
-    body,
+    body: bytes,
     headers: { 'Content-Type': contentType },
+  });
+
+  const headers = new Headers(signed.headers);
+  headers.set('Content-Length', String(bytes.byteLength));
+
+  const res = await fetch(signed.url, {
+    method: 'PUT',
+    headers,
+    body: bytes,
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -105,7 +130,10 @@ export async function uploadObject(
 export async function getObject(key: string): Promise<Response> {
   const cfg = getMediaConfig();
   if (!cfg) throw new Error('MEDIA_STORAGE_NOT_CONFIGURED');
-  return client(cfg).fetch(objectUrl(cfg, key), { method: 'GET' });
+  return client(cfg).fetch(objectUrl(cfg, key), {
+    method: 'GET',
+    signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+  });
 }
 
 export async function deleteObject(key: string): Promise<void> {

@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { WalletProvider } from "@/contexts/WalletContext";
 import AuthProvider from "@/features/auth/AuthProvider";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { Toaster } from "@/components/ui/Toast";
 import AppOpener from "@/components/AppOpener";
 import DeepLinkHandler from "@/components/DeepLinkHandler";
 import BunzyLaunchOverlay from "@/components/bunzy/BunzyLaunchOverlay";
@@ -55,6 +56,7 @@ export default function RootLayout({
           <BunzyLaunchOverlay />
         <AppOpener />
           <ToastProvider>
+            <Toaster />
             <AuthProvider>
               <DeepLinkHandler />
               <WalletProvider>
