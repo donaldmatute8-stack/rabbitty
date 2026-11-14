@@ -21,6 +21,24 @@ export default function BusinessScanPage() {
   const [fiatAmount, setFiatAmount] = useState('');
   const [processing, setProcessing] = useState(false);
 
+  // ── Modo: dar Bunz (recompensa) o cobrar Bunz (consumo) ──
+  const [mode, setMode] = useState<"mint" | "charge">("mint");
+  const [chargeCustomer, setChargeCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [chargeStage, setChargeStage] = useState<"idle" | "waiting" | "done">("idle");
+  const [chargeInfo, setChargeInfo] = useState<{ requestId: string; orderId: string } | null>(null);
+  const [onCellular, setOnCellular] = useState(false);
+
+  // Igual que el comandero: cobrar exige conexión del local, no datos móviles.
+  useEffect(() => {
+    const conn = (navigator as unknown as { connection?: { type?: string } }).connection;
+    if (!conn) return;
+    const check = () => setOnCellular(String(conn.type || "") === "cellular");
+    check();
+    const el = conn as unknown as EventTarget;
+    el.addEventListener?.("change", check);
+    return () => el.removeEventListener?.("change", check);
+  }, []);
+
   useEffect(() => {
     if (user?.id) {
       PlatformBridge.getAuthHeaders()
@@ -43,8 +61,14 @@ export default function BusinessScanPage() {
       const res = await resolveScannedPayload(decodedText);
       if (res.type === 'user' && res.user?.id) {
         setScannedAddress(res.user.id);
-        setShowMintModal(true);
-        toast.success(`Cliente identificado: ${res.user.name}`);
+        if (mode === "charge") {
+          setChargeCustomer({ id: res.user.id, name: res.user.name || "Rabbitter" });
+          setChargeStage("idle");
+          toast.success(`Cliente identificado: ${res.user.name}`);
+        } else {
+          setShowMintModal(true);
+          toast.success(`Cliente identificado: ${res.user.name}`);
+        }
         return;
       }
       if (res.raw) {
@@ -58,6 +82,73 @@ export default function BusinessScanPage() {
 
     setScannedAddress(decodedText);
     setShowMintModal(true);
+  };
+
+  const getCoords = (): Promise<{ lat?: number; lng?: number }> =>
+    new Promise((resolve) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) return resolve({});
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve({}),
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 30_000 },
+      );
+    });
+
+  const startCharge = async () => {
+    if (!business || !chargeCustomer) return;
+    const amount = Number(fiatAmount);
+    if (!amount || amount <= 0) return toast.error("Ingresa un monto válido");
+    if (onCellular) return toast.error("Conéctate al Wi-Fi del local para cobrar.");
+
+    setProcessing(true);
+    const toastId = toast.loading("Creando cobro…");
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const coords = await getCoords();
+      const res = await fetch("/api/business/scan/charge", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: business.id, customerId: chargeCustomer.id, amount, ...coords }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo crear el cobro", { id: toastId });
+        return;
+      }
+      setChargeInfo({ requestId: data.requestId, orderId: data.orderId });
+      setChargeStage("waiting");
+      toast.success("Pídele al cliente aprobar en su app", { id: toastId });
+
+      // Se sondea la captura: el endpoint responde 409 mientras no apruebe.
+      const started = Date.now();
+      const timer = setInterval(async () => {
+        if (Date.now() - started > 5 * 60_000) {
+          clearInterval(timer);
+          setChargeStage("idle");
+          toast.error("La solicitud expiró. Vuelve a intentar.");
+          return;
+        }
+        try {
+          const r = await fetch("/api/business/scan/charge/settle", {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ businessId: business.id, requestId: data.requestId }),
+          });
+          if (r.ok) {
+            const ok = await r.json();
+            clearInterval(timer);
+            setChargeStage("done");
+            setFiatAmount("");
+            toast.success(`Cobrado: ${ok.amount} Bunz`, { duration: 5000 });
+          }
+        } catch { /* sigue esperando */ }
+      }, 3000);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error al cobrar", { id: toastId });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleMintSubmit = async (e: React.FormEvent) => {
@@ -107,13 +198,39 @@ export default function BusinessScanPage() {
   return (
     <div className="px-6 pb-6 max-w-2xl mx-auto w-full" style={{ paddingTop: 'calc(max(env(safe-area-inset-top), 16px) + 24px)' }}>
       <div className="flex items-center justify-between mb-8">
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-black text-black tracking-tight">Escáner de Caja</h1>
           <p className="text-gray-500 text-sm mt-1">
-            Escanea el código QR de los Rabbitters para validar sus certificados o asignarles recompensas por sus consumos.
+            {mode === "charge"
+              ? "Cobra con Bunz al Rabbitter. Se crea una orden real: la ves en el POS, en los turnos y en los reportes."
+              : "Escanea el código QR de los Rabbitters para validar sus certificados o asignarles recompensas por sus consumos."}
           </p>
         </div>
       </div>
+
+      {/* Dar Bunz (recompensa) vs Cobrar Bunz (consumo) */}
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-gray-100 p-1">
+        {([
+          { key: "mint" as const, label: "Dar Bunz" },
+          { key: "charge" as const, label: "Cobrar Bunz" },
+        ]).map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setMode(opt.key)}
+            className={`rounded-xl py-3 text-sm font-black transition-all ${
+              mode === opt.key ? "bg-black text-white shadow" : "text-gray-500"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "charge" && onCellular && (
+        <p className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs font-bold text-amber-800">
+          Estás con datos móviles. Para cobrar, conéctate al Wi-Fi del local.
+        </p>
+      )}
 
       <div className="bg-gray-50 border border-gray-100 rounded-3xl p-8 flex flex-col items-center justify-center text-center mt-12">
         <div className="w-24 h-24 bg-white rounded-full shadow-sm flex items-center justify-center mb-6">
@@ -138,6 +255,75 @@ export default function BusinessScanPage() {
           onScan={handleScan}
           onClose={() => setIsScanning(false)}
         />
+      )}
+
+      {/* Charge Modal */}
+      {chargeCustomer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-4xl w-full max-w-md p-6 shadow-2xl relative">
+            <h2 className="text-2xl font-black text-gray-900 mb-1">
+              {chargeStage === "done" ? "Cobrado" : "Cobrar en Bunz"}
+            </h2>
+            <p className="text-sm text-gray-500 mb-6">
+              {chargeStage === "done"
+                ? "El cobro quedó registrado en la orden y en el turno."
+                : `Cliente: ${chargeCustomer.name}. Se le pedirá aprobar el cobro en su app.`}
+            </p>
+
+            {chargeStage !== "done" && (
+              <>
+                <div className="bg-gray-50 p-4 rounded-2xl mb-6 border border-gray-100">
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    Monto a cobrar (MXN)
+                  </label>
+                  <div className="flex items-center">
+                    <span className="text-2xl font-bold text-gray-400 mr-2">$</span>
+                    <input
+                      type="number"
+                      value={fiatAmount}
+                      onChange={(e) => setFiatAmount(e.target.value)}
+                      className="w-full bg-transparent text-4xl font-black text-black outline-none placeholder:text-gray-300"
+                      placeholder="0.00"
+                      autoFocus
+                      min="1"
+                      disabled={chargeStage === "waiting"}
+                    />
+                  </div>
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    Se descuentan {Number(fiatAmount || 0)} Bunz del saldo del cliente.
+                  </p>
+                </div>
+
+                {chargeStage === "waiting" && (
+                  <p className="mb-4 rounded-2xl border border-violet-200 bg-violet-50 p-3 text-xs font-bold text-violet-700">
+                    Esperando que {chargeCustomer.name} apruebe en su app…
+                  </p>
+                )}
+              </>
+            )}
+
+            <div className="flex gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => { setChargeCustomer(null); setChargeStage("idle"); setFiatAmount(""); setChargeInfo(null); }}
+                className="flex-1 py-4 font-bold text-gray-500 hover:bg-gray-50 rounded-2xl transition-colors"
+                disabled={processing || chargeStage === "waiting"}
+              >
+                {chargeStage === "done" ? "Cerrar" : "Cancelar"}
+              </button>
+              {chargeStage !== "done" && (
+                <button
+                  type="button"
+                  onClick={startCharge}
+                  className="flex-1 py-4 font-bold text-white bg-black rounded-2xl active:scale-95 transition-transform disabled:opacity-50"
+                  disabled={processing || chargeStage === "waiting" || !fiatAmount || onCellular}
+                >
+                  {chargeStage === "waiting" ? "Esperando…" : "Cobrar"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Mint Modal */}
