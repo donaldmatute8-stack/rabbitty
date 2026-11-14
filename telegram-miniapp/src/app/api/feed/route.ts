@@ -82,6 +82,7 @@ export async function GET() {
         distance: 0,
         imageUrl,
         logo_base64: b.logoUrl,
+        logoUrl: b.logoUrl,
         lat: b.lat,
         lng: b.lng,
         hops: b.hops || 0,

@@ -13,13 +13,20 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
 
 // High-performance OpenStreetMap raster tiles (Zero API key watermark, styled via dark filter)
-// CARTO publica dark_all/light_all sin API key (el `?key=` es opcional y solo
-// para cuentas con límites). Antes, si no había key, se caía a OSM *claro* en
-// ambos temas: por eso el mapa nunca se veía oscuro.
-const DARK_MATTER_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const LIGHT_POSITRON_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const MAP_TILE_ATTR =
-  '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+// CARTO exige API key (sin ella devuelve tiles "API KEY Required"). Si no hay
+// key se usa OSM; en tema oscuro se invierte por CSS para que siga viéndose
+// oscuro sin depender de un proveedor con credenciales.
+const cartoKey = process.env.NEXT_PUBLIC_CARTO_KEY;
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const DARK_MATTER_URL = cartoKey
+  ? `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
+  : OSM_TILE_URL;
+const LIGHT_POSITRON_URL = cartoKey
+  ? `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
+  : OSM_TILE_URL;
+const MAP_TILE_ATTR = cartoKey
+  ? '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 export interface MapBusiness {
   id: string;
@@ -594,13 +601,13 @@ export default function InteractiveMap({
     }
     const layer = isDark
       ? L.tileLayer(DARK_MATTER_URL, {
-          subdomains: 'abcd',
+          subdomains: cartoKey ? 'abcd' : 'abc',
           maxZoom: 19,
           className: 'rabbitty-dark-tiles',
           attribution: MAP_TILE_ATTR,
         })
       : L.tileLayer(LIGHT_POSITRON_URL, {
-          subdomains: 'abcd',
+          subdomains: cartoKey ? 'abcd' : 'abc',
           maxZoom: 19,
           className: 'rabbitty-light-tiles',
           attribution: MAP_TILE_ATTR,
@@ -686,7 +693,9 @@ export default function InteractiveMap({
           outline: none;
         }
         .rabbitty-dark-tiles {
-          filter: brightness(0.72) contrast(1.18) saturate(0.78) hue-rotate(-10deg);
+          filter: ${cartoKey
+            ? 'brightness(0.72) contrast(1.18) saturate(0.78) hue-rotate(-10deg)'
+            : 'invert(1) hue-rotate(180deg) brightness(0.88) contrast(1.05) saturate(0.7)'};
         }
         @keyframes radar-spin {
           from { transform: translate(-50%, -50%) rotate(0deg); }
