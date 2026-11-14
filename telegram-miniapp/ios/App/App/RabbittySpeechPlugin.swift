@@ -26,6 +26,12 @@ public class RabbittySpeechPlugin: CAPPlugin, CAPBridgedPlugin {
     private var currentCall: CAPPluginCall?
     private var didInstallTap = false
 
+    /// Cierre por silencio: se reinicia con cada resultado parcial y, si la
+    /// persona deja de hablar, se manda `endAudio()` para forzar el final.
+    private var silenceTimer: Timer?
+    private var hardCapTimer: Timer?
+    private var lastTranscript: String = ""
+
     @objc func available(_ call: CAPPluginCall) {
         let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "es-MX"))
         call.resolve(["available": recognizer?.isAvailable ?? false])
@@ -71,7 +77,7 @@ public class RabbittySpeechPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = false
+        request.shouldReportPartialResults = true
         recognitionRequest = request
 
         let inputNode = audioEngine.inputNode
@@ -91,20 +97,66 @@ public class RabbittySpeechPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         currentCall = call
+        lastTranscript = ""
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             guard let self = self else { return }
-            if let result = result, result.isFinal {
+            if let result = result {
                 let text = result.bestTranscription.formattedString
-                self.finish(text: text, error: nil)
+                if !text.isEmpty { self.lastTranscript = text }
+                if result.isFinal {
+                    self.finish(text: text, error: nil)
+                    return
+                }
+                // Mientras siga llegando texto, se reinicia el contador de silencio.
+                self.armSilenceTimer()
             } else if let error = error {
-                self.finish(text: nil, error: error.localizedDescription)
+                self.finish(text: self.lastTranscript.isEmpty ? nil : self.lastTranscript, error: error.localizedDescription)
             }
+        }
+
+        // Tope duro: nunca dejar el micrófono abierto más de 15 s.
+        hardCapTimer?.invalidate()
+        hardCapTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+            self?.stopListeningAndFinish()
+        }
+        armSilenceTimer(initial: true)
+    }
+
+    /// Si hay 1.4 s sin novedades, se cierra la captura y el reconocedor finaliza.
+    private func armSilenceTimer(initial: Bool = false) {
+        silenceTimer?.invalidate()
+        // 4 s de gracia para empezar a hablar; 1.4 s entre avances del dictado.
+        let delay: TimeInterval = initial ? 4.0 : 1.4
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.stopListeningAndFinish()
         }
     }
 
+    private func stopListeningAndFinish() {
+        guard currentCall != nil else { return }
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if didInstallTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            didInstallTap = false
+        }
+        // endAudio deja que el reconocedor entregue el resultado final.
+        recognitionRequest?.endAudio()
+    }
+
     @objc func stop(_ call: CAPPluginCall) {
-        stopRecognition()
-        call.resolve()
+        // Cierre manual (el usuario toca el micrófono): se entrega lo último
+        // escuchado en lugar de tirarlo.
+        stopListeningAndFinish()
+        let partial = lastTranscript
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+            guard let self = self, self.currentCall != nil else { return }
+            // Si el resultado final no llegó, se resuelve con lo último escuchado.
+            self.finish(text: self.lastTranscript.isEmpty ? (partial.isEmpty ? nil : partial) : self.lastTranscript, error: nil)
+        }
     }
 
     private func finish(text: String?, error: String?) {
@@ -119,6 +171,10 @@ public class RabbittySpeechPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func stopRecognition() {
+        silenceTimer?.invalidate()
+        silenceTimer = nil
+        hardCapTimer?.invalidate()
+        hardCapTimer = nil
         if audioEngine.isRunning {
             audioEngine.stop()
         }

@@ -49,6 +49,9 @@ export default function RootLayout({
           src="https://telegram.org/js/telegram-web-app.js"
           async
         />
+        {/* Mapa: abrir TLS/DNS antes de que el motor pida tiles (menos latencia) */}
+        <link rel="preconnect" href="https://tiles.openfreemap.org" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://tiles.openfreemap.org" />
       </head>
       <body className="antialiased" suppressHydrationWarning>
         <NativeGestures />

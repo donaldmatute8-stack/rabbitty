@@ -283,6 +283,10 @@ function VoiceNoteBubble({
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { showToast } = useToast();
+  // La ruta /api/chat/media exige sesión (Bearer). El <audio> no manda headers,
+  // así que se descarga con auth y se reproduce desde un blob local.
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [audioLoadFailed, setAudioLoadFailed] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -312,6 +316,41 @@ function VoiceNoteBubble({
     }
     return arr;
   }, [msgId]);
+
+  useEffect(() => {
+    if (!src) {
+      setAudioSrc(null);
+      setAudioLoadFailed(false);
+      return;
+    }
+    // Blob/data URLs ya son reproducibles tal cual.
+    if (!src.startsWith('/api/chat/media/')) {
+      setAudioSrc(src);
+      setAudioLoadFailed(false);
+      return;
+    }
+    let alive = true;
+    let objectUrl: string | null = null;
+    setAudioLoadFailed(false);
+    void (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch(src, { headers: headers as Record<string, string> });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (!alive) return;
+        objectUrl = URL.createObjectURL(blob);
+        setAudioSrc(objectUrl);
+      } catch (err) {
+        console.warn('[voice] no se pudo cargar el audio:', err);
+        if (alive) setAudioLoadFailed(true);
+      }
+    })();
+    return () => {
+      alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [src]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -355,7 +394,10 @@ function VoiceNoteBubble({
     e.stopPropagation();
     PlatformBridge.hapticFeedback('light');
     const el = audioRef.current;
-    if (!el || !src) return;
+    if (!el || !audioSrc) {
+      if (audioLoadFailed) showToast('No se pudo cargar la nota de voz. Vuelve a abrir el chat.', 'error');
+      return;
+    }
 
     // Pausa (también corta el fallback por AudioContext, que no usa <audio>).
     if (!el.paused || playing) {
@@ -459,7 +501,7 @@ function VoiceNoteBubble({
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const el = audioRef.current;
-    if (!el || !src) return;
+    if (!el || !audioSrc) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const dur = el.duration && Number.isFinite(el.duration) ? el.duration : totalSec;
@@ -485,7 +527,7 @@ function VoiceNoteBubble({
         userSelect: 'none',
       }}
     >
-      {src && <audio ref={audioRef} src={src} data-raw-src={rawSrc || ''} preload="auto" style={{ display: 'none' }} />}
+      {audioSrc && <audio ref={audioRef} src={audioSrc} data-raw-src={rawSrc || ''} preload="auto" style={{ display: 'none' }} />}
 
       {/* Botón circular Play / Pause estilo Telegram */}
       <button

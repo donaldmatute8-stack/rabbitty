@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/contexts/ToastContext';
 import { PlatformBridge } from '@/lib/platform';
 import MembershipCard from '@/components/ui/MembershipCard';
+import BunnyInlineLoader from '@/components/ui/BunnyInlineLoader';
 import ProfileDrawer from '@/components/ProfileDrawer';
 import { useTheme } from '@/contexts/ThemeContext';
 import RabbittyContourLoader from '@/components/ui/RabbittyContourLoader';
@@ -829,26 +830,7 @@ export default function FeedPage() {
             }}
             aria-hidden={!refreshingFeed && pullDist <= 4}
           >
-            <div className="flex items-center gap-2.5">
-              <motion.img
-                src={isDark ? '/logo_conejo.png' : '/logo_conejo_blk.png'}
-                alt=""
-                animate={{ rotate: [0, -12, 12, 0] }}
-                transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
-                className="h-5 w-5 object-contain drop-shadow-[0_0_8px_rgba(233,30,99,0.45)]"
-              />
-              <div className="flex items-center gap-[3px] h-4">
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <motion.div
-                    key={i}
-                    className="w-[3px] rounded-full bg-linear-to-t from-purple-600 via-pink-500 to-cyan-300"
-                    animate={{ height: [6, 14, 6] }}
-                    transition={{ repeat: Infinity, duration: 0.8, delay: i * 0.09, ease: 'easeInOut' }}
-                  />
-                ))}
-              </div>
-
-            </div>
+            <BunnyInlineLoader size={20} />
           </div>
 
           {/* Loader del conejo (global, se muestra al actualizar desde cualquier pestaña) */}

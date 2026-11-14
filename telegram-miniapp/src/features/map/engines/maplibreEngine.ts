@@ -93,7 +93,7 @@ export async function createMapLibreEngine(opts: MapEngineOptions): Promise<MapE
     zoom: 13,
     minZoom: 2,
     maxZoom: 19,
-    fadeDuration: 80,
+    fadeDuration: 0,
     dragRotate: false,
     pitchWithRotate: false,
     touchPitch: false,
@@ -311,13 +311,17 @@ export async function createMapLibreEngine(opts: MapEngineOptions): Promise<MapE
 
   map.on('load', () => {
     if (disposed) return;
-    // Centrado inicial: el usuario si ya llegó del GPS, si no el primer spot.
-    if (!ready) {
+    ensureLayers();
+    syncMarkers();
+    // `load` solo significa "estilo listo": todavía puede no haber un solo tile
+    // pintado. El loader se quita con el primer `idle` (tiles dibujados) y, si
+    // el servidor tarda, con el tope de abajo.
+    map.once('idle', () => {
+      if (disposed || ready) return;
       ready = true;
-      ensureLayers();
       onReady();
       syncMarkers();
-    }
+    });
   });
 
   // Cluster: al tocar, se acerca hasta desagrupar.
@@ -349,7 +353,7 @@ export async function createMapLibreEngine(opts: MapEngineOptions): Promise<MapE
       ready = true;
       onReady();
     }
-  }, 6000);
+  }, 3500);
 
   return {
     kind: 'maplibre',

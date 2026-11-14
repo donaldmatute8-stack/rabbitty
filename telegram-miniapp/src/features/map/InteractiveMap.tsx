@@ -9,6 +9,7 @@ import {
 import { PlatformBridge } from '@/lib/platform';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RabbittyMap } from './nativeMapBridge';
+import BunnyInlineLoader from '@/components/ui/BunnyInlineLoader';
 import { createMapEngine, type MapEngine } from './engines';
 import { getIcon } from './markers';
 import type { MapBusiness } from './engines/types';
@@ -40,13 +41,11 @@ export default function InteractiveMap({
   const [engineKind, setEngineKind] = useState<'maplibre' | 'leaflet'>('leaflet');
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-  const affiliateParam = searchParams?.get('affiliate');
+  // Se leen después de montar: leer `window` durante el render provoca
+  // desajuste de hidratación (React regenera el árbol y el mapa carga dos veces).
+  const [affiliateParam, setAffiliateParam] = useState<string | null>(null);
 
-  const [selected, setSelected] = useState<MapBusiness | null>(() => {
-    if (!affiliateParam || !businesses || businesses.length === 0) return null;
-    return businesses.find(b => b.id === affiliateParam) || null;
-  });
+  const [selected, setSelected] = useState<MapBusiness | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [activeMode, setActiveMode] = useState<string>('Todos');
   
@@ -54,13 +53,24 @@ export default function InteractiveMap({
   const [isListening, setIsListening] = useState(false);
   const [copilotQuery, setCopilotQuery] = useState('');
   const [copilotReply, setCopilotReply] = useState<string | null>(null);
-  const speechSupported = typeof window !== 'undefined' && (
-    PlatformBridge.isNative() ||
-    'webkitSpeechRecognition' in window ||
-    'SpeechRecognition' in window
-  );
-  const isNativeIos = typeof window !== 'undefined' && PlatformBridge.isIos();
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [isNativeIos, setIsNativeIos] = useState(false);
+
+  useEffect(() => {
+    setAffiliateParam(new URLSearchParams(window.location.search).get('affiliate'));
+    setSpeechSupported(
+      PlatformBridge.isNative() ||
+        'webkitSpeechRecognition' in window ||
+        'SpeechRecognition' in window,
+    );
+    setIsNativeIos(PlatformBridge.isIos());
+  }, []);
   const [nativeMapActive, setNativeMapActive] = useState(false);
+  // Voz: referencias para poder cortar al detectar silencio y no perder lo dicho.
+  const recognitionRef = useRef<{ stop: () => void; abort?: () => void } | null>(null);
+  const voiceTranscriptRef = useRef('');
+  const voiceSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nativeSpeechRef = useRef<{ stop?: () => Promise<unknown> } | null>(null);
 
   const router = useRouter();
 
@@ -68,6 +78,7 @@ export default function InteractiveMap({
   useEffect(() => {
     if (!affiliateParam || businesses.length === 0) return;
     const target = businesses.find(b => b.id === affiliateParam);
+    if (target) setSelected(target);
     if (target && target.lat && target.lng && engineRef.current) {
       engineRef.current?.flyTo(Number(target.lat), Number(target.lng), 16.5, 1200);
     }
@@ -252,6 +263,14 @@ export default function InteractiveMap({
     PlatformBridge.hapticFeedback('medium');
 
     if (isListening) {
+      // Antes solo se apagaba el estado: se perdía lo dictado y el motor seguía
+      // escuchando. Ahora se cierra el micrófono y se procesa lo reconocido.
+      try { recognitionRef.current?.stop(); } catch { /* noop */ }
+      try { void nativeSpeechRef.current?.stop?.(); } catch { /* noop */ }
+      if (voiceSilenceTimerRef.current) {
+        clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = null;
+      }
       setIsListening(false);
       return;
     }
@@ -378,17 +397,36 @@ export default function InteractiveMap({
 
       recognition.lang = 'es-MX';
       recognition.continuous = false;
-      recognition.interimResults = false;
+      // Resultados parciales: permiten saber que la persona sigue hablando y
+      // cerrar solos al detectar silencio (Safari no siempre emite el final).
+      recognition.interimResults = true;
+      recognitionRef.current = recognition as unknown as { stop: () => void };
+      voiceTranscriptRef.current = '';
+
+      const armSilence = () => {
+        if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = setTimeout(() => {
+          voiceSilenceTimerRef.current = null;
+          try { recognition.stop(); } catch { /* noop */ }
+        }, 1400);
+      };
 
       recognition.onstart = () => {
         setIsListening(true);
+        armSilence();
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       recognition.onresult = (event: any) => {
-        const text = event.results?.[0]?.[0]?.transcript;
-        setIsListening(false);
-        if (text) handleVoiceCommand(text);
+        let text = '';
+        for (let i = event.resultIndex ?? 0; i < (event.results?.length ?? 0); i += 1) {
+          const part = event.results?.[i]?.[0]?.transcript;
+          if (part) text += part;
+        }
+        const clean = text.trim();
+        if (!clean) return;
+        voiceTranscriptRef.current = clean;
+        armSilence();
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -404,7 +442,15 @@ export default function InteractiveMap({
       };
 
       recognition.onend = () => {
+        if (voiceSilenceTimerRef.current) {
+          clearTimeout(voiceSilenceTimerRef.current);
+          voiceSilenceTimerRef.current = null;
+        }
         setIsListening(false);
+        recognitionRef.current = null;
+        const said = voiceTranscriptRef.current.trim();
+        voiceTranscriptRef.current = '';
+        if (said) handleVoiceCommand(said);
       };
 
       try {
@@ -424,6 +470,12 @@ export default function InteractiveMap({
       setTimeout(() => setCopilotReply(null), 3500);
     }
   };
+
+  // Voz: no dejar timers ni micrófono abiertos al salir del mapa.
+  useEffect(() => () => {
+    if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
+    try { recognitionRef.current?.abort?.(); } catch { /* noop */ }
+  }, []);
 
   // ── Inicialización del motor (una sola vez) ──
   // maplibre (OpenFreeMap, vectorial) con respaldo automático a leaflet.
@@ -562,6 +614,17 @@ export default function InteractiveMap({
             : `repeating-linear-gradient(60deg,rgba(0,136,204,0.02) 0px,rgba(0,136,204,0.02) 1px,transparent 1px,transparent 30px)`
         }} 
       />
+
+      {/* Mientras el motor no reporta listo: mismo loader que el inicio */}
+      {!mapReady && !nativeMapActive && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center"
+          style={{ background: isDark ? '#08050E' : '#F8FAFC' }}
+          aria-live="polite"
+        >
+          <BunnyInlineLoader size={26} label="Cargando mapa" />
+        </div>
+      )}
 
       {/* Atribución mínima de los tiles (OpenFreeMap sirve datos de OSM) */}
       <span className="rabbitty-map-credit">
