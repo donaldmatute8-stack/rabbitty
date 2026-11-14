@@ -1676,7 +1676,9 @@ export default function PosPage() {
     customerName?: string,
     awardedBunz?: number,
     claimToken?: string,
-    orderId?: string
+    orderId?: string,
+    // Partes del pago dividido: se imprimen con método y monto en el ticket.
+    splitPayments?: Array<{ method: string; amount: number; reference?: string }>
   ) => {
     const rest = ticketContext?.restaurant;
     const branch = ticketContext?.branch;
@@ -1725,6 +1727,17 @@ export default function PosPage() {
       gratuityMode: String((rest as any)?.gratuityMode || "OFF"),
       customerAssigned: Boolean(selectedRabbitter?.id) || undefined,
       paymentMethod: method,
+      payments: splitPayments && splitPayments.length > 0
+        ? splitPayments.map((p) => ({
+            method:
+              p.method === "CASH" ? "EFECTIVO"
+              : p.method === "BUNZ" ? "BUNZ"
+              : p.method === "DEBIT_CARD" ? "TARJETA DEBITO"
+              : "TARJETA",
+            amount: p.amount,
+            reference: p.reference,
+          }))
+        : undefined,
       cashGiven: cashGiven && cashGiven > 0 ? cashGiven : undefined,
       change: changeAmount,
       currency: rest?.currency || "MXN",
@@ -1734,7 +1747,10 @@ export default function PosPage() {
         : undefined,
       usdRate: (rest as any)?.showUsdTicket ? Number((rest as any)?.usdRate) || undefined : undefined,
       bunzCashbackRate: selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20,
-      estimatedBunz: Math.max(1, Math.round(total * ((selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20) / 100))),
+      // Sin mínimo artificial: $0 (membresía que cubre todo) = 0 Bunz.
+      estimatedBunz: total > 0
+        ? Math.max(1, Math.round(total * ((selectedRabbitter?.currentRewardRate ?? rest?.defaultRewardRate ?? 20) / 100)))
+        : 0,
       customerName: customerName || selectedRabbitter?.name || undefined,
       membership: detectedMembership
         ? membershipTicketData(detectedMembership, selectedBenefitIds.length > 0)
@@ -2029,7 +2045,8 @@ export default function PosPage() {
           checkoutResult.customerName || selectedRabbitter?.name || undefined,
           checkoutResult.awardedBunz || undefined,
           checkoutResult.claimToken || undefined,
-          checkoutResult.orderId || undefined
+          checkoutResult.orderId || undefined,
+          isMembershipCovered ? undefined : splitOverride
         );
         setLastPaidOrderId(checkoutResult.orderId ?? null);
         setSelectedBenefitIds([]); // beneficios ya consumidos y ligados al ticket

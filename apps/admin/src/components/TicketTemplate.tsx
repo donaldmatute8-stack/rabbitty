@@ -209,7 +209,7 @@ export function TicketTemplate({
           )}
           {data.membership.applied && (
             <p className={`text-center text-[9px] mt-1.5 font-bold ${isThermalPaper ? "text-black" : "text-emerald-300"}`}>
-              Beneficios aplicados a esta venta
+              {(data.total || 0) <= 0 ? "Consumo cubierto por la membresía" : "Beneficios aplicados a esta venta"}
             </p>
           )}
         </div>
@@ -321,7 +321,10 @@ export function TicketTemplate({
         </div>
       </div>
 
-      {/* ── BUNZ CASHBACK & RABBITTY LOYALTY ── */}
+      {/* ── BUNZ CASHBACK & RABBITTY LOYALTY ──
+          Solo si hay algo que acreditar o reclamar. Un consumo cubierto por
+          membresía no genera Bunz y no imprime QR. */}
+      {(data.awardedBunz && data.awardedBunz > 0) || estimatedBunz > 0 ? (
       <div className={`py-3 space-y-2 text-center border-b border-dashed border-gray-700 ${isThermalPaper ? "text-black" : "text-gray-300"}`}>
         {(data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ") || (data.awardedBunz && data.awardedBunz > 0)) ? (
           <div className="rounded-xl p-2 bg-linear-to-r from-emerald-500/10 via-emerald-400/10 to-emerald-500/10 border border-white/5 space-y-1">
@@ -357,6 +360,7 @@ export function TicketTemplate({
           </>
         )}
       </div>
+      ) : null}
 
       {/* ── FOOTER & POWERED BY ── */}
       <div className="pt-3 text-center space-y-1 text-[10px]">

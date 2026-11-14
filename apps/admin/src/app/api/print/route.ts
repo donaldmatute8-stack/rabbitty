@@ -124,9 +124,12 @@ export async function POST(req: Request) {
     ticket += `Metodo de Pago: ${paymentMethod}\n`;
     ticket += "--------------------------------\n";
     ticket += CENTER;
-    ticket += `${BOLD_ON}Ganas +${bunzEstimated} Bunz Cashback!${BOLD_OFF}\n`;
-    ticket += "Escanea en Rabbitty App\n";
-    ticket += `[ QR: RBBTY-${orderNumber}-VERIF ]\n`;
+    // Solo si hubo consumo: un ticket de $0 (membresía) no da Bunz ni QR.
+    if (bunzEstimated > 0) {
+      ticket += `${BOLD_ON}Ganas +${bunzEstimated} Bunz Cashback!${BOLD_OFF}\n`;
+      ticket += "Escanea en Rabbitty App\n";
+      ticket += `[ QR: RBBTY-${orderNumber}-VERIF ]\n`;
+    }
     ticket += "--------------------------------\n";
     ticket += "Gracias por tu visita!\n";
     ticket += "🐰 POWERED BY RABBITTY OS\n";

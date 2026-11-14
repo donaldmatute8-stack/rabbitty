@@ -344,9 +344,31 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
   }
   addText(divider);
 
-  // FORMAS DE PAGO
+  // MEMBRESÍA: es un beneficio, no un pago. Se imprime aparte y, si cubrió
+  // todo el consumo, no hay forma de pago que mostrar (ni Bunz ni QR).
+  if (data.membership) {
+    addText(`MEMBRESIA\n`);
+    if (data.membership.planName) addText(`Plan: ${data.membership.planName}\n`);
+    if (data.membership.memberName) addText(`Miembro: ${data.membership.memberName}\n`);
+    if (data.membership.validity) addText(`${data.membership.validity}\n`);
+    if (Array.isArray(data.membership.benefits) && data.membership.benefits.length > 0) {
+      addText(`Beneficios aplicados:\n`);
+      for (const b of data.membership.benefits) {
+        const quota = b?.quota != null ? ` (${b?.remaining ?? 0}/${b.quota})` : "";
+        addText(`  - ${String(b?.label ?? "")}${quota}\n`);
+      }
+    }
+    const membershipCoversAll = Number(data.total || 0) <= 0;
+    if (data.membership.applied && membershipCoversAll) {
+      addText(`* Consumo cubierto por la membresia\n`);
+    }
+    addText(divider);
+  }
+
+  // FORMAS DE PAGO (si la membresía cubrió todo, no hay ninguna)
   chunks.push(alignLeft);
-  if (Array.isArray(data.payments) && data.payments.length > 0) {
+  const isMembershipOnly = Boolean(data.membership?.applied) && Number(data.total || 0) <= 0;
+  if (!isMembershipOnly && Array.isArray(data.payments) && data.payments.length > 0) {
     addText(`FORMA DE PAGO:\n`);
     for (const p of data.payments) {
       const pMethod = String(p.method || "EFECTIVO").toUpperCase();
@@ -355,7 +377,7 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
       addText(`  ${pMethod}${" ".repeat(pSpace)}${pAmt}\n`);
     }
     addText(divider);
-  } else if (data.paymentMethod) {
+  } else if (data.paymentMethod && !isMembershipOnly) {
     const methodStr = String(data.paymentMethod).toUpperCase();
     const methodLabel = "FORMA DE PAGO: ";
     if (methodLabel.length + methodStr.length <= width) {
@@ -377,7 +399,11 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
 
   // BUNZ CASHBACK
   const effectiveCashbackRate = data.bunzCashbackRate ?? 20;
-  const earnedBunz = data.estimatedBunz ?? (data.total > 0 ? Math.max(1, Math.round(data.total * (effectiveCashbackRate / 100))) : 0);
+  const paidBase = Number(data.total || 0);
+  // Sin mínimo artificial: un consumo de $0 (membresía) no genera Bunz.
+  const earnedBunz = paidBase > 0
+    ? Number(data.estimatedBunz ?? Math.round(paidBase * (effectiveCashbackRate / 100)))
+    : 0;
 
   if (earnedBunz > 0) {
     chunks.push(boldOn);
