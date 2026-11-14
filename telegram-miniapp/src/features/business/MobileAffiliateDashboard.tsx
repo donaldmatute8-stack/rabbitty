@@ -407,25 +407,10 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </svg>
         </button>
 
-        {/* Central Pill with Business Name and Category */}
-        <div 
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full max-w-55"
-          style={{
-            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-        >
-          <span className="text-xs">🏪</span>
-          <div className="flex flex-col min-w-0">
-            <span className="text-[12px] font-black leading-tight truncate text-(--text-primary)">
-              {business?.name || 'Comercio Afiliado'}
-            </span>
-            <span className="text-[9px] font-semibold text-(--text-muted) truncate">
-              {business?.category || 'Afiliado'}
-            </span>
-          </div>
-        </div>
+        {/* Etiqueta discreta: la identidad del negocio ya vive en el hero */}
+        <span className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: 'var(--text-muted)' }}>
+          Portal de negocio
+        </span>
 
         {/* Right QR trigger */}
         <button
@@ -555,274 +540,225 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
           </button>
         )}
 
-        {/* Metric Cards */}
-        <motion.div 
+        {/* Métricas: una sola pieza (no cuatro tarjetas sueltas) */}
+        <motion.div
           initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-4 gap-2 mb-4"
+          className="mb-3 overflow-hidden rounded-3xl"
+          style={{
+              background: 'color-mix(in srgb, var(--bg-elevated) 74%, transparent)',
+              backdropFilter: 'blur(20px) saturate(170%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(170%)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
         >
-          <div 
-            className="rounded-2xl p-2.5 text-center transition-all"
-            style={{ 
-              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
-              border: '1px solid var(--border-subtle)',
-              boxShadow: 'var(--shadow-sm)'
-            }}
-          >
-            <p className="text-lg font-black text-(--text-primary) tracking-tight m-0">{txCount}</p>
-            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Tickets</p>
-          </div>
-          <div 
-            className="rounded-2xl p-2.5 text-center transition-all"
-            style={{ 
-              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
-              border: '1px solid var(--border-subtle)',
-              boxShadow: 'var(--shadow-sm)'
-            }}
-          >
-            <p className="text-lg font-black text-(--text-primary) tracking-tight m-0">{clientCount}</p>
-            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Clientes</p>
-          </div>
-          <div 
-            className="rounded-2xl p-2.5 text-center transition-all"
-            style={{ 
-              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
-              border: '1px solid var(--border-subtle)',
-              boxShadow: 'var(--shadow-sm)'
-            }}
-          >
-            <p className="text-lg font-black text-amber-400 tracking-tight m-0">{business?.hops || 0}</p>
-            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Hops 🐾</p>
-          </div>
-          <div 
-            className="rounded-2xl p-2.5 text-center transition-all"
-            style={{ 
-              background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
-              border: '1px solid var(--border-subtle)',
-              boxShadow: 'var(--shadow-sm)'
-            }}
-          >
-            <p className="text-lg font-black text-[#E91E63] tracking-tight m-0">{totalBunz.toLocaleString()}</p>
-            <p className="text-[8px] font-black text-(--text-muted) tracking-wider uppercase mt-1 mb-0">Bunz Dados</p>
+          <div className="grid grid-cols-4">
+            {[
+              { value: txCount.toLocaleString(), label: 'Tickets', tone: 'var(--text-primary)' },
+              { value: clientCount.toLocaleString(), label: 'Clientes', tone: 'var(--text-primary)' },
+              { value: String(business?.hops || 0), label: 'Hops', tone: '#F59E0B' },
+              { value: totalBunz.toLocaleString(), label: 'Bunz dados', tone: '#E91E63' },
+            ].map((m, i) => (
+              <div
+                key={m.label}
+                className="py-3 text-center"
+                style={{ borderLeft: i === 0 ? 'none' : '1px solid var(--border-subtle)' }}
+              >
+                <p className="m-0 text-[17px] font-black leading-none tracking-tight" style={{ color: m.tone }}>{m.value}</p>
+                <p className="m-0 mt-1 text-[8.5px] font-black uppercase tracking-[0.12em]" style={{ color: 'var(--text-muted)' }}>{m.label}</p>
+              </div>
+            ))}
           </div>
         </motion.div>
 
-        {/* QR Code Quick Action Banner */}
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-          className="rounded-2xl p-4 mb-4 flex items-center justify-between"
-          style={{ 
-            background: 'linear-gradient(135deg, #1A0D26 0%, #0D0D1A 100%)',
-            border: '1px solid rgba(233, 30, 99, 0.25)',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center shrink-0">
-              <QrCode size={20} className="text-[#E91E63]" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white m-0 leading-snug">Generar código QR</p>
-              <p className="text-xs text-white/60 m-0">Para registrar consumos en caja</p>
-            </div>
-          </div>
-          <div 
+        {/* Acciones: una pieza ancha + dos mosaicos, no tres filas de lista */}
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
+            whileTap={{ scale: 0.985 }}
+            onClick={() => { PlatformBridge.hapticFeedback('medium'); setActiveSubTab('campaigns'); }}
+            className="col-span-2 flex items-center gap-3 overflow-hidden rounded-3xl p-4 text-left"
+            style={{
+              background: 'linear-gradient(135deg, rgba(233,30,99,0.16) 0%, rgba(139,92,246,0.14) 100%)',
+              border: '1px solid rgba(233,30,99,0.30)',
+              boxShadow: '0 16px 36px -26px rgba(233,30,99,0.85)',
+            }}
+          >
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+              style={{ background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)' }}
+            >
+              <Zap size={19} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-black" style={{ color: 'var(--text-primary)' }}>Motor de crecimiento</span>
+              <span className="mt-0.5 block truncate text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {growthSignals.length > 0
+                  ? `${growthSignals.length} oportunidades detectadas por Bunzy`
+                  : 'Campañas flash y recuperación de clientes'}
+              </span>
+            </span>
+            <ChevronRight size={17} style={{ color: '#E91E63' }} />
+          </motion.button>
+
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => {
-              PlatformBridge.hapticFeedback('light');
-              setShowCodeModal(true);
+              PlatformBridge.hapticFeedback('medium');
+              const encodedName = encodeURIComponent(business.name || 'Mi Negocio');
+              const encodedRef = encodeURIComponent(business.id?.replace(/-/g, '').slice(0, 8) || 'afiliado');
+              const encodedLogo = encodeURIComponent(business.logoUrl || '');
+              const encodedNiche = encodeURIComponent(business.category || '');
+              const bunzValue = encodeURIComponent(String(business.rewardPercentage || 25));
+              const printKitUrl = `https://rabbitty.me/impresos?name=${encodedName}&ref=${encodedRef}&bunz=${bunzValue}&logo=${encodedLogo}&niche=${encodedNiche}`;
+              void PlatformBridge.openExternalUrl(printKitUrl);
             }}
-            className="rounded-xl p-1.5 flex items-center justify-center cursor-pointer active:scale-95 transition-transform shrink-0"
-            style={{ backgroundColor: '#180B28', border: '1px solid rgba(233,30,99,0.3)' }}
+            className="flex flex-col items-start gap-2.5 rounded-3xl p-3.5 text-left"
+            style={{
+              background: 'color-mix(in srgb, var(--bg-elevated) 74%, transparent)',
+              backdropFilter: 'blur(20px) saturate(170%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(170%)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
           >
-            <QRDiscovery value={`rc:${business?.scanCode ?? ''}`} variant="affiliate" size={38} revealMode="immediate" surfaceKey="biz-mini" />
-          </div>
-        </motion.div>
-
-        {/* Action: Growth Engine & Campañas Flash */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.10 }}
-          className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
-          style={{
-            background: 'linear-gradient(135deg, rgba(233,30,99,0.12) 0%, rgba(255,138,0,0.12) 100%)',
-            border: '1.5px solid rgba(233,30,99,0.3)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-          onClick={() => {
-            PlatformBridge.hapticFeedback('medium');
-            setActiveSubTab('campaigns');
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-[#E91E63] to-[#FF8A00] text-white flex items-center justify-center shrink-0 text-lg shadow-sm">
-              ⚡
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-(--text-primary) m-0 leading-snug">Motor de Crecimiento & Campañas</p>
-              <p className="text-xs text-(--text-muted) m-0">
-                {growthSignals.length > 0 ? `${growthSignals.length} oportunidades detectadas por Bunzy` : 'Campañas flash y recuperación de clientes'}
-              </p>
-            </div>
-          </div>
-          <div className="px-3 py-1.5 rounded-full bg-[#E91E63] text-white text-xs font-bold shrink-0 shadow-sm">
-            Ver
-          </div>
-        </motion.div>
-
-        {/* Action: Kit de Impresión Físico Dinámico */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
-          className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
-          style={{
-            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)',
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-          onClick={() => {
-            PlatformBridge.hapticFeedback('medium');
-            const encodedName = encodeURIComponent(business.name || 'Mi Negocio');
-            const encodedRef = encodeURIComponent(business.id?.replace(/-/g, '').slice(0, 8) || 'afiliado');
-            const encodedLogo = encodeURIComponent(business.logoUrl || '');
-            const encodedNiche = encodeURIComponent(business.category || '');
-            const bunzValue = encodeURIComponent(String(business.rewardPercentage || 25));
-            const printKitUrl = `https://rabbitty.me/impresos?name=${encodedName}&ref=${encodedRef}&bunz=${bunzValue}&logo=${encodedLogo}&niche=${encodedNiche}`;
-            void PlatformBridge.openExternalUrl(printKitUrl);
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center shrink-0 text-lg">
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-[16px]"
+              style={{ background: 'rgba(233,30,99,0.12)', border: '1px solid rgba(233,30,99,0.22)' }}
+            >
               🖨️
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-(--text-primary) m-0 leading-snug">Kit de Impresos del Local</p>
-              <p className="text-xs text-(--text-muted) m-0">Cartel A3, habladores de mesa y caja listos en PDF</p>
-            </div>
-          </div>
-          <div className="px-3 py-1.5 rounded-full bg-pink-500/15 border border-pink-500/30 text-[#E91E63] text-xs font-bold shrink-0">
-            Exportar
-          </div>
-        </motion.div>
+            </span>
+            <span>
+              <span className="block text-[12.5px] font-black leading-tight" style={{ color: 'var(--text-primary)' }}>Kit de impresos</span>
+              <span className="mt-0.5 block text-[10.5px] leading-snug" style={{ color: 'var(--text-muted)' }}>Cartel A3 y habladores en PDF</span>
+            </span>
+          </motion.button>
 
-        {/* Action: Reporte Oficial de Cuadre de Caja & PDF */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}
-          className="rounded-2xl p-4 mb-4 flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
-          style={{
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%)',
-            border: '1.5px solid rgba(16, 185, 129, 0.3)',
-            boxShadow: 'var(--shadow-sm)',
-          }}
-          onClick={() => {
-            PlatformBridge.hapticFeedback('medium');
-            router.push(`/business/reports${business?.id ? `?businessId=${business.id}` : ''}`);
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-linear-to-br from-emerald-500 to-cyan-500 text-white flex items-center justify-center shrink-0 text-lg shadow-sm">
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('medium');
+              router.push(`/business/reports${business?.id ? `?businessId=${business.id}` : ''}`);
+            }}
+            className="flex flex-col items-start gap-2.5 rounded-3xl p-3.5 text-left"
+            style={{
+              background: 'color-mix(in srgb, var(--bg-elevated) 74%, transparent)',
+              backdropFilter: 'blur(20px) saturate(170%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(170%)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            <span
+              className="flex h-9 w-9 items-center justify-center rounded-xl text-[16px]"
+              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.24)' }}
+            >
               📊
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-(--text-primary) m-0 leading-snug">Cuadre de Caja & Auditoría</p>
-              <p className="text-xs text-(--text-muted) m-0">Reporte oficial con desglose de ventas, IVA y PDF</p>
-            </div>
-          </div>
-          <div className="px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-xs font-bold shrink-0">
-            Ver PDF
-          </div>
-        </motion.div>
+            </span>
+            <span>
+              <span className="block text-[12.5px] font-black leading-tight" style={{ color: 'var(--text-primary)' }}>Cuadre de caja</span>
+              <span className="mt-0.5 block text-[10.5px] leading-snug" style={{ color: 'var(--text-muted)' }}>Ventas, IVA y PDF oficial</span>
+            </span>
+          </motion.button>
+        </div>
 
-        {/* Capacidad para recibir */}
-        <motion.div 
+        {/* Operación: capacidad y tasa en una sola pieza, separadas por un filete */}
+        <motion.div
           initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="rounded-2xl p-4 mb-4"
-          style={{ 
-            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)'
-          }}
+          className="mb-4 overflow-hidden rounded-3xl"
+          style={{
+              background: 'color-mix(in srgb, var(--bg-elevated) 74%, transparent)',
+              backdropFilter: 'blur(20px) saturate(170%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(170%)',
+              border: '1px solid var(--border-subtle)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
         >
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-[14px] font-bold text-(--text-primary) m-0 mb-0.5">
-                  Capacidad para recibir
+          <div className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="m-0 text-[13.5px] font-black" style={{ color: 'var(--text-primary)' }}>Capacidad para recibir</p>
+                  {business?.sandbox && (
+                    <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-black uppercase text-amber-500">
+                      Prueba
+                    </span>
+                  )}
+                </div>
+                <p className="m-0 mt-0.5 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+                  Los Rabbitters consumen Bunz hasta este límite.
                 </p>
-                {business?.sandbox && (
-                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                    Prueba
-                  </span>
+              </div>
+              <div className="shrink-0 text-right">
+                {(business?.bunzBalance || 0) > 0 ? (
+                  <p className="m-0 text-[18px] font-black leading-none" style={{ color: '#E91E63' }}>
+                    {(business?.bunzBalance || 0).toLocaleString()} B
+                  </p>
+                ) : (
+                  <p className="m-0 text-[12px] font-bold" style={{ color: 'var(--text-muted)' }}>En revisión</p>
+                )}
+                {(business?.creditLimit || 0) > 0 && (
+                  <p className="m-0 mt-0.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    {(business?.bunzBalance || 0) > 0 ? 'autorizado' : 'propuesta'} {business?.creditLimit?.toLocaleString()} B
+                  </p>
                 )}
               </div>
-              <p className="text-[12px] text-(--text-muted) m-0">
-                Los Rabbitters pueden consumir Bunz hasta esta capacidad.
+            </div>
+            {business?.sandbox && (
+              <p className="m-0 mt-1.5 text-[10.5px] text-amber-500">
+                Capacidad de prueba: se depura al cerrar el piloto, no tiene valor real.
               </p>
-            </div>
-            <div className="text-right">
-              {(business?.bunzBalance || 0) > 0 ? (
-                <p className="text-lg font-black text-[#E91E63] m-0">
-                  {(business?.bunzBalance || 0).toLocaleString()} B
-                </p>
-              ) : (
-                <p className="text-[12px] font-bold text-(--text-muted) m-0">En revisión</p>
-              )}
-              {(business?.creditLimit || 0) > 0 && (
-                <p className="text-[10px] text-(--text-muted) m-0">
-                  {(business?.bunzBalance || 0) > 0 ? 'autorizado' : 'propuesta'}{' '}
-                  {business?.creditLimit?.toLocaleString()} B
-                </p>
-              )}
-            </div>
+            )}
           </div>
-          {business?.sandbox && (
-            <p className="text-[11px] text-amber-500 m-0 mt-1">
-              Capacidad de prueba: debe retornarse o depurarse; no tiene valor real.
-            </p>
-          )}
-        </motion.div>
 
-        {/* Reward Rate Card */}
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="rounded-2xl p-4 mb-4"
-          style={{ 
-            background: 'color-mix(in srgb, var(--bg-elevated) 72%, transparent)', backdropFilter: 'blur(18px) saturate(165%)', WebkitBackdropFilter: 'blur(18px) saturate(165%)', 
-            border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)'
-          }}
-        >
-          <div className="flex justify-between items-center mb-2">
-            <div>
-              <p className="text-[14px] font-bold text-(--text-primary) m-0 mb-0.5">Tasa de recompensa</p>
-              <p className="text-[12px] text-(--text-muted) m-0">Otorga {rewardRate}% en bunz por consumo</p>
+          <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+
+          <div className="p-4">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <p className="m-0 text-[13.5px] font-black" style={{ color: 'var(--text-primary)' }}>Tasa de recompensa</p>
+                <p className="m-0 mt-0.5 text-[11.5px]" style={{ color: 'var(--text-muted)' }}>Bunz que otorgas por cada consumo</p>
+              </div>
+              <p className="m-0 shrink-0 text-[22px] font-black leading-none" style={{ color: '#E91E63' }}>{rewardRate}%</p>
             </div>
-            <p className="text-2xl font-black text-[#E91E63] m-0">{rewardRate}%</p>
-          </div>
-          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-subtle)' }}>
-            <motion.div 
-              initial={{ width: 0 }} 
-              animate={{ width: `${rewardRate}%` }} 
-              transition={{ duration: 1, delay: 0.4 }}
-              className="h-full rounded-full bg-[#E91E63]"
+
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--bg-subtle)' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${rewardRate}%` }}
+                transition={{ duration: 1, delay: 0.3 }}
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(90deg, #E91E63 0%, #8B5CF6 100%)' }}
+              />
+            </div>
+
+            <input
+              type="range"
+              min="2"
+              max="50"
+              value={rewardRate}
+              onChange={(e) => setRewardRate(Number(e.target.value))}
+              className="mt-3 w-full cursor-pointer accent-[#E91E63]"
             />
+            <div className="mt-1 flex justify-between text-[10.5px]" style={{ color: 'var(--text-muted)' }}>
+              <span>2% mínimo</span>
+              <span>50% máximo</span>
+            </div>
+
+            <button
+              onClick={saveRewardRate}
+              disabled={savingRate}
+              className="mt-3 w-full rounded-2xl py-2.5 text-[12px] font-black text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)' }}
+            >
+              {savingRate ? 'Guardando…' : 'Guardar tasa'}
+            </button>
           </div>
-          
-          <input
-            type="range" 
-            min="2" 
-            max="50" 
-            value={rewardRate} 
-            onChange={(e) => setRewardRate(Number(e.target.value))}
-            className="w-full mt-4 cursor-pointer accent-[#E91E63]"
-          />
-          <div className="flex justify-between mt-1 text-[11px] text-(--text-muted)">
-            <span>2% Mínimo</span>
-            <span>50% Máximo</span>
-          </div>
-          <button
-            onClick={saveRewardRate}
-            disabled={savingRate}
-            className="mt-3 w-full py-2.5 rounded-xl bg-[#E91E63] text-white font-bold text-xs border-none cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-50"
-          >
-            {savingRate ? 'Guardando...' : 'Guardar tasa'}
-          </button>
         </motion.div>
 
         {/* Stock Reservations */}
