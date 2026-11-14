@@ -11,11 +11,11 @@
  * devuelve al diseño anterior en una línea.
  */
 
-import { useMemo, useRef, useState } from 'react';
-import qrcode from 'qrcode-generator';
+import { useRef, useState } from 'react';
 import { X, Sun, ArrowLeft, Share2, ScanLine, Check, Sparkles, Flame, Leaf, Zap } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
+import BrandQR from './BrandQR';
 
 type ThemeId = 'classic' | 'fire' | 'mint' | 'neon';
 
@@ -35,23 +35,6 @@ const THEMES: Record<ThemeId, Palette> = {
 };
 
 const THEME_IDS = Object.keys(THEMES) as ThemeId[];
-
-function buildMatrix(value: string): { count: number; dark: (r: number, c: number) => boolean } {
-  const qr = qrcode(0, 'M');
-  qr.addData(value);
-  qr.make();
-  const count = qr.getModuleCount();
-  return { count, dark: (r, c) => qr.isDark(r, c) };
-}
-
-/** Celdas que caen dentro de un patrón de posición (7x7 en las esquinas). */
-function inFinder(r: number, c: number, count: number): boolean {
-  const top = r < 7;
-  const bottom = r >= count - 7;
-  const left = c < 7;
-  const right = c >= count - 7;
-  return (top || bottom) && (left || right);
-}
 
 interface Props {
   value: string;
@@ -76,17 +59,6 @@ export default function GlassPassQR({ value, handle, name, avatarUrl, theme, onS
     const i = THEME_IDS.indexOf(activeTheme);
     setActiveTheme(THEME_IDS[(i + 1) % THEME_IDS.length]!);
   };
-
-  const matrix = useMemo(() => buildMatrix(value), [value]);
-  const cells = useMemo(() => {
-    const list: { r: number; c: number }[] = [];
-    for (let r = 0; r < matrix.count; r += 1) {
-      for (let c = 0; c < matrix.count; c += 1) {
-        if (matrix.dark(r, c) && !inFinder(r, c, matrix.count)) list.push({ r, c });
-      }
-    }
-    return list;
-  }, [matrix]);
 
   const share = async () => {
     PlatformBridge.hapticFeedback('medium');
@@ -168,37 +140,7 @@ export default function GlassPassQR({ value, handle, name, avatarUrl, theme, onS
         >
           {/* QR con avatar en la esquina inferior derecha (no centrado) */}
           <div className="relative">
-            <svg
-              viewBox={`0 0 ${matrix.count + 4} ${matrix.count + 4}`}
-              width="100%"
-              height="100%"
-              role="img"
-              aria-label="Código QR de Rabbitty"
-              style={{ display: 'block' }}
-            >
-              <defs>
-                <linearGradient id="rb-qr-fill" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor={palette.from} />
-                  <stop offset="100%" stopColor={palette.to} />
-                </linearGradient>
-              </defs>
-              <g transform="translate(2,2)">
-                {cells.map(({ r, c }) => (
-                  <rect key={`${r}-${c}`} x={c} y={r} width={1} height={1} rx={0.3} fill="#140d1c" />
-                ))}
-                {[
-                  [0, 0],
-                  [0, matrix.count - 7],
-                  [matrix.count - 7, 0],
-                ].map(([fr, fc]) => (
-                  <g key={`f-${fr}-${fc}`}>
-                    <rect x={fc} y={fr} width={7} height={7} rx={2} fill="url(#rb-qr-fill)" />
-                    <rect x={fc + 1} y={fr + 1} width={5} height={5} rx={1.5} fill="#fbfafc" />
-                    <rect x={fc + 2} y={fr + 2} width={3} height={3} rx={1} fill="url(#rb-qr-fill)" />
-                  </g>
-                ))}
-              </g>
-            </svg>
+            <BrandQR value={value} from={palette.from} to={palette.to} />
 
             {/* Avatar integrado: esquina inferior derecha, con marco del panel */}
             <div

@@ -144,6 +144,19 @@ export default function MembershipsPage() {
   const [memberName, setMemberName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Membership | null>(null);
+  // Acceso directo desde el Rabbitty Pass: /memberships?focus=<id>
+  const [focusId, setFocusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('focus');
+    if (!id) return;
+    setFocusId(id);
+    const t = window.setTimeout(() => {
+      document.getElementById(`membership-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 320);
+    const clear = window.setTimeout(() => setFocusId(null), 5200);
+    return () => { window.clearTimeout(t); window.clearTimeout(clear); };
+  }, [memberships.length]);
   const [flipped, setFlipped] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [usage, setUsage] = useState<Usage[]>([]);
@@ -393,14 +406,16 @@ export default function MembershipsPage() {
             return (
               <motion.button
                 key={m.id}
+                id={`membership-${m.id}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 onClick={() => setActive(m)}
-                className="w-full text-left rounded-2xl overflow-hidden cursor-pointer"
+                className="w-full text-left rounded-2xl overflow-hidden cursor-pointer scroll-mt-24"
                 style={{
-                  border: `1px solid ${activeStatus ? accent + '55' : 'rgba(255,255,255,.08)'}`,
+                  border: `1px solid ${focusId === m.id ? 'rgba(233,30,99,.85)' : activeStatus ? accent + '55' : 'rgba(255,255,255,.08)'}`,
                   background: 'linear-gradient(135deg, rgba(255,255,255,.045), rgba(255,255,255,.015))',
+                  boxShadow: focusId === m.id ? '0 0 0 3px rgba(233,30,99,.22), 0 14px 30px -18px rgba(233,30,99,.9)' : undefined,
                 }}
               >
                 <div className="flex gap-3 p-3">
