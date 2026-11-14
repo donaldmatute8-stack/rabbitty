@@ -9,6 +9,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import QRDiscovery from '@/components/QRDiscovery';
 import RabbittyCodeSimple from '@/components/ui/RabbittyCodeSimple';
+import GlassPassQR from '@/components/ui/GlassPassQR';
 import { RABBITTY_CODE_STYLE } from '@/lib/rabbittyCodeStyle';
 import { NativeQrScanner } from '@/components/scanner/NativeQrScanner';
 import RabbittyLoader from '@/components/RabbittyLoader';
@@ -937,8 +938,8 @@ export default function ScanPage() {
         />
       )}
 
-      {/* Fondo nuevo de Mi Código */}
-      {activeTab === 'my-code' && (
+      {/* Fondo nuevo de Mi Código (solo estilos con wallpaper; 'glass' trae el suyo) */}
+      {activeTab === 'my-code' && RABBITTY_CODE_STYLE !== 'glass' && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -960,7 +961,13 @@ export default function ScanPage() {
       {/* Background glow removed — my-code tab handles its own background */}
 
       {/* Main Content Area */}
-      <div className={`relative flex-1 w-full flex flex-col items-center ${activeTab === 'my-code' ? 'p-0 justify-between' : 'justify-center z-10 px-4 py-4'}`}>
+      <div className={`relative flex-1 w-full flex flex-col items-center ${
+        activeTab === 'my-code'
+          ? RABBITTY_CODE_STYLE === 'glass'
+            ? 'p-0 justify-center'
+            : 'p-0 justify-between'
+          : 'justify-center z-10 px-4 py-4'
+      }`}>
 
         {/* My Code tab - Official Rabbitty Code Hologram / Telegram style */}
         {activeTab === 'my-code' && (
@@ -978,7 +985,21 @@ export default function ScanPage() {
                 level="M"
               />
             </div>
-            {RABBITTY_CODE_STYLE === 'simple' ? (
+            {RABBITTY_CODE_STYLE === 'glass' ? (
+              <GlassPassQR
+                value={`https://app.rabbitty.me/u/${encodeURIComponent(
+                  user?.username || String(qrValue || ''),
+                )}`}
+                handle={user?.username || null}
+                name={user?.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}` : null}
+                avatarUrl={userAvatar}
+                onClose={() => router.replace("/")}
+                onScan={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setActiveTab('scan');
+                }}
+              />
+            ) : RABBITTY_CODE_STYLE === 'simple' ? (
               <RabbittyCodeSimple
                 value={`https://app.rabbitty.me/u/${encodeURIComponent(
                   user?.username || String(qrValue || ''),
