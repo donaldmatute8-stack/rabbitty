@@ -192,6 +192,54 @@ export default function MembershipsPage() {
         </div>
       )}
 
+      {enabled && analytics && (
+        <div className="space-y-2">
+          {/* Retención y lealtad (Fase 15.2.3) */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-rose-300/60">Churn 30d</p>
+              <p className="mt-1 text-2xl font-black text-rose-300">
+                {analytics.churnRate30d == null ? "—" : `${analytics.churnRate30d}%`}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/60">Retención 30d</p>
+              <p className="mt-1 text-2xl font-black text-emerald-300">
+                {analytics.retention30d == null ? "—" : `${analytics.retention30d}%`}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Renovaciones</p>
+              <p className="mt-1 text-2xl font-black text-white">{analytics.renewals}</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Canjes por socio</p>
+              <p className="mt-1 text-2xl font-black text-white">{analytics.redemptionsPerMember}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+            <span className="font-bold uppercase tracking-wider text-white/35">Lealtad</span>
+            {(
+              [
+                ["BRONZE", "Bronce", "#C97B4A"],
+                ["SILVER", "Plata", "#A8B3C1"],
+                ["GOLD", "Oro", "#FFD166"],
+              ] as const
+            ).map(([key, label, color]) => (
+              <span
+                key={key}
+                className="rounded-full px-2 py-0.5 font-bold"
+                style={{ color, background: `${color}1f`, border: `1px solid ${color}44` }}
+              >
+                {label} {analytics.loyaltyTiers[key]}
+              </span>
+            ))}
+            <span className="ml-1">· Antigüedad media {analytics.avgTenureDays} días</span>
+          </div>
+        </div>
+      )}
+
       {enabled && <ReferralProgramCard businessId={businessId} />}
 
       {enabled && tab === "plans" && (

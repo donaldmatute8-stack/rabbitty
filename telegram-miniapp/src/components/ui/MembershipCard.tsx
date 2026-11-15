@@ -56,6 +56,10 @@ interface PassMembership {
   currentPeriodEnd: string | null;
   noExpiration: boolean;
   badgeColor: string | null;
+  /** Lealtad (15.2.2): periodos completos y nivel calculado en el backend. */
+  renewals?: number;
+  loyaltyTier?: 'BRONZE' | 'SILVER' | 'GOLD' | null;
+  createdAt?: string | null;
 }
 
 type PassThemeId = 'classic' | 'fire' | 'mint' | 'neon';
@@ -132,6 +136,13 @@ const PASS_THEMES: Record<PassThemeId, {
 };
 
 const THEME_IDS = Object.keys(PASS_THEMES) as PassThemeId[];
+
+/** Insignia de lealtad: se gana renovando, no pagando una vez. */
+const LOYALTY: Record<'BRONZE' | 'SILVER' | 'GOLD', { label: string; color: string }> = {
+  BRONZE: { label: 'Bronce', color: '#C97B4A' },
+  SILVER: { label: 'Plata', color: '#A8B3C1' },
+  GOLD: { label: 'Oro', color: '#FFD166' },
+};
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Activa',
@@ -599,6 +610,18 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                     <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${isDark ? 'bg-white/10 text-white/80 border border-white/10' : 'bg-slate-900/5 text-slate-800 border border-slate-900/10'}`}>
                       {STATUS_LABEL[current.m.status] || current.m.status}
                     </span>
+                    {current.m.loyaltyTier && (
+                      <span
+                        className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider"
+                        style={{
+                          color: LOYALTY[current.m.loyaltyTier].color,
+                          background: `${LOYALTY[current.m.loyaltyTier].color}22`,
+                          border: `1px solid ${LOYALTY[current.m.loyaltyTier].color}55`,
+                        }}
+                      >
+                        {LOYALTY[current.m.loyaltyTier].label}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {slides.length > 1 && (
@@ -654,6 +677,14 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                           ? `Vigente hasta ${new Date(current.m.currentPeriodEnd).toLocaleDateString('es-MX')}`
                           : 'Sin fecha de corte'}
                     </p>
+                    {(current.m.createdAt || current.m.renewals != null) && (
+                      <p className={`m-0 mt-0.5 text-[10px] ${isDark ? 'text-white/30' : 'text-slate-400'}`}>
+                        {current.m.createdAt
+                          ? `Miembro desde ${new Date(current.m.createdAt).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' })}`
+                          : 'Miembro'}
+                        {current.m.renewals ? ` · ${current.m.renewals} renovación${current.m.renewals === 1 ? '' : 'es'}` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
 

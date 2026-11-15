@@ -1589,6 +1589,49 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           new Date(r.sub.updatedAt) >= cutoff,
       ).length;
 
+      // ── Retención y antigüedad (15.2.3) ──
+      // Renovaciones = periodos completos desde el alta según la periodicidad
+      // del plan; sirve para el multiplicador de lealtad y para el panel.
+      const monthsOf = (interval?: string | null) =>
+        interval === "MONTHLY" ? 1
+        : interval === "QUARTERLY" ? 3
+        : interval === "SEMIANNUAL" ? 6
+        : 12;
+      const completedPeriods = (createdAt: Date | null, interval?: string | null) => {
+        if (!createdAt) return 0;
+        const months = (Date.now() - new Date(createdAt).getTime()) / (30.44 * 86_400_000);
+        return Math.max(0, Math.floor(months / monthsOf(interval)));
+      };
+
+      const renewals = active.reduce(
+        (sum, r) => sum + completedPeriods(r.sub.createdAt as unknown as Date | null, r.version?.billingInterval),
+        0,
+      );
+      const tenureDays = active.length
+        ? Math.round(
+            active.reduce((sum, r) => {
+              const created = r.sub.createdAt ? new Date(r.sub.createdAt).getTime() : Date.now();
+              return sum + (Date.now() - created) / 86_400_000;
+            }, 0) / active.length,
+          )
+        : 0;
+
+      const olderThan30 = rows.filter(
+        (r) => r.sub.createdAt && new Date(r.sub.createdAt) <= cutoff,
+      );
+      const retained30 = olderThan30.filter((r) => r.sub.status === "ACTIVE").length;
+      const retention30d = olderThan30.length > 0 ? Math.round((retained30 / olderThan30.length) * 100) : null;
+
+      const loyaltyTiers = active.reduce(
+        (acc, r) => {
+          const periods = completedPeriods(r.sub.createdAt as unknown as Date | null, r.version?.billingInterval);
+          const tier = periods >= 5 ? "GOLD" : periods >= 2 ? "SILVER" : "BRONZE";
+          acc[tier] += 1;
+          return acc;
+        },
+        { BRONZE: 0, SILVER: 0, GOLD: 0 } as Record<"BRONZE" | "SILVER" | "GOLD", number>,
+      );
+
       const [redemptionRow] = await ctx.coreDb
         .select({ count: sql<number>`COALESCE(SUM(${entitlementUsages.quantityUsed}), 0)::int` })
         .from(entitlementUsages)
@@ -1607,12 +1650,25 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         .orderBy(desc(sql`count(*)`))
         .limit(5);
 
+      const redemptions = Number(redemptionRow?.count ?? 0);
+      const denominator = active.length + cancelledLast30;
+
       return {
         activeMembers: active.length,
         issued: rows.length,
         mrr: Math.round(mrr * 100) / 100,
         cancelledLast30,
-        redemptions: Number(redemptionRow?.count ?? 0),
+        /** % de cancelaciones sobre la base viva del último mes. */
+        churnRate30d: denominator > 0 ? Math.round((cancelledLast30 / denominator) * 1000) / 10 : null,
+        /** % de socios con más de 30 días que siguen activos. */
+        retention30d,
+        /** Periodos completos sumados de los socios activos. */
+        renewals,
+        /** Antigüedad media de los socios activos, en días. */
+        avgTenureDays: tenureDays,
+        redemptions,
+        redemptionsPerMember: active.length > 0 ? Math.round((redemptions / active.length) * 10) / 10 : 0,
+        loyaltyTiers,
         topBenefits: topBenefits.map((b) => ({ type: b.type, count: Number(b.count) })),
       };
     }),

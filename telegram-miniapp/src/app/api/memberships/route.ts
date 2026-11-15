@@ -74,8 +74,26 @@ export async function GET(req: NextRequest) {
     const memberName = [me?.firstName, me?.lastName].filter(Boolean).join(" ") || me?.username || null;
 
     const nowMs = Date.now();
+    // Lealtad (15.2.2): renovaciones = periodos completos desde el alta según
+    // la periodicidad del plan. El pase lo muestra como insignia.
+    const monthsOf = (interval?: string | null) =>
+      interval === "MONTHLY" ? 1
+      : interval === "QUARTERLY" ? 3
+      : interval === "SEMIANNUAL" ? 6
+      : 12;
+    const completedPeriods = (createdAt: string | Date | null, interval?: string | null) => {
+      if (!createdAt) return 0;
+      const months = (Date.now() - new Date(createdAt).getTime()) / (30.44 * 86_400_000);
+      return Math.max(0, Math.floor(months / monthsOf(interval)));
+    };
+
     const memberships = rows.map((r) => ({
       ...r,
+      renewals: completedPeriods(r.createdAt as unknown as string | null, r.billingInterval),
+      loyaltyTier:
+        completedPeriods(r.createdAt as unknown as string | null, r.billingInterval) >= 5 ? "GOLD"
+        : completedPeriods(r.createdAt as unknown as string | null, r.billingInterval) >= 2 ? "SILVER"
+        : "BRONZE",
       entitlements: ents
         .filter((e) => e.subscriptionId === r.id)
         .map((e) => ({
