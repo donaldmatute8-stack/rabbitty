@@ -5,6 +5,7 @@ import { eq, and, gte, sql, or, desc, gt } from "drizzle-orm";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
 import crypto from "crypto";
+import { resolveLoyaltyBonus } from "@/lib/membershipLoyalty";
 
 export async function POST(request: Request) {
   try {
@@ -146,6 +147,20 @@ export async function POST(request: Request) {
       });
     }
 
+    // ── BONO DE LEALTAD (membresías) ──────────────────────────────────────
+    // Se paga de un pozo mensual respaldado por el neto de la membresía ya
+    // cobrada; nunca es emisión libre. No se acumula con campañas flash.
+    const boostApplied = bunzToMint > baseBunzPos;
+    let loyalty: Awaited<ReturnType<typeof resolveLoyaltyBonus>> = null;
+    if (!boostApplied && existingUserId && effectiveBusinessId) {
+      loyalty = await resolveLoyaltyBonus({
+        userId: existingUserId,
+        businessId: effectiveBusinessId,
+        baseBunz: baseBunzPos,
+      });
+      if (loyalty?.bonus) bunzToMint += loyalty.bonus;
+    }
+
     if (bunzToMint <= 0) {
       return NextResponse.json({ message: "Amount too low to generate Bunz" }, { status: 200 });
     }
@@ -247,7 +262,15 @@ export async function POST(request: Request) {
             type: 'EARN',
             referenceId: order_id || txId,
             idempotencyKey,
-            metadata: { orderId: order_id, amountUsd: amount_usd },
+            metadata: {
+              orderId: order_id,
+              amountUsd: amount_usd,
+              // Trazabilidad del bono: el pozo se mide con esta marca.
+              loyaltyBonus: loyalty?.bonus ?? 0,
+              loyaltyTier: loyalty?.tier,
+              loyaltyPool: loyalty?.pool,
+              subscriptionId: loyalty?.subscriptionId,
+            },
           },
           tx
         );
@@ -272,6 +295,8 @@ export async function POST(request: Request) {
         success: true, 
         message: 'Bunz minted to existing user (Debt adjusted if applicable)', 
         bunz: bunzToMint,
+        loyaltyBonus: loyalty?.bonus ?? 0,
+        loyaltyTier: loyalty?.tier ?? null,
         userId: existingUser.id,
       });
 

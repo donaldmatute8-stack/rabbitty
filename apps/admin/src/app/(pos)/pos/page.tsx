@@ -1678,7 +1678,9 @@ export default function PosPage() {
     claimToken?: string,
     orderId?: string,
     // Partes del pago dividido: se imprimen con método y monto en el ticket.
-    splitPayments?: Array<{ method: string; amount: number; reference?: string }>
+    splitPayments?: Array<{ method: string; amount: number; reference?: string }>,
+    // Bono de lealtad incluido en los Bunz acreditados (15.2.2).
+    loyaltyBonus?: number
   ) => {
     const rest = ticketContext?.restaurant;
     const branch = ticketContext?.branch;
@@ -1756,6 +1758,7 @@ export default function PosPage() {
         ? membershipTicketData(detectedMembership, selectedBenefitIds.length > 0)
         : undefined,
       awardedBunz: awardedBunz !== undefined && awardedBunz > 0 ? awardedBunz : undefined,
+      loyaltyBonus: loyaltyBonus && loyaltyBonus > 0 ? loyaltyBonus : undefined,
     };
 
     setPaidTicketData(ticket);
@@ -2046,7 +2049,8 @@ export default function PosPage() {
           checkoutResult.awardedBunz || undefined,
           checkoutResult.claimToken || undefined,
           checkoutResult.orderId || undefined,
-          isMembershipCovered ? undefined : splitOverride
+          isMembershipCovered ? undefined : splitOverride,
+          ("loyaltyBonus" in checkoutResult ? checkoutResult.loyaltyBonus : undefined) || undefined
         );
         setLastPaidOrderId(checkoutResult.orderId ?? null);
         setSelectedBenefitIds([]); // beneficios ya consumidos y ligados al ticket

@@ -3042,6 +3042,7 @@ export const posRouter = router({
 
       // CRM Auto-segmentation & Bunz Minting
       let totalAwardedBunz = 0;
+      let awardedLoyaltyBunz = 0;
       const [branch] = await ctx.restaurantDb.select().from(dbSchema.branches).where(eq(dbSchema.branches.id, ctx.branchId));
       if (branch) {
         const [restaurant] = await ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
@@ -3088,7 +3089,7 @@ export const posRouter = router({
             // El costo de entrega no genera cashback (hasta tener Rabbitty Ride).
             const deliveryFee = Number((order as { deliveryFee?: number }).deliveryFee ?? 0);
             const rewardBase = Math.max(0, finalAmount - deliveryFee);
-            const attemptReward = async (): Promise<{ success: boolean; bunz?: number } | null> => {
+            const attemptReward = async (): Promise<{ success: boolean; bunz?: number; loyaltyBonus?: number; loyaltyTier?: string | null } | null> => {
               const directBizId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
               // RP-2B: kill switch de emisión + lista blanca/tope del piloto.
               const expectedReward = Math.floor(
@@ -3139,6 +3140,7 @@ export const posRouter = router({
             const res = await attemptReward();
             if (res?.success) {
               totalAwardedBunz = res.bunz || Math.floor(finalAmount * ((restaurant.defaultRewardRate ?? 20) / 100));
+              awardedLoyaltyBunz = Number(res.loyaltyBonus ?? 0);
               // Guardar Bunz otorgados en la orden para auditoría.
               // Post-commit del cobro: mutación protegida para no pisar una versión ajena.
               await ctx.restaurantDb.transaction(async (tx: any) => {
@@ -3195,6 +3197,7 @@ export const posRouter = router({
         tax: calcTaxAmt,
         customerName: input.customerName || null,
         awardedBunz: totalAwardedBunz || (order as any)?.bunzReward || 0,
+        loyaltyBonus: awardedLoyaltyBunz,
         rewardQueued: (totalAwardedBunz > 0) || Boolean((order as any)?.bunzReward && (order as any).bunzReward > 0),
         claimToken,
       };

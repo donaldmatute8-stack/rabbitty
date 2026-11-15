@@ -412,7 +412,11 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
       const credited = data.awardedBunz ?? earnedBunz;
       addText(`¡Cashback de +${Number(credited).toFixed(2)} Bunz!\n`);
       chunks.push(boldOff);
-      addText(data.customerName ? `Depositado a ${data.customerName}\n\n` : `Depositado automaticamente a tu cuenta.\n\n`);
+      addText(data.customerName ? `Depositado a ${data.customerName}\n` : `Depositado automaticamente a tu cuenta.\n`);
+      if (Number(data.loyaltyBonus || 0) > 0) {
+        addText(`Incluye +${Number(data.loyaltyBonus)} Bunz por lealtad\n`);
+      }
+      addText(`\n`);
     } else {
       addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
       chunks.push(boldOff);

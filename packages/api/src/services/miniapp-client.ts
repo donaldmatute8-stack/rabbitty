@@ -54,6 +54,9 @@ export interface RewardResult {
   bunz: number;
   expiresAt?: string;
   userId?: string;
+  /** Parte del total que se pagó con el pozo de lealtad (15.2.2). */
+  loyaltyBonus?: number;
+  loyaltyTier?: string | null;
 }
 
 export interface ChargeResult {

@@ -61,6 +61,8 @@ export interface TicketData {
     benefits?: Array<{ label: string; remaining?: number | null; quota?: number }>;
   };
   awardedBunz?: number;
+  /** Bunz del total que se pagaron con el pozo de lealtad (15.2.2). */
+  loyaltyBonus?: number;
   orderId?: string;
   claimToken?: string;
   isRefund?: boolean;
@@ -335,6 +337,11 @@ export function TicketTemplate({
             <p className="text-[9px] text-gray-400">
               {data.customerName ? `Depositados a ${data.customerName}` : "Depositados automáticamente a tu cuenta."}
             </p>
+            {Number(data.loyaltyBonus || 0) > 0 && (
+              <p className="text-[9px] font-bold text-purple-300">
+                Incluye +{Number(data.loyaltyBonus)} Bunz por lealtad
+              </p>
+            )}
           </div>
         ) : (
           <>
