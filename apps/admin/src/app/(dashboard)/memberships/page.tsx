@@ -101,6 +101,7 @@ export default function MembershipsPage() {
   const businessName = (businesses ?? []).find((b) => b.id === businessId)?.name ?? "Tu negocio";
   const { data: plans } = trpc.memberships.listPlansAdmin.useQuery({ businessId }, { enabled });
   const { data: analytics } = trpc.memberships.businessAnalytics.useQuery({ businessId }, { enabled });
+  const { data: loyalty } = trpc.memberships.loyaltyAnalytics.useQuery({ businessId }, { enabled });
   const { data: members } = trpc.memberships.listMembers.useQuery({ businessId }, { enabled: enabled && tab === "members" });
 
   const publish = trpc.memberships.publishPlanVersion.useMutation({
@@ -238,6 +239,86 @@ export default function MembershipsPage() {
             <span className="ml-1">· Antigüedad media {analytics.avgTenureDays} días</span>
           </div>
         </div>
+      )}
+
+      {/* ── Bono de lealtad: pozo vs. bonificado (15.2.2) ── */}
+      {enabled && loyalty && (
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-white m-0">Bono de lealtad</h2>
+              <p className="text-[11px] text-white/45 m-0 mt-0.5">
+                Últimos {loyalty.windowDays} días · se paga de un pozo respaldado por el neto de la membresía
+              </p>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-white/35">
+              Plata +10 % · Oro +20 % · tope {loyalty.maxPerOrder}/ticket
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/10 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-purple-300/60">Bonificado</p>
+              <p className="mt-1 text-xl font-black text-purple-200">{loyalty.bonusTotal.toLocaleString()} B</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Pozo disponible</p>
+              <p className="mt-1 text-xl font-black text-white">{loyalty.poolTotal.toLocaleString()} B</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Consumo del pozo</p>
+              <p className="mt-1 text-xl font-black text-white">
+                {loyalty.poolUsedPct == null ? "—" : `${loyalty.poolUsedPct}%`}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Órdenes bonificadas</p>
+              <p className="mt-1 text-xl font-black text-white">{loyalty.bonusCount}</p>
+            </div>
+          </div>
+
+          {loyalty.bonusTotal === 0 ? (
+            <p className="text-[11.5px] text-white/45 m-0">
+              Aún sin bonos: los socios <b>Bronce</b> (0–1 renovaciones) no bonifican y el bono empieza en
+              <b> Plata</b> (2 renovaciones). El pozo solo se emite si el socio compra; si no, no se crea nada.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {loyalty.members.map((m) => {
+                const pct = m.pool > 0 ? Math.min(100, Math.round((m.used / m.pool) * 100)) : 0;
+                const tierColor = m.tier === "GOLD" ? "#FFD166" : m.tier === "SILVER" ? "#A8B3C1" : "#C97B4A";
+                return (
+                  <div key={m.subscriptionId} className="rounded-xl border border-white/8 bg-black/20 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[12px] font-bold text-white truncate">{m.name}</span>
+                        <span
+                          className="text-[9px] font-black uppercase tracking-wider rounded-full px-1.5 py-0.5"
+                          style={{ color: tierColor, background: `${tierColor}1f`, border: `1px solid ${tierColor}44` }}
+                        >
+                          {m.tier === "GOLD" ? "Oro" : m.tier === "SILVER" ? "Plata" : "Bronce"}
+                        </span>
+                        <span className="text-[10px] text-white/35 truncate">{m.planName ?? "Membresía"}</span>
+                      </div>
+                      <span className="text-[11px] font-bold text-white/70 tabular-nums">
+                        {m.used}/{m.pool} B · {m.orders} orden{m.orders === 1 ? "" : "es"}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/8">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${pct}%`,
+                          background: "linear-gradient(90deg, #A855F7 0%, #E91E63 100%)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
       {enabled && <ReferralProgramCard businessId={businessId} />}

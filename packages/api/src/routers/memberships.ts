@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, desc, sql, lt, gt, inArray } from "drizzle-orm";
+import { and, eq, desc, sql, lt, gt, gte, inArray } from "drizzle-orm";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { router, posProcedure, posPermission } from "../trpc";
@@ -14,7 +14,7 @@ import {
   membershipReferralPrograms,
   membershipReferralRewards,
 } from "@rabbitty/database-core/schema";
-import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
+import { branches, restaurants, ledgerEntries } from "@rabbitty/database-restaurant/schema";
 import { isGodAdminIdentity } from "../services/god2fa";
 import { miniappClient } from "../services/miniapp-client";
 import {
@@ -1670,6 +1670,147 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         redemptionsPerMember: active.length > 0 ? Math.round((redemptions / active.length) * 10) / 10 : 0,
         loyaltyTiers,
         topBenefits: topBenefits.map((b) => ({ type: b.type, count: Number(b.count) })),
+      };
+    }),
+
+  /**
+   * Admin: bono de lealtad de los últimos N días (Fase 15.2.2).
+   *
+   * El pozo de cada socio es un techo autorizado (10 % del neto mensual de su
+   * membresía). Aquí se compara lo bonificado contra ese techo para decidir si
+   * el porcentaje es sostenible. Los bonos se leen del ledger, donde el cobro
+   * del POS deja `loyaltyBonus`, `loyaltyTier` y `subscriptionId`.
+   */
+  loyaltyAnalytics: posProcedure
+    .input(z.object({ businessId: z.string().uuid(), days: z.number().int().min(7).max(90).optional() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+      const days = input.days ?? 30;
+      const since = new Date(Date.now() - days * 86_400_000);
+
+      // Mismas reglas que `telegram-miniapp/src/lib/membershipLoyalty.ts`
+      const PLATFORM_FEE = 0.08;
+      const POOL_PCT = 0.1;
+      const maxPerOrder = Number(process.env.LOYALTY_MAX_PER_ORDER ?? 15);
+      const monthsOf = (interval?: string | null) =>
+        interval === "QUARTERLY" ? 3 : interval === "SEMIANNUAL" ? 6 : interval === "ANNUAL" || interval === "YEARLY" ? 12 : 1;
+
+      const subs = await ctx.coreDb
+        .select({
+          id: membershipSubscriptions.id,
+          userId: membershipSubscriptions.userId,
+          status: membershipSubscriptions.status,
+          createdAt: membershipSubscriptions.createdAt,
+          planName: membershipPlans.name,
+          price: membershipPlanVersions.priceFiat,
+          interval: membershipPlanVersions.billingInterval,
+          username: users.username,
+          firstName: users.firstName,
+        })
+        .from(membershipSubscriptions)
+        .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+        .leftJoin(membershipPlans, eq(membershipPlans.id, membershipPlanVersions.planId))
+        .leftJoin(users, eq(users.id, membershipSubscriptions.userId))
+        .where(eq(membershipSubscriptions.businessId, input.businessId));
+
+      const empty = {
+        windowDays: days,
+        bonusTotal: 0,
+        bonusCount: 0,
+        poolTotal: 0,
+        poolUsedPct: null as number | null,
+        maxPerOrder,
+        tierSplit: { BRONZE: 0, SILVER: 0, GOLD: 0 },
+        members: [] as Array<{
+          subscriptionId: string;
+          name: string;
+          planName: string | null;
+          tier: "BRONZE" | "SILVER" | "GOLD";
+          pool: number;
+          used: number;
+          remaining: number;
+          orders: number;
+          lastAt: string | null;
+        }>,
+      };
+
+      if (subs.length === 0) return empty;
+      const ids = subs.map((s) => s.id);
+
+      const rows = await ctx.coreDb
+        .select({
+          subscriptionId: sql<string>`${ledgerEntries.metadata}->>'subscriptionId'`,
+          bonus: sql<number>`COALESCE((${ledgerEntries.metadata}->>'loyaltyBonus')::numeric, 0)`,
+          createdAt: ledgerEntries.createdAt,
+        })
+        .from(ledgerEntries)
+        .where(
+          and(
+            gte(ledgerEntries.createdAt, since),
+            inArray(sql`${ledgerEntries.metadata}->>'subscriptionId'`, ids),
+          ),
+        );
+
+      const bySub = new Map<string, { used: number; orders: number; lastAt: Date | null }>();
+      for (const r of rows) {
+        const key = r.subscriptionId;
+        const bonus = Number(r.bonus ?? 0);
+        if (!key || bonus <= 0) continue;
+        const prev = bySub.get(key) ?? { used: 0, orders: 0, lastAt: null };
+        const at = r.createdAt ? new Date(r.createdAt) : null;
+        bySub.set(key, {
+          used: prev.used + bonus,
+          orders: prev.orders + 1,
+          lastAt: at && (!prev.lastAt || at > prev.lastAt) ? at : prev.lastAt,
+        });
+      }
+
+      const members = subs.map((s) => {
+        const months = monthsOf(s.interval);
+        const monthlyNet = (Number(s.price ?? 0) * (1 - PLATFORM_FEE)) / months;
+        const pool = Math.floor(monthlyNet * POOL_PCT);
+        const stat = bySub.get(s.id);
+        const used = stat?.used ?? 0;
+        const elapsedMonths =
+          (Date.now() - new Date(s.createdAt as unknown as string).getTime()) / (30.44 * 86_400_000);
+        const renewals = Math.max(0, Math.floor(elapsedMonths / months));
+        const tier: "BRONZE" | "SILVER" | "GOLD" = renewals >= 5 ? "GOLD" : renewals >= 2 ? "SILVER" : "BRONZE";
+        return {
+          subscriptionId: s.id,
+          name: [s.firstName, s.username].filter(Boolean).join(" ") || "Socio",
+          planName: s.planName ?? null,
+          tier,
+          pool,
+          used,
+          remaining: Math.max(0, pool - used),
+          orders: stat?.orders ?? 0,
+          lastAt: stat?.lastAt ? stat.lastAt.toISOString() : null,
+        };
+      });
+
+      const bonusTotal = members.reduce((sum, m) => sum + m.used, 0);
+      const poolTotal = members
+        .filter((m) => m.tier !== "BRONZE")
+        .reduce((sum, m) => sum + m.pool, 0);
+      const tierSplit = members.reduce(
+        (acc, m) => {
+          if (m.used > 0) acc[m.tier] += m.used;
+          return acc;
+        },
+        { BRONZE: 0, SILVER: 0, GOLD: 0 } as Record<"BRONZE" | "SILVER" | "GOLD", number>,
+      );
+
+      return {
+        ...empty,
+        bonusTotal,
+        bonusCount: members.reduce((n, m) => n + m.orders, 0),
+        poolTotal,
+        poolUsedPct: poolTotal > 0 ? Math.round((bonusTotal / poolTotal) * 1000) / 10 : null,
+        tierSplit,
+        members: members
+          .filter((m) => m.used > 0 || m.tier !== "BRONZE")
+          .sort((a, b) => b.used - a.used)
+          .slice(0, 12),
       };
     }),
 
