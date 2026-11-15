@@ -287,6 +287,7 @@ function VoiceNoteBubble({
   // así que se descarga con auth y se reproduce desde un blob local.
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const [audioLoadFailed, setAudioLoadFailed] = useState(false);
+  const [audioReloadKey, setAudioReloadKey] = useState(0);
   const ctxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -333,24 +334,49 @@ function VoiceNoteBubble({
     let objectUrl: string | null = null;
     setAudioLoadFailed(false);
     void (async () => {
+      const attempt = async (init?: RequestInit) => {
+        const res = await fetch(src, { cache: 'no-store', ...init });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      };
+
       try {
         const headers = await PlatformBridge.getAuthHeaders();
-        const res = await fetch(src, { headers: headers as Record<string, string> });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
+        let blob: Blob | null = null;
+        try {
+          blob = await attempt({ headers: headers as Record<string, string> });
+        } catch (first) {
+          // Reintento sin headers (por si la sesión viaja en cookie) y, si
+          // tampoco, dejamos que el navegador lo intente directo.
+          console.warn('[voice] primer intento falló, reintentando:', first);
+          try {
+            blob = await attempt();
+          } catch (second) {
+            console.warn('[voice] segundo intento falló:', second);
+          }
+        }
+
         if (!alive) return;
-        objectUrl = URL.createObjectURL(blob);
-        setAudioSrc(objectUrl);
+        if (blob) {
+          objectUrl = URL.createObjectURL(blob);
+          setAudioSrc(objectUrl);
+        } else {
+          setAudioSrc(src);
+          setAudioLoadFailed(true);
+        }
       } catch (err) {
         console.warn('[voice] no se pudo cargar el audio:', err);
-        if (alive) setAudioLoadFailed(true);
+        if (alive) {
+          setAudioSrc(src);
+          setAudioLoadFailed(true);
+        }
       }
     })();
     return () => {
       alive = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [src]);
+  }, [src, audioReloadKey]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -388,7 +414,7 @@ function VoiceNoteBubble({
       el.removeEventListener('pause', onPause);
       el.removeEventListener('play', onPlay);
     };
-  }, [src, totalSec]);
+  }, [src, audioSrc, totalSec]);
 
   const togglePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -527,7 +553,16 @@ function VoiceNoteBubble({
         userSelect: 'none',
       }}
     >
-      {audioSrc && <audio ref={audioRef} src={audioSrc} data-raw-src={rawSrc || ''} preload="auto" style={{ display: 'none' }} />}
+      {audioSrc && (
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          data-raw-src={rawSrc || ''}
+          preload="auto"
+          onError={() => setAudioLoadFailed(true)}
+          style={{ display: 'none' }}
+        />
+      )}
 
       {/* Botón circular Play / Pause estilo Telegram */}
       <button
@@ -613,6 +648,24 @@ function VoiceNoteBubble({
         >
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <span>{formatVoiceDuration(displaySec)}</span>
+            {audioLoadFailed && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setAudioLoadFailed(false); setAudioReloadKey((k) => k + 1); }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'inherit',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textDecoration: 'underline',
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                Reintentar
+              </button>
+            )}
             {!hasPlayed && (
               <span
                 style={{
@@ -848,6 +901,10 @@ export default function ChatRoomPage() {
       if (typeof meta.voiceUrl === 'string' && meta.voiceUrl) continue;
       // Media en bucket: la URL se arma con la key (proxy autenticado).
       if (typeof meta.key === 'string' && meta.key) {
+        // Si el mensaje viaja cifrado (E2E), lo descifra el efecto de abajo;
+        // poner aquí la URL del proxy dejaría bytes cifrados y el audio no
+        // sonaría (y el segundo efecto no podría sobrescribirla).
+        if (msg.encrypted) continue;
         const src = `/api/chat/media/${meta.key.split('/').map(encodeURIComponent).join('/')}`;
         setVoiceSrcMap((prev) => (prev[msg.id] ? prev : { ...prev, [msg.id]: src }));
         continue;
@@ -1865,7 +1922,15 @@ export default function ChatRoomPage() {
           const mediaKey = e2eKeyMap.get(m.e2eKeyVersion ?? e2eVersion) ?? e2eKey;
           if (!mediaKey) continue;
           const plain = await decryptBytes(mediaKey, await res.arrayBuffer());
-          const mime = meta.kind === 'VOICE' ? 'audio/webm' : 'image/webp';
+          const keyExt = String(meta.key).split('.').pop()?.toLowerCase() ?? '';
+          const audioMime =
+            typeof meta.mime === 'string' && String(meta.mime).startsWith('audio/')
+              ? String(meta.mime)
+              : keyExt === 'm4a' ? 'audio/mp4'
+              : keyExt === 'mp3' ? 'audio/mpeg'
+              : keyExt === 'ogg' ? 'audio/ogg'
+              : 'audio/webm';
+          const mime = meta.kind === 'VOICE' ? audioMime : 'image/webp';
           const url = URL.createObjectURL(new Blob([plain], { type: mime }));
           if (!alive) return;
           if (meta.kind === 'VOICE') setVoiceSrcMap((prev) => (prev[m.id] ? prev : { ...prev, [m.id]: url }));

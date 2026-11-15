@@ -48,6 +48,23 @@ export default function NotificationsPage() {
     return subscribeSettings((s) => setInAppBell(s.inAppBell));
   }, []);
 
+  /**
+   * Destino seguro para una notificación.
+   *
+   * Las notificaciones guardan la ruta del momento en que se crearon; algunas
+   * apuntan a pantallas que ya no existen en la app móvil (`/pos`,
+   * `/business-dashboard`) y al tocarlas se abría un 404. Se traducen a su
+   * equivalente vigente y se descarta cualquier destino externo o inválido.
+   */
+  const resolveNotificationRoute = (raw: string | null | undefined): string | null => {
+    if (!raw) return null;
+    const route = String(raw).trim();
+    if (!route.startsWith('/') || route.startsWith('//')) return null;
+    if (route === '/pos' || route.startsWith('/pos/')) return '/business';
+    if (route === '/business-dashboard' || route.startsWith('/business-dashboard/')) return '/business';
+    return route;
+  };
+
   const fetchNotifications = useCallback(async (): Promise<void> => {
     if (!user?.id) return;
     try {
@@ -255,8 +272,19 @@ export default function NotificationsPage() {
             <div 
               key={notif.id} 
               onClick={() => {
-                if (!notif.isRead) markAsRead(notif.id);
-                if (notif.route) router.push(notif.route);
+                if (!notif.isRead) void markAsRead(notif.id);
+                const target = resolveNotificationRoute(notif.route);
+                if (!notif.route) return;
+                if (!target) {
+                  showToast('Esta notificación ya no tiene un destino disponible', 'info');
+                  return;
+                }
+                PlatformBridge.hapticFeedback('light');
+                try {
+                  router.push(target);
+                } catch {
+                  showToast('No se pudo abrir esa pantalla', 'error');
+                }
               }}
               className={`relative overflow-hidden rounded-2xl border p-4 backdrop-blur-xl transition-all ${
                 notif.isRead
