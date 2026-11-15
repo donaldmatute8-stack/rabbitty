@@ -146,6 +146,26 @@ export default function MembershipsPage() {
   const [active, setActive] = useState<Membership | null>(null);
   // Acceso directo desde el Rabbitty Pass: /memberships?focus=<id>
   const [focusId, setFocusId] = useState<string | null>(null);
+  // Misiones (15.2.1): progreso derivado, sin premios en Bunz.
+  const [missions, setMissions] = useState<Array<{
+    subscriptionId: string;
+    businessName: string;
+    planName: string;
+    tier: 'BRONZE' | 'SILVER' | 'GOLD';
+    renewals: number;
+    missions: Array<{ id: string; title: string; hint: string; progress: number; target: number; done: boolean; badge: { id: string; label: string; color: string } }>;
+    badgesEarned: Array<{ id: string; label: string; color: string }>;
+  }>>([]);
+
+  useEffect(() => {
+    let alive = true;
+    void PlatformBridge.getAuthHeaders()
+      .then((headers) => fetch('/api/memberships/missions', { headers, cache: 'no-store' }))
+      .then((r) => r.json())
+      .then((d) => { if (alive && d?.success && Array.isArray(d.memberships)) setMissions(d.memberships); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   // Apertura directa desde el pase: /memberships?open=<id> abre esa membresía,
   // no la lista. ?focus=<id> (compatibilidad) solo desplaza y resalta.
@@ -401,12 +421,17 @@ export default function MembershipsPage() {
         </button>
       </div>
 
+      {tab === 'mine' && !loading && missions.length > 0 && (
+        <MissionsPanel missions={missions} />
+      )}
+
       {tab === 'discover' ? (
         <MembershipMarketplace />
       ) : loading ? (
         <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500" /></div>
       ) : memberships.length === 0 ? (
         <EmptyState icon={<div className="text-[32px]">🎟️</div>} title="Sin membresías" description="Cuando te suscribas a un plan de un negocio, tu pase aparecerá aquí." />
+
       ) : (
         <div className="flex flex-col gap-3">
           {memberships.map((m, i) => {
@@ -738,5 +763,94 @@ export default function MembershipsPage() {
         )}
       </AnimatePresence>
     </ProfileSubpageLayout>
+  );
+}
+
+/**
+ * Misiones del socio (15.2.1). Progreso derivado de su actividad real.
+ * Las insignias NO generan Bunz: son reconocimiento y, si el negocio quiere,
+ * un gesto en mostrador (upgrade, prioridad).
+ */
+function MissionsPanel({
+  missions,
+}: {
+  missions: Array<{
+    subscriptionId: string;
+    businessName: string;
+    planName: string;
+    tier: 'BRONZE' | 'SILVER' | 'GOLD';
+    missions: Array<{ id: string; title: string; hint: string; progress: number; target: number; done: boolean; badge: { id: string; label: string; color: string } }>;
+    badgesEarned: Array<{ id: string; label: string; color: string }>;
+  }>;
+}) {
+  const tierLabel = { BRONZE: 'Bronce', SILVER: 'Plata', GOLD: 'Oro' } as const;
+  const tierColor = { BRONZE: '#C97B4A', SILVER: '#A8B3C1', GOLD: '#FFD166' } as const;
+
+  return (
+    <section className="mb-5 rounded-3xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="m-0 text-[10px] font-black uppercase tracking-[0.16em] text-[#E91E63]">Misiones</p>
+          <p className="m-0 mt-0.5 text-[11px] text-(--text-muted)">Insignias de reconocimiento, sin Bunz</p>
+        </div>
+      </div>
+
+      {missions.map((m) => (
+        <div key={m.subscriptionId} className="mb-4 last:mb-0">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="truncate text-[12.5px] font-black text-(--text-primary)">{m.businessName}</span>
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+              style={{ color: tierColor[m.tier], background: `${tierColor[m.tier]}1f`, border: `1px solid ${tierColor[m.tier]}44` }}
+            >
+              {tierLabel[m.tier]}
+            </span>
+            {m.badgesEarned.length > 0 && (
+              <span className="ml-auto text-[10px] font-bold text-(--text-muted)">
+                {m.badgesEarned.length} insignia{m.badgesEarned.length === 1 ? '' : 's'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {m.missions.map((mission) => {
+              const pct = Math.min(100, Math.round((mission.progress / mission.target) * 100));
+              return (
+                <div key={mission.id} className="rounded-2xl border border-(--border-subtle) bg-(--bg-primary) p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11.5px] font-bold text-(--text-primary)">{mission.title}</span>
+                    <span className="shrink-0 text-[10.5px] font-black tabular-nums text-(--text-muted)">
+                      {mission.progress}/{mission.target}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-(--bg-elevated)">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${pct}%`,
+                        background: mission.done
+                          ? `linear-gradient(90deg, ${mission.badge.color} 0%, ${mission.badge.color}aa 100%)`
+                          : 'linear-gradient(90deg, #A855F7 0%, #E91E63 100%)',
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <span className="text-[10px] text-(--text-muted)">{mission.hint}</span>
+                    {mission.done && (
+                      <span
+                        className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                        style={{ color: mission.badge.color, background: `${mission.badge.color}1f`, border: `1px solid ${mission.badge.color}44` }}
+                      >
+                        {mission.badge.label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </section>
   );
 }
