@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { getCoreDb } from "@rabbitty/api/db";
 import {
   notificationsOutbox,
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
           gte(userPreferences.score, MIN_SCORE),
           gte(userPreferences.signalCount, MIN_SIGNALS),
           gte(userPreferences.lastSeenAt, sinceActivity),
-          gte(users.createdAt, minCreated),
+          lte(users.createdAt, minCreated),
         ),
       )
       .orderBy(desc(userPreferences.score))
