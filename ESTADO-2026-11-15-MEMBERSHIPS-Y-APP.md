@@ -184,10 +184,14 @@ apps/admin/src/app/(pos)/pos/page.tsx                    # escaneo de pase + cob
 · fuera de 21:00–09:00 (hora México) · negocio APPROVED/VERIFIED.
 
 ### Operación
-1. **Programar los crons** (hoy no están en `railway.json`, se disparan externo):
-   - `POST /api/cron/preferences` → diario 03:00 (recalcula favoritos).
-   - `POST /api/cron/preference-nudges` → cada 2 h entre 09:00 y 20:00.
-   - Auth: `Authorization: Bearer $CRON_SECRET`.
+1. **Crons ya programados en GitHub Actions** (secretos `CRON_SECRET` y opcional `ADMIN_APP_URL`):
+   - `.github/workflows/preferences-cron.yml` → `POST /api/cron/preferences`, diario **09:00 UTC (03:00 MX)**.
+   - `.github/workflows/preference-nudges-cron.yml` → `POST /api/cron/preference-nudges`, **cada 2 h** (el endpoint aplica el horario de silencio y los topes).
+2. **Medición**: al abrir la ficha de un negocio se llama `POST /api/preferences/visit`, que marca `openedAt` y `convertedAt` del último aviso (7 días). El panel de Admin muestra **avisos enviados / apertura / conversión (30 d)**.
+3. **Fase 3 viva**:
+   - **franja habitual** (`DAY_PART` calculado en la agregación): el aviso "ya te alcanza" solo sale dentro de la franja del producto ("tu café de las 8:30");
+   - **riesgo de abandono** (`CHURN_RISK`): si no viene en 21 días y le alcanza, aviso semanal con dedupe por semana.
+4. **Insights**: favoritos y categorías agregadas por negocio (`topFavorites`, `topCategories`).
 2. Verificar datos:
    ```sql
    SELECT kind, "businessId", label, score, "signalCount", explicit
@@ -199,6 +203,7 @@ apps/admin/src/app/(pos)/pos/page.tsx                    # escaneo de pase + cob
 4. Un favorito **explícito** nunca se pisa: la agregación lo respeta (`explicit = true`).
 
 ### Pendientes de esta línea
-- Medir conversión (ir al local después del aviso) con `preference_nudges.openedAt/convertedAt`.
-- Notificaciones de fase 3 no implementadas: promo sobre favorito, "hace 21 días", día-parte, Bunz por vencer.
-- Insights más ricos para el negocio (por cohorte/segmento) y forecast.
+- **Promo sobre el favorito** (cruzar campañas flash con `user_preferences`).
+- **Bunz por vencer**: requiere lotes con caducidad (hoy el saldo es agregado, sin vencimiento por lote).
+- Insights por cohorte/segmento y forecast de inventario.
+- Comparar conversión con/sin aviso (hoy se mide, no se A/B testea).
