@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
         businessId: userPreferences.businessId,
         refId: userPreferences.refId,
         label: userPreferences.label,
+        lastSeenAt: userPreferences.lastSeenAt,
         businessName: ownedBusinesses.name,
         balance: sql<number>`GREATEST(0, COALESCE(${users.totalBunzEarned}, 0) - COALESCE(${users.totalBunzSpent}, 0))`,
         pushRules: users.pushRules,
@@ -133,9 +134,36 @@ export async function POST(req: NextRequest) {
       .groupBy(preferenceNudges.userId);
     const weeklyByUser = new Map(weekly.map((w) => [w.userId, Number(w.count)]));
 
+    // Franja habitual por producto (DAY_PART). Si existe, solo se avisa dentro.
+    const dayParts = await coreDb
+      .select({
+        userId: userPreferences.userId,
+        businessId: userPreferences.businessId,
+        refId: userPreferences.refId,
+        label: userPreferences.label,
+      })
+      .from(userPreferences)
+      .where(eq(userPreferences.kind, "DAY_PART"));
+    const dayPartByProduct = new Map(
+      dayParts.map((d) => [`${d.userId}|${d.businessId}|${d.refId}`, d.label]),
+    );
+    const BUCKETS: Record<string, [number, number]> = {
+      mañana: [6, 12],
+      tarde: [12, 18],
+      noche: [18, 24],
+      madrugada: [0, 6],
+    };
+    const inBucket = (label: string | undefined): boolean => {
+      if (!label) return true; // sin historial horario: no se restringe
+      const range = BUCKETS[label];
+      if (!range) return true;
+      return hour >= range[0] && hour < range[1];
+    };
+
     const dateKey = new Date().toISOString().slice(0, 10);
+    const weekKey = `${new Date().getUTCFullYear()}-W${String(Math.ceil((now / 86_400_000 + 3) / 7)).padStart(2, "0")}`;
     let sent = 0;
-    const skipped = { noOptIn: 0, muted: 0, notEnough: 0, unavailable: 0, frequent: 0, weeklyCap: 0 };
+    const skipped = { noOptIn: 0, muted: 0, notEnough: 0, unavailable: 0, frequent: 0, weeklyCap: 0, offSchedule: 0, churn: 0 };
 
     for (const p of prefs) {
       if (!p.businessId) continue;
@@ -155,6 +183,10 @@ export async function POST(req: NextRequest) {
 
       if (blockedPrefs.has(p.id)) { skipped.frequent += 1; continue; }
       if ((weeklyByUser.get(p.userId) ?? 0) >= WEEKLY_CAP) { skipped.weeklyCap += 1; continue; }
+
+      // "Tu café de las 8:30": si sabemos su franja, solo avisamos dentro.
+      const dayPart = dayPartByProduct.get(`${p.userId}|${p.businessId}|${p.refId}`);
+      if (!inBucket(dayPart)) { skipped.offSchedule += 1; continue; }
 
       const dedupeKey = `pref_alert:${p.userId}:${p.id}:${dateKey}`;
 
@@ -185,6 +217,58 @@ export async function POST(req: NextRequest) {
         .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
 
       blockedPrefs.add(p.id);
+      weeklyByUser.set(p.userId, (weeklyByUser.get(p.userId) ?? 0) + 1);
+      sent += 1;
+    }
+
+    // ── Segunda pasada: "hace 21 días que no vienes" ──
+    // Se apoya en la última compra registrada (lastSeenAt de la preferencia).
+    const CHURN_DAYS = 21;
+    for (const p of prefs) {
+      if (!p.businessId || !p.lastSeenAt) continue;
+      const days = (now - new Date(p.lastSeenAt).getTime()) / 86_400_000;
+      if (days < CHURN_DAYS) continue;
+
+      const rules = parseJson<Record<string, boolean>>(p.pushRules, {});
+      if (rules.favoriteAlerts !== true) continue;
+      const muted = parseJson<string[]>(p.muted, []);
+      if (muted.includes("favorites")) continue;
+
+      const item = itemById.get(p.refId);
+      if (!item || !item.isActive || !item.isAvailable) { skipped.churn += 1; continue; }
+      const price = Number(item.price ?? 0);
+      const balance = Number(p.balance ?? 0);
+      if (price <= 0 || balance < price * BALANCE_MARGIN) { skipped.churn += 1; continue; }
+      if ((weeklyByUser.get(p.userId) ?? 0) >= WEEKLY_CAP) { skipped.weeklyCap += 1; continue; }
+
+      const dedupeKey = `pref_churn:${p.userId}:${p.id}:${weekKey}`;
+
+      await coreDb
+        .insert(preferenceNudges)
+        .values({
+          userId: p.userId,
+          businessId: p.businessId,
+          preferenceId: p.id,
+          reason: "CHURN_RISK",
+          channel: "push",
+          dedupeKey,
+        })
+        .onConflictDoNothing({ target: preferenceNudges.dedupeKey });
+
+      await coreDb
+        .insert(notificationsOutbox)
+        .values({
+          userId: p.userId,
+          type: "PREFERENCE_ALERT",
+          title: `${p.businessName ?? "Tu lugar"} te extraña`,
+          message: `Hace ${Math.round(days)} días que no vienes. Tu ${p.label} sigue ahí y con tus ${Math.round(balance)} Bunz te alcanza.`,
+          route: `/affiliate/${p.businessId}`,
+          data: { businessId: p.businessId, productId: p.refId, price, balance, reason: "CHURN_RISK" },
+          dedupeKey,
+          priority: "normal",
+        })
+        .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+
       weeklyByUser.set(p.userId, (weeklyByUser.get(p.userId) ?? 0) + 1);
       sent += 1;
     }

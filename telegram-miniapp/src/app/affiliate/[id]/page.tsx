@@ -344,6 +344,20 @@ function AffiliateProfileContent() {
     return () => { alive = false; };
   }, [affiliate?.id]);
 
+  // Conversión del aviso: si llegó aquí después de un "ya te alcanza", cuenta.
+  useEffect(() => {
+    if (!affiliate?.id) return;
+    void PlatformBridge.getAuthHeaders()
+      .then((headers) =>
+        fetch('/api/preferences/visit', {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessId: affiliate.id }),
+        }),
+      )
+      .catch(() => {});
+  }, [affiliate?.id]);
+
   const favoriteItem = useMemo(() => {
     if (!favoriteProduct?.refId) return null;
     for (const cat of categories) {

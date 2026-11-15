@@ -86,6 +86,9 @@ export async function POST(req: NextRequest) {
     const now = Date.now();
 
     const productAgg = new Map<string, Agg>();
+    // Franja horaria del producto (para "tu café de las 8:30").
+    const productHours = new Map<string, { morning: number; afternoon: number; evening: number; night: number }>();
+    const hourFmt = new Intl.DateTimeFormat("es-MX", { timeZone: "America/Mexico_City", hour: "2-digit", hour12: false });
     const categoryAgg = new Map<string, Agg>();
     const globalCategoryAgg = new Map<string, Agg>();
     const businessTotals = new Map<string, number>();
@@ -110,6 +113,16 @@ export async function POST(req: NextRequest) {
 
       const prodKey = keyOf(r.userId, r.businessId, "PRODUCT", r.productId);
       bump(productAgg, prodKey, r.productName ?? "Producto", weight, at);
+
+      if (at) {
+        const h = Number(hourFmt.format(at)) % 24;
+        const hist = productHours.get(prodKey) ?? { morning: 0, afternoon: 0, evening: 0, night: 0 };
+        if (h >= 6 && h < 12) hist.morning += 1;
+        else if (h >= 12 && h < 18) hist.afternoon += 1;
+        else if (h >= 18 && h < 24) hist.evening += 1;
+        else hist.night += 1;
+        productHours.set(prodKey, hist);
+      }
       businessTotals.set(keyOf(r.userId, r.businessId), (businessTotals.get(keyOf(r.userId, r.businessId)) ?? 0) + weight);
 
       if (r.categoryId) {
@@ -126,7 +139,7 @@ export async function POST(req: NextRequest) {
     const upsert = async (input: {
       userId: string;
       businessId: string | null;
-      kind: "PRODUCT" | "CATEGORY";
+      kind: "PRODUCT" | "CATEGORY" | "DAY_PART";
       refId: string;
       label: string;
       score: number;
@@ -221,6 +234,33 @@ export async function POST(req: NextRequest) {
         });
         if (res === "created") created += 1;
         else if (res === "updated") updated += 1;
+
+        // Franja habitual del producto (una sola, la dominante)
+        const hist = productHours.get(item.key);
+        if (hist) {
+          const buckets = [
+            { key: "morning", label: "mañana" },
+            { key: "afternoon", label: "tarde" },
+            { key: "evening", label: "noche" },
+            { key: "night", label: "madrugada" },
+          ] as const;
+          const total = hist.morning + hist.afternoon + hist.evening + hist.night;
+          const top = [...buckets].sort((a, b) => hist[b.key] - hist[a.key])[0];
+          if (total > 0 && top) {
+            const dayRes = await upsert({
+              userId,
+              businessId,
+              kind: "DAY_PART" as never,
+              refId,
+              label: top.label,
+              score: Math.round((hist[top.key] / total) * 1000) / 1000,
+              signals: hist[top.key],
+              lastSeenAt: item.agg.lastSeenAt,
+            });
+            if (dayRes === "created") created += 1;
+            else if (dayRes === "updated") updated += 1;
+          }
+        }
       }
     }
 

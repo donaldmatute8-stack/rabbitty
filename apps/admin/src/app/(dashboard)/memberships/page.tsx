@@ -219,6 +219,41 @@ export default function MembershipsPage() {
             </div>
           </div>
 
+          {/* Desempeño de los avisos "ya te alcanza" */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Avisos 30d</p>
+              <p className="mt-1 text-lg font-black text-white">{analytics.nudges.sent}</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Apertura</p>
+              <p className="mt-1 text-lg font-black text-white">
+                {analytics.nudges.openRate == null ? "—" : `${analytics.nudges.openRate}%`}
+              </p>
+            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/60">Conversión</p>
+              <p className="mt-1 text-lg font-black text-emerald-300">
+                {analytics.nudges.conversionRate == null ? "—" : `${analytics.nudges.conversionRate}%`}
+              </p>
+            </div>
+          </div>
+
+          {analytics.topCategories && analytics.topCategories.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+              <span className="font-bold uppercase tracking-wider text-white/35">Categorías</span>
+              {analytics.topCategories.map((c) => (
+                <span
+                  key={c.label}
+                  className="rounded-full px-2 py-0.5 font-bold"
+                  style={{ color: '#93C5FD', background: 'rgba(147,197,253,0.12)', border: '1px solid rgba(147,197,253,0.35)' }}
+                >
+                  {c.label} · {c.members}
+                </span>
+              ))}
+            </div>
+          )}
+
           {analytics.topFavorites && analytics.topFavorites.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
               <span className="font-bold uppercase tracking-wider text-white/35">Favoritos</span>

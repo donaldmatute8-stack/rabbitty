@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { router, posProcedure, posPermission } from "../trpc";
 import {
   userPreferences,
+  preferenceNudges,
   membershipPlans,
   membershipPlanVersions,
   membershipSubscriptions,
@@ -1668,6 +1669,42 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         .orderBy(desc(sql`count(distinct ${userPreferences.userId})`))
         .limit(5);
 
+      // Categorías favoritas agregadas (sin exponer individuos)
+      const topCategories = await ctx.coreDb
+        .select({
+          label: userPreferences.label,
+          members: sql<number>`count(distinct ${userPreferences.userId})::int`,
+        })
+        .from(userPreferences)
+        .where(
+          and(
+            eq(userPreferences.businessId, input.businessId),
+            eq(userPreferences.kind, "CATEGORY"),
+          ),
+        )
+        .groupBy(userPreferences.label)
+        .orderBy(desc(sql`count(distinct ${userPreferences.userId})`))
+        .limit(5);
+
+      // Desempeño de los avisos "ya te alcanza" (últimos 30 días)
+      const [nudgeRow] = await ctx.coreDb
+        .select({
+          sent: sql<number>`count(*)::int`,
+          opened: sql<number>`count(${preferenceNudges.openedAt})::int`,
+          converted: sql<number>`count(${preferenceNudges.convertedAt})::int`,
+        })
+        .from(preferenceNudges)
+        .where(
+          and(
+            eq(preferenceNudges.businessId, input.businessId),
+            gte(preferenceNudges.sentAt, cutoff),
+          ),
+        );
+
+      const nudgeSent = Number(nudgeRow?.sent ?? 0);
+      const nudgeOpened = Number(nudgeRow?.opened ?? 0);
+      const nudgeConverted = Number(nudgeRow?.converted ?? 0);
+
       const redemptions = Number(redemptionRow?.count ?? 0);
       const denominator = active.length + cancelledLast30;
 
@@ -1688,6 +1725,14 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         redemptionsPerMember: active.length > 0 ? Math.round((redemptions / active.length) * 10) / 10 : 0,
         loyaltyTiers,
         topFavorites: topFavorites.map((f) => ({ label: f.label, members: Number(f.members) })),
+        topCategories: topCategories.map((c) => ({ label: c.label, members: Number(c.members) })),
+        nudges: {
+          sent: nudgeSent,
+          opened: nudgeOpened,
+          converted: nudgeConverted,
+          openRate: nudgeSent > 0 ? Math.round((nudgeOpened / nudgeSent) * 1000) / 10 : null,
+          conversionRate: nudgeSent > 0 ? Math.round((nudgeConverted / nudgeSent) * 1000) / 10 : null,
+        },
         topBenefits: topBenefits.map((b) => ({ type: b.type, count: Number(b.count) })),
       };
     }),

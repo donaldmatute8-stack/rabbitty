@@ -1,0 +1,35 @@
+name: Rabbitty Preference Nudges
+
+on:
+  schedule:
+    # cada 2 h. El endpoint aplica por sí mismo el horario de silencio
+    # (21:00–09:00 hora de México), topes por favorito y por semana.
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  nudges:
+    name: "Bunzy: ya te alcanza"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Trigger preference nudges
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          echo "Evaluating preference nudges at $APP_URL..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$APP_URL/api/cron/preference-nudges" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Preference nudges cron failed with HTTP $HTTP_STATUS"
+            exit 1
+          fi
