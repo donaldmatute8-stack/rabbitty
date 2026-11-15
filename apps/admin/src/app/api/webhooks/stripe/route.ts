@@ -28,13 +28,26 @@ async function notifyMembershipUser(
   userId: string,
   title: string,
   message: string,
-  route = "/memberships"
+  route = "/memberships",
+  dedupeKey?: string
 ) {
   try {
-    await coreDb.execute(
-       
-      (await import("drizzle-orm")).sql`INSERT INTO "notifications" ("id", "userId", "title", "message", "type", "route") VALUES (gen_random_uuid()::text, ${userId}, ${title}, ${message}, 'REWARD', ${route})`
-    );
+    // Al outbox: entrega in-app + push por el worker y, con dedupeKey, los
+    // reintentos de Stripe no duplican la notificación.
+    const { notificationsOutbox } = await import("@rabbitty/database-core/schema");
+    await coreDb
+      .insert(notificationsOutbox)
+      .values({
+        userId,
+        type: "MEMBERSHIP_GRANTED",
+        title,
+        message,
+        route,
+        data: { kind: "membership" },
+        dedupeKey: dedupeKey ?? `membership_notice:${userId}:${title.slice(0, 24)}:${new Date().toISOString().slice(0, 10)}`,
+        priority: "normal",
+      })
+      .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
   } catch (e) {
     console.error("[Stripe Webhook] notificación membresía falló:", e);
   }
@@ -273,14 +286,14 @@ export async function POST(req: Request) {
                 planId: meta.planId ?? null,
               });
             }
-            await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa. Muéstrala en caja con su QR dorado.", "/memberships");
+            await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa. Muéstrala en caja con su QR dorado.", "/memberships", `membership_activated:${String(session.subscription)}`);
             // Bidireccional: avisa al DUEÑO del negocio la venta
             try {
               const [bizRow] = await coreDb.select({ ownerId: (await import("@rabbitty/database-core/schema")).ownedBusinesses.ownerId, name: (await import("@rabbitty/database-core/schema")).ownedBusinesses.name })
                 .from((await import("@rabbitty/database-core/schema")).ownedBusinesses)
                 .where((await import("drizzle-orm")).eq((await import("@rabbitty/database-core/schema")).ownedBusinesses.id, meta.businessId))
                 .limit(1);
-              if (bizRow?.ownerId) await notifyMembershipUser(coreDb, bizRow.ownerId, "💸 Vendiste una membresía", `Nuevo miembro activo en ${bizRow.name} — la cuota llega por Stripe.`, "/memberships");
+              if (bizRow?.ownerId) await notifyMembershipUser(coreDb, bizRow.ownerId, "💸 Vendiste una membresía", `Nuevo miembro activo en ${bizRow.name} — la cuota llega por Stripe.`, "/memberships", `membership_sold:${String(session.subscription)}`);
             } catch (ownErr) { console.error("[Stripe Webhook] notify owner falló:", ownErr); }
           }
         }
@@ -357,7 +370,7 @@ export async function POST(req: Request) {
                 planId: meta.planId ?? null,
               });
             }
-            await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa por 12 meses.", "/memberships");
+            await notifyMembershipUser(coreDb, meta.userId, "🎟️ ¡Membresía activada!", "Tu pago fue confirmado y tu membresía ya está activa por 12 meses.", "/memberships", `membership_activated:${session.id}`);
           }
         }
         break;
@@ -392,7 +405,7 @@ export async function POST(req: Request) {
               .set({ currentPeriodEnd: newEnd, status: "ACTIVE", updatedAt: new Date() })
               .where(eq(membershipSubscriptions.id, sub.sub.id));
             console.log(`[Stripe Webhook] Renovación aplicada: sub=${sub.sub.id} → ${newEnd.toISOString()}`);
-            await notifyMembershipUser(coreDb, sub.sub.userId, "🔄 Membresía renovada", `Tu cuota se pagó correctamente — membresía vigente hasta ${newEnd.toLocaleDateString("es-MX")}.`, "/memberships");
+            await notifyMembershipUser(coreDb, sub.sub.userId, "🔄 Membresía renovada", `Tu cuota se pagó correctamente — membresía vigente hasta ${newEnd.toLocaleDateString("es-MX")}.`, "/memberships", `membership_renewed:${sub.sub.id}:${newEnd.toISOString().slice(0, 10)}`);
           }
         }
         break;
@@ -410,7 +423,7 @@ export async function POST(req: Request) {
           .set({ status: "EXPIRED", updatedAt: new Date() })
           .where(eq(membershipSubscriptions.paymentProviderSubId, String(stripeSub.id)));
         if (expiredSub?.userId) {
-          await notifyMembershipUser(coreDb, expiredSub.userId, "⚠️ Tu membresía expiró", "El periodo pagado terminó. Renuévate desde el perfil del negocio para seguir disfrutando tus beneficios.", "/memberships");
+          await notifyMembershipUser(coreDb, expiredSub.userId, "⚠️ Tu membresía expiró", "El periodo pagado terminó. Renuévate desde el perfil del negocio para seguir disfrutando tus beneficios.", "/memberships", `membership_expired:${String(stripeSub.id)}`);
         }
         break;
       }

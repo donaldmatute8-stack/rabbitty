@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import QRDiscovery from '@/components/QRDiscovery';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { ArrowUpRight, ArrowDownLeft, Copy, RefreshCw, X } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
 import AnimatedBunz from '@/components/ui/AnimatedBunz';
+import { useToast } from '@/contexts/ToastContext';
 
 interface Transaction {
   id: string;
@@ -31,6 +32,8 @@ interface RabbitterSuggestion {
 export default function WalletPage() {
   const { balance, refreshBalance } = useWallet();
   const { user } = useAuth();
+  const { showToast } = useToast();
+  const balanceRef = useRef<HTMLDivElement | null>(null);
   const [history, setHistory] = useState<Transaction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -219,7 +222,7 @@ export default function WalletPage() {
       }
 
       await PlatformBridge.hapticFeedback('success');
-      alert(`🎉 ¡Enviaste con éxito ${amt} BUNZ a ${data.data?.recipientName || sendRecipient}!`);
+      showToast(`Enviaste ${amt} BUNZ a ${data.data?.recipientName || sendRecipient}`, 'success');
       setShowSend(false);
       setSendRecipient('');
       setSendAmount('');
@@ -227,10 +230,14 @@ export default function WalletPage() {
       setSendStep(1);
       setIdempotencyKey('');
       await handleRefresh();
+      // Volver a los dígitos (saldo actualizado), no quedarse en el formulario.
+      requestAnimationFrame(() => {
+        balanceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     } catch (err: unknown) {
       await PlatformBridge.hapticFeedback('error');
       const msg = err instanceof Error ? err.message : 'Error al enviar Bunz';
-      alert(msg);
+      showToast(msg, 'error');
     } finally {
       setSending(false);
     }
@@ -241,7 +248,7 @@ export default function WalletPage() {
       <div className="flex flex-col gap-5">
 
         {/* Main balance card */}
-        <div style={{
+        <div ref={balanceRef} style={{
           background: 'linear-gradient(145deg, rgba(233,30,99,.20) 0%, #1A0A16 48%, #2A0B24 100%)',
           borderColor: 'rgba(233,30,99,.28)',
         }} className="rounded-4xl px-6 py-7 relative overflow-hidden border shadow-[0_20px_60px_-24px_rgba(233,30,99,.55)] text-white">

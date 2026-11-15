@@ -25,6 +25,8 @@ export const users = pgTable("users", {
   role: text("role").default("USER").notNull(),
   hasMadeFirstTransaction: boolean("hasMadeFirstTransaction").default(false).notNull(),
   hasEarnedFirstBunz: boolean("hasEarnedFirstBunz").default(false).notNull(),
+  /** Última señal de app abierta (para no duplicar push nativo). */
+  lastActiveAt: timestamp("lastActiveAt"),
   hops: integer("hops").default(0).notNull(),
   levelId: text("levelId"),
   supportWhatsApp: text("supportWhatsApp"),

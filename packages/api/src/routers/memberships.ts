@@ -297,6 +297,7 @@ export const membershipsRouter = router({
           message: input.giftNote ? `Con nota: "${input.giftNote}" — ábrela en Mis Membresías y muéstrala en caja.` : "Está activa desde ya — muéstrala en caja con su QR dorado.",
           type: "REWARD",
           route: "/memberships",
+          dedupeKey: `membership_grant:${sub.id}`,
         } as any);
       } catch (notifyErr) {
         console.error("[memberships] notify cortesía falló:", notifyErr);
@@ -645,11 +646,12 @@ export const membershipsRouter = router({
           cardNiche: input.cardNiche || "other",
           cardDetail: input.cardDetail || null,
           cardTagline: input.cardTagline || null,
-          isMarketplaceVisible: input.isMarketplaceVisible ?? false,
+          // Los planes nuevos nacen visibles en Descubrir; se pueden ocultar luego.
+          isMarketplaceVisible: input.isMarketplaceVisible ?? true,
           category: input.category || null,
           tags: input.tags ?? [],
           foundingSlots: input.foundingSlots ?? null,
-          publishedAt: input.isMarketplaceVisible ? new Date() : null,
+          publishedAt: input.isMarketplaceVisible === false ? null : new Date(),
           featuredUntil: input.featured ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null,
         }).returning();
         const [version] = await tx.insert(membershipPlanVersions).values({
@@ -780,7 +782,8 @@ export const membershipsRouter = router({
               title: `🎟️ Nuevo plan en ${biz?.name || 'tu negocio guardado'}`,
               message: `Publicaron la membresía "${row.plan.name}"${row.version.priceFiat ? ` ($${Number(row.version.priceFiat)} / ${row.version.billingInterval.toLowerCase()})` : ''}. Échale un ojo en su perfil.`,
               type: "AFFILIATE",
-              route: `/affiliate/${row.plan.businessId}`,
+              route: `/memberships/plan/${row.plan.id}`,
+              dedupeKey: `plan_published:${row.version.id}:${s2.userId}`,
             } as any);
           } catch { /* best-effort */ }
         }
@@ -895,6 +898,7 @@ export const membershipsRouter = router({
               message: `El negocio activó tu membresía "${row.plan.name}". Ya puedes mostrarla en caja con su QR dorado.`,
               type: "REWARD",
               route: "/memberships",
+              dedupeKey: `membership_activated_pos:${sub.id}`,
             } as any);
           } catch (notifyErr) {
             console.error("[memberships] notificación al cliente falló:", notifyErr);

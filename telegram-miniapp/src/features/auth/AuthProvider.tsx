@@ -262,6 +262,32 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
   }, [user?.id, pushSettingVersion]);
 
+  // Heartbeat de primer plano: el worker no manda banner nativo si la app está abierta.
+  useEffect(() => {
+    if (!user?.id) return;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const ping = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+      void PlatformBridge.getAuthHeaders()
+        .then((headers) => fetch('/api/presence/heartbeat', { method: 'POST', headers }))
+        .catch(() => {});
+    };
+    const start = () => {
+      ping();
+      if (!timer) timer = setInterval(ping, 60_000);
+    };
+    const stop = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+    };
+    const onVisibility = () => (document.visibilityState === 'visible' ? start() : stop());
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user?.id]);
+
   // El banner de primer plano se cierra solo a los 14s.
   useEffect(() => {
     if (!foregroundPush) return;
@@ -307,55 +333,85 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             left: 12,
             right: 12,
             zIndex: 99999,
+            display: 'flex',
+            justifyContent: 'center',
+            pointerEvents: 'none',
           }}
         >
           <div
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              const route = foregroundPush.route;
+              setForegroundPush(null);
+              if (route) { try { router.push(route); } catch { /* noop */ } }
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { const r = foregroundPush.route; setForegroundPush(null); if (r) router.push(r); } }}
             style={{
+              pointerEvents: 'auto',
+              position: 'relative',
+              overflow: 'hidden',
+              width: '100%',
+              maxWidth: 380,
+              borderRadius: 20,
+              padding: '11px 13px 13px',
               display: 'flex',
               alignItems: 'center',
-              gap: 10,
-              padding: 12,
-              borderRadius: 18,
-              background: 'linear-gradient(135deg, rgba(35,18,32,0.98), rgba(12,12,20,0.98))',
-              border: '1px solid rgba(233,30,99,0.45)',
-              boxShadow: '0 16px 44px rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(16px)',
+              gap: 11,
+              cursor: foregroundPush.route ? 'pointer' : 'default',
+              background: 'color-mix(in srgb, var(--bg-elevated, #14101c) 82%, transparent)',
+              backdropFilter: 'blur(26px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(26px) saturate(180%)',
+              border: '1px solid color-mix(in srgb, var(--border-subtle, rgba(255,255,255,0.12)) 85%, transparent)',
+              boxShadow: '0 18px 40px -22px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 -10px 30px -24px rgba(233,30,99,0.4)',
             }}
           >
-            <div style={{ width: 38, height: 38, borderRadius: 12, background: 'rgba(233,30,99,0.18)', border: '1px solid rgba(233,30,99,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>
-              🐰
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 900, color: '#fff', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 34, height: 34, flexShrink: 0, borderRadius: 12, color: '#fff',
+                background: 'linear-gradient(140deg, #E91E63 0%, #8B5CF6 100%)',
+                boxShadow: '0 8px 18px -8px rgba(233,30,99,0.42)',
+              }}
+            >
+              🎟️
+            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+              <span
+                style={{
+                  fontSize: 9, fontWeight: 900, letterSpacing: '0.18em', textTransform: 'uppercase',
+                  color: 'color-mix(in srgb, var(--text-muted, rgba(255,255,255,0.55)) 92%, transparent)',
+                }}
+              >
+                Rabbitty
+              </span>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, lineHeight: 1.3, color: 'var(--text-primary, #fff)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {foregroundPush.title}
               </p>
               {foregroundPush.body && (
-                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'rgba(255,255,255,0.6)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted, rgba(255,255,255,0.6))', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {foregroundPush.body}
                 </p>
               )}
             </div>
-            {foregroundPush.route && (
-              <button
-                type="button"
-                onClick={() => {
-                  const route = foregroundPush.route;
-                  setForegroundPush(null);
-                  try { router.push(route); } catch { /* noop */ }
-                }}
-                style={{ flexShrink: 0, border: 'none', borderRadius: 12, background: '#E91E63', color: '#fff', fontSize: 11, fontWeight: 900, padding: '9px 12px', cursor: 'pointer' }}
-              >
-                Ver
-              </button>
-            )}
             <button
               type="button"
               aria-label="Cerrar"
-              onClick={() => setForegroundPush(null)}
-              style={{ flexShrink: 0, border: 'none', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', width: 28, height: 28, borderRadius: 999, cursor: 'pointer', fontSize: 13 }}
+              onClick={(e) => { e.stopPropagation(); setForegroundPush(null); }}
+              style={{
+                flexShrink: 0, border: 'none', width: 26, height: 26, borderRadius: 999,
+                background: 'rgba(255,255,255,0.08)', color: 'var(--text-muted, rgba(255,255,255,0.6))',
+                cursor: 'pointer', fontSize: 12,
+              }}
             >
               ✕
             </button>
+            <span
+              style={{
+                position: 'absolute', left: 0, right: 0, bottom: 0, height: 2,
+                background: 'linear-gradient(90deg, #E91E63 0%, #8B5CF6 100%)', opacity: 0.75,
+              }}
+            />
           </div>
         </div>
       )}

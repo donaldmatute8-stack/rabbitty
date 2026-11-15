@@ -238,6 +238,32 @@ export async function processOutboxBatch(limit = 20): Promise<{
           : {}),
     };
 
+    // ── App abierta: no duplicar (in-app ya se insertó; el banner nativo sobra) ──
+    // El cliente manda un heartbeat cada minuto mientras está en primer plano.
+    try {
+      const [activity] = await db
+        .select({ lastActiveAt: users.lastActiveAt })
+        .from(users)
+        .where(eq(users.id, item.userId))
+        .limit(1);
+      const activeNow =
+        activity?.lastActiveAt && Date.now() - new Date(activity.lastActiveAt).getTime() < 120_000;
+      if (activeNow && notificationId) {
+        await db.insert(notificationDeliveries).values({
+          notificationId,
+          channel: "APNs",
+          status: "SKIPPED",
+          reason: "foreground",
+        });
+        summary.skipped += 1;
+        await db
+          .update(notificationsOutbox)
+          .set({ status: "PROCESSED", lockedUntil: null, updatedAt: new Date() })
+          .where(eq(notificationsOutbox.id, item.id));
+        continue;
+      }
+    } catch { /* si falla la comprobación, se envía normal */ }
+
     let anyOk = false;
     const deliveryRefId = notificationId ?? item.id; // deliveries sin FK — id de outbox nos sirve de fallback
     for (const dev of usersDevices) {
