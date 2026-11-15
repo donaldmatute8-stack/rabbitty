@@ -191,7 +191,10 @@ apps/admin/src/app/(pos)/pos/page.tsx                    # escaneo de pase + cob
 3. **Fase 3 viva**:
    - **franja habitual** (`DAY_PART` calculado en la agregación): el aviso "ya te alcanza" solo sale dentro de la franja del producto ("tu café de las 8:30");
    - **riesgo de abandono** (`CHURN_RISK`): si no viene en 21 días y le alcanza, aviso semanal con dedupe por semana.
-4. **Insights**: favoritos y categorías agregadas por negocio (`topFavorites`, `topCategories`).
+4. **Insights**: favoritos y categorías agregadas por negocio (`topFavorites`, `topCategories`), **demanda semanal** por producto (4 semanas) y **% de quienes tienen favorito que son socios**.
+5. **Ritmo (anti "todo de un jalón")**: `packages/api/src/services/notificationPacing.ts`. Los avisos de engagement comparten un presupuesto (1 al día por usuario); los transaccionales (pedidos, pagos, chat, seguridad) no cuentan.
+6. **Opt-in avisado**: `.github/workflows/preference-optin-cron.yml` (diario 10:00 MX) pide el opt-in **una sola vez**, solo si el Rabbitter ya tiene un favorito confiable, volvió en 45 días y su cuenta tiene **≥ 2 días**. Abre Ajustes → Notificaciones.
+7. **Promo sobre el favorito**: `.github/workflows/preference-promos-cron.yml` (cada 4 h) cruza campañas `FLASH_OFFER` activas con las preferencias (saldo suficiente, disponibilidad, opt-in, ritmo de 48 h, una por campaña/usuario).
 2. Verificar datos:
    ```sql
    SELECT kind, "businessId", label, score, "signalCount", explicit
@@ -202,8 +205,10 @@ apps/admin/src/app/(pos)/pos/page.tsx                    # escaneo de pase + cob
    dejar de programar el cron o silenciar la categoría `favorites`.
 4. Un favorito **explícito** nunca se pisa: la agregación lo respeta (`explicit = true`).
 
+### Reglas de Bunz
+**Los Bunz no vencen**: son fungibles y el saldo es agregado. No existe (ni se debe implementar) aviso de "Bunz por vencer".
+
 ### Pendientes de esta línea
-- **Promo sobre el favorito** (cruzar campañas flash con `user_preferences`).
-- **Bunz por vencer**: requiere lotes con caducidad (hoy el saldo es agregado, sin vencimiento por lote).
-- Insights por cohorte/segmento y forecast de inventario.
-- Comparar conversión con/sin aviso (hoy se mide, no se A/B testea).
+- Insights por cohorte/segmento (hoy hay favoritos por producto/categoría y demanda semanal).
+- A/B test del aviso (hoy se mide conversión, no contra grupo de control).
+- Notificaciones de "día-parte" para negocios sin historial horario (hoy solo si existe `DAY_PART`).
