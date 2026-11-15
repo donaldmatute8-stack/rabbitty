@@ -155,3 +155,50 @@ apps/admin/src/app/(pos)/pos/page.tsx                    # escaneo de pase + cob
 - typecheck: `npx tsc --noEmit` en `telegram-miniapp`, `apps/admin`, `packages/api`
 - build: `npx next build` en `telegram-miniapp` y `apps/admin`
 - despliegue: push a `main` → Vercel (app) y Railway (`rabbitty-admin`, watch `apps/**`)
+
+---
+
+## 8. Preferencias de consumo + Bunzy (implementado 2026-11-15)
+
+> Especificación completa: `DOCS/PREFERENCIAS-CONSUMO-Y-BUNZY.md`.
+> Decidido: **opt-in explícito**, favorito **por negocio + categoría global**,
+> umbral **precio × 1.05**, **1/negocio/72 h y 3/semana**, y **barista con opt-in**.
+
+### Lo que está vivo
+
+| Pieza | Dónde |
+|---|---|
+| Tablas `user_preferences` y `preference_nudges` | migración `0011_user_preferences.sql` **aplicada en prod** |
+| Agregación de pedidos (180 días, decaimiento 45) | `apps/admin/src/app/api/cron/preferences` (POST) |
+| Avisos "ya te alcanza" | `apps/admin/src/app/api/cron/preference-nudges` (POST) |
+| API del Rabbitter | `telegram-miniapp/src/app/api/preferences` (GET lista, POST favorito explícito) |
+| Categoría push `favorites` + tipo `PREFERENCE_ALERT` | `packages/events` |
+| Opt-in | Ajustes → "Avisarme cuando me alcance para mi favorito" (`pushRules.favoriteAlerts`) |
+| "Tu favorito aquí" + "Lo de siempre" | `telegram-miniapp/src/app/affiliate/[id]/page.tsx` |
+| "Suele pedir: X" al barista | `pos.customerFavorite` + chip en el POS (solo con opt-in) |
+| Favoritos agregados del negocio | `businessAnalytics.topFavorites` + panel de Admin |
+
+### Reglas del aviso (todas obligatorias)
+`score ≥ 0.25` · `≥ 3` señales · opt-in · categoría no silenciada · saldo ≥ precio × 1.05
+· producto activo y disponible · sin aviso de ese favorito en 72 h · máx 3/semana
+· fuera de 21:00–09:00 (hora México) · negocio APPROVED/VERIFIED.
+
+### Operación
+1. **Programar los crons** (hoy no están en `railway.json`, se disparan externo):
+   - `POST /api/cron/preferences` → diario 03:00 (recalcula favoritos).
+   - `POST /api/cron/preference-nudges` → cada 2 h entre 09:00 y 20:00.
+   - Auth: `Authorization: Bearer $CRON_SECRET`.
+2. Verificar datos:
+   ```sql
+   SELECT kind, "businessId", label, score, "signalCount", explicit
+   FROM user_preferences ORDER BY score DESC LIMIT 20;
+   SELECT count(*) FROM preference_nudges WHERE "sentAt" > now() - interval '7 days';
+   ```
+3. Apagar por usuario: el usuario desactiva el opt-in (Ajustes). Apagar global:
+   dejar de programar el cron o silenciar la categoría `favorites`.
+4. Un favorito **explícito** nunca se pisa: la agregación lo respeta (`explicit = true`).
+
+### Pendientes de esta línea
+- Medir conversión (ir al local después del aviso) con `preference_nudges.openedAt/convertedAt`.
+- Notificaciones de fase 3 no implementadas: promo sobre favorito, "hace 21 días", día-parte, Bunz por vencer.
+- Insights más ricos para el negocio (por cohorte/segmento) y forecast.
