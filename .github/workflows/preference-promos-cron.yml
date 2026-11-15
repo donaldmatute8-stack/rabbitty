@@ -1,0 +1,25 @@
+name: Rabbitty Favorite Promos
+
+on:
+  schedule:
+    # cada 4 h: cruza campañas FLASH_OFFER con los favoritos (ritmo 48 h por usuario)
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+jobs:
+  promos:
+    name: Promo on favorite
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Trigger favorite promos
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$APP_URL/api/cron/preference-promos" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Accept: application/json")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP $HTTP_STATUS"; echo "$BODY"
+          [ "$HTTP_STATUS" -eq 200 ] || { echo "::error::promos cron failed"; exit 1; }

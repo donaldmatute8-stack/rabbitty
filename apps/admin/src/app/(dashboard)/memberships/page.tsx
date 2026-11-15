@@ -239,6 +239,26 @@ export default function MembershipsPage() {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Socios con favorito</p>
+              <p className="mt-1 text-lg font-black text-white">
+                {analytics.favoriteMembersShare == null ? "—" : `${analytics.favoriteMembersShare}%`}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">Demanda semanal</p>
+              <p className="mt-1 text-[11px] text-white/70 leading-snug">
+                {analytics.weeklyDemand.length === 0
+                  ? "—"
+                  : analytics.weeklyDemand
+                      .slice(0, 3)
+                      .map((d) => `${d.label} · ${d.unitsPerWeek}`)
+                      .join("  ·  ")}
+              </p>
+            </div>
+          </div>
+
           {analytics.topCategories && analytics.topCategories.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
               <span className="font-bold uppercase tracking-wider text-white/35">Categorías</span>

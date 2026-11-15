@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { menuItems } from "@rabbitty/database-restaurant/schema";
+import { canSendEngagement } from "@rabbitty/api/services/notificationPacing";
 import {
   notificationsOutbox,
   ownedBusinesses,
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
     const dateKey = new Date().toISOString().slice(0, 10);
     const weekKey = `${new Date().getUTCFullYear()}-W${String(Math.ceil((now / 86_400_000 + 3) / 7)).padStart(2, "0")}`;
     let sent = 0;
-    const skipped = { noOptIn: 0, muted: 0, notEnough: 0, unavailable: 0, frequent: 0, weeklyCap: 0, offSchedule: 0, churn: 0 };
+    const skipped = { noOptIn: 0, muted: 0, notEnough: 0, unavailable: 0, frequent: 0, weeklyCap: 0, offSchedule: 0, churn: 0, pacing: 0 };
 
     for (const p of prefs) {
       if (!p.businessId) continue;
@@ -187,6 +188,9 @@ export async function POST(req: NextRequest) {
       // "Tu café de las 8:30": si sabemos su franja, solo avisamos dentro.
       const dayPart = dayPartByProduct.get(`${p.userId}|${p.businessId}|${p.refId}`);
       if (!inBucket(dayPart)) { skipped.offSchedule += 1; continue; }
+
+      // Ritmo: no más de un aviso de engagement al día por usuario.
+      if (!(await canSendEngagement(coreDb, p.userId, 24))) { skipped.pacing += 1; continue; }
 
       const dedupeKey = `pref_alert:${p.userId}:${p.id}:${dateKey}`;
 

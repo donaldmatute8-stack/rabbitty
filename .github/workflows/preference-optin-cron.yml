@@ -1,0 +1,25 @@
+name: Rabbitty Favorite Opt-in Nudge
+
+on:
+  schedule:
+    # diario 16:00 UTC (10:00 MX): pide el opt-in de favoritos, uno por usuario
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+jobs:
+  optin:
+    name: Ask favorite alerts opt-in
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Trigger opt-in nudge
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$APP_URL/api/cron/preference-optin" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Accept: application/json")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP $HTTP_STATUS"; echo "$BODY"
+          [ "$HTTP_STATUS" -eq 200 ] || { echo "::error::opt-in cron failed"; exit 1; }

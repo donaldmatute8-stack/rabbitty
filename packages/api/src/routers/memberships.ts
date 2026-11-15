@@ -16,7 +16,7 @@ import {
   membershipReferralPrograms,
   membershipReferralRewards,
 } from "@rabbitty/database-core/schema";
-import { branches, restaurants, ledgerEntries } from "@rabbitty/database-restaurant/schema";
+import { branches, restaurants, ledgerEntries, orders, orderItems, menuItems } from "@rabbitty/database-restaurant/schema";
 import { isGodAdminIdentity } from "../services/god2fa";
 import { miniappClient } from "../services/miniapp-client";
 import {
@@ -1701,6 +1701,45 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           ),
         );
 
+      // Demanda semanal (últimas 4 semanas) — forecast-lite por producto
+      const since28 = new Date(Date.now() - 28 * 86_400_000);
+      const demandRows = await ctx.restaurantDb
+        .select({
+          label: menuItems.name,
+          units: sql<number>`COALESCE(SUM(${orderItems.quantity}), 0)::int`,
+        })
+        .from(orderItems)
+        .innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .innerJoin(menuItems, eq(menuItems.id, orderItems.menuItemId))
+        .innerJoin(branches, eq(branches.id, orders.branchId))
+        .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+        .where(
+          and(
+            eq(restaurants.businessId, input.businessId),
+            gte(orders.createdAt, since28),
+            eq(orders.billOnly, false),
+          ),
+        )
+        .groupBy(menuItems.name)
+        .orderBy(desc(sql`COALESCE(SUM(${orderItems.quantity}), 0)`))
+        .limit(5);
+
+      // ¿Qué parte de quienes tienen favorito son socios?
+      const favoriteUsers = await ctx.coreDb
+        .selectDistinct({ userId: userPreferences.userId })
+        .from(userPreferences)
+        .where(
+          and(
+            eq(userPreferences.businessId, input.businessId),
+            eq(userPreferences.kind, "PRODUCT"),
+          ),
+        );
+      const activeUserIds = new Set(active.map((r) => r.sub.userId));
+      const favoriteMembers = favoriteUsers.filter((f) => activeUserIds.has(f.userId)).length;
+      const favoriteMembersShare = favoriteUsers.length > 0
+        ? Math.round((favoriteMembers / favoriteUsers.length) * 1000) / 10
+        : null;
+
       const nudgeSent = Number(nudgeRow?.sent ?? 0);
       const nudgeOpened = Number(nudgeRow?.opened ?? 0);
       const nudgeConverted = Number(nudgeRow?.converted ?? 0);
@@ -1726,6 +1765,11 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         loyaltyTiers,
         topFavorites: topFavorites.map((f) => ({ label: f.label, members: Number(f.members) })),
         topCategories: topCategories.map((c) => ({ label: c.label, members: Number(c.members) })),
+        weeklyDemand: demandRows.map((d) => ({
+          label: d.label,
+          unitsPerWeek: Math.round((Number(d.units) / 4) * 10) / 10,
+        })),
+        favoriteMembersShare,
         nudges: {
           sent: nudgeSent,
           opened: nudgeOpened,

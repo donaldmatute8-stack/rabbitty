@@ -135,6 +135,7 @@ export function categoryForType(type: string): PushCategoryKey {
       return PushCategory.MEMBERSHIPS;
     case "PREFERENCE_ALERT":
     case "PREFERENCE_PROMO":
+    case "PREFERENCE_OPTIN":
       return PushCategory.FAVORITES;
     case "OFFER_FLASH":
     default:
