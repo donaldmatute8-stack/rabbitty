@@ -15,7 +15,7 @@ export {
 
 /** Catálogo visible en settings (UI) — labels es-MX, no sensible al contrato. */
 export const PUSH_CATEGORY_LIST = [
-  "chat", "rewards", "orders", "proximity", "memberships", "marketing",
+  "chat", "rewards", "orders", "proximity", "memberships", "favorites", "marketing",
 ] as const;
 
 export type PushCategoryKey = (typeof PUSH_CATEGORY_LIST)[number];
@@ -26,6 +26,7 @@ export const PUSH_CATEGORY_LABELS: Record<PushCategoryKey, { label: string; desc
   orders: { label: "Órdenes y cuentas", desc: "Pago confirmado, cuenta enviada, propinas" },
   proximity: { label: "Cercanía al local", desc: "Llegada y recordatorios de check-in" },
   memberships: { label: "Membresías", desc: "Altas, renovaciones y revocaciones" },
+  favorites: { label: "Tus favoritos", desc: "Cuando tu saldo alcanza para lo que sueles pedir" },
   marketing: { label: "Marketing y ofertas", desc: "Ofertas flash y campañas de tus lugares" },
 };
 
@@ -44,13 +45,17 @@ export function parseMutedCategories(raw: unknown): string[] {
 // El usuario activa/desactiva desde Ajustes → Notificaciones. La ubicación de
 // guardado es users.pushRules (JSON obj). Keys conocidas:
 
-export const PUSH_RULE_KEYS = ["proximityAllAlerts"] as const;
+export const PUSH_RULE_KEYS = ["proximityAllAlerts", "favoriteAlerts"] as const;
 export type PushRulesKey = (typeof PUSH_RULE_KEYS)[number];
 
 export const PUSH_RULE_LABELS: Record<PushRulesKey, { label: string; desc: string }> = {
   proximityAllAlerts: {
     label: "Recibir TODAS las alertas de afiliados cerca",
     desc: "Sin límite anti-spam de 12h por negocio — llega cada alerta de cercanía mientras estés cerca (máx 1 por negocio cada 5 min).",
+  },
+  favoriteAlerts: {
+    label: "Avisarme cuando me alcance para mi favorito",
+    desc: "Bunzy te avisa cuando tu saldo cubre lo que sueles pedir, si estás cerca o en tu horario habitual. Nunca más de 1 por negocio cada 3 días.",
   },
 };
 

@@ -219,6 +219,21 @@ export default function MembershipsPage() {
             </div>
           </div>
 
+          {analytics.topFavorites && analytics.topFavorites.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
+              <span className="font-bold uppercase tracking-wider text-white/35">Favoritos</span>
+              {analytics.topFavorites.map((f) => (
+                <span
+                  key={f.label}
+                  className="rounded-full px-2 py-0.5 font-bold"
+                  style={{ color: '#F0ABFC', background: 'rgba(240,171,252,0.12)', border: '1px solid rgba(240,171,252,0.35)' }}
+                >
+                  {f.label} · {f.members}
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
             <span className="font-bold uppercase tracking-wider text-white/35">Lealtad</span>
             {(

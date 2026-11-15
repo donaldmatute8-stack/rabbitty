@@ -1,5 +1,5 @@
 import { pgTable, text, integer, real, timestamp, boolean, uuid, jsonb, customType, uniqueIndex, index } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 const id = () => uuid("id").defaultRandom().$defaultFn(() => crypto.randomUUID()).primaryKey();
 const fkId = (field: string) => uuid(field).notNull();
@@ -1165,6 +1165,59 @@ export const entitlementUsages = pgTable("entitlement_usages", {
   quantityUsed: integer("quantityUsed").default(1).notNull(),
   idempotencyKey: text("idempotencyKey").notNull().unique(), // Evita doble redención en reintentos
   redeemedAt: timestamp("redeemedAt").defaultNow().notNull(),
+});
+
+/**
+ * ── Preferencias de consumo (2026-11-15) ──
+ *
+ * "Tarjeta de sellos inteligente": guarda qué consume cada Rabbitter para
+ * personalizar el feed y avisar (Bunzy) cuando su saldo alcanza para su
+ * favorito. Se infiere de pedidos; las filas explícitas mandan (`explicit`).
+ *
+ * `businessId` NULL = preferencia global (categoría). La unicidad se parte en
+ * dos índices parciales porque en Postgres los NULL no colisionan.
+ */
+export const userPreferences = pgTable("user_preferences", {
+  id: id(),
+  // En la base real `users.id` y `ownedBusinesses.id` son text (drift conocido),
+  // así que estas FKs también lo son para no romper comparaciones.
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  businessId: text("businessId").references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  /** PRODUCT | CATEGORY */
+  kind: text("kind").notNull(),
+  refId: text("refId").notNull(),
+  label: text("label").notNull(),
+  /** 0..1 — participación en el gasto del usuario en ese negocio. */
+  score: real("score").default(0).notNull(),
+  signalCount: integer("signalCount").default(0).notNull(),
+  lastSeenAt: timestamp("lastSeenAt"),
+  /** ORDER | MEMBERSHIP | SAVED | CHAT | EXPLICIT */
+  source: text("source").default("ORDER").notNull(),
+  explicit: boolean("explicit").default(false).notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("user_preferences_business_uq").on(t.userId, t.businessId, t.kind, t.refId).where(sql`${t.businessId} is not null`),
+  uniqueIndex("user_preferences_global_uq").on(t.userId, t.kind, t.refId).where(sql`${t.businessId} is null`),
+  index("user_preferences_user_idx").on(t.userId),
+]);
+
+/**
+ * ── Avisos de preferencia enviados (medición) ──
+ * Permite medir apertura/conversión y aplicar anti-spam (72 h por favorito,
+ * 3 por semana). La entrega real sigue por `notifications_outbox`.
+ */
+export const preferenceNudges = pgTable("preference_nudges", {
+  id: id(),
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  preferenceId: uuid("preferenceId").notNull().references(() => userPreferences.id, { onDelete: "cascade" }),
+  /** BALANCE_ENOUGH | PROMO | CHURN_RISK | DAY_PART */
+  reason: text("reason").notNull(),
+  channel: text("channel").default("push").notNull(),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  openedAt: timestamp("openedAt"),
+  convertedAt: timestamp("convertedAt"),
+  dedupeKey: text("dedupeKey").notNull().unique(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -434,6 +434,11 @@ const RULE_CATALOG = [
     label: 'Recibir TODAS las alertas near',
     desc: 'Sin límite anti-spam de 12h por negocio — llega cada alerta de cercanía (máx 1 por negocio cada 5 min).',
   },
+  {
+    key: 'favoriteAlerts',
+    label: 'Avisarme cuando me alcance para mi favorito',
+    desc: 'Bunzy te avisa cuando tu saldo cubre lo que sueles pedir, si estás cerca o en tu horario. Máx. 1 por negocio cada 3 días.',
+  },
 ];
 
 function CategoryRulesRows() {

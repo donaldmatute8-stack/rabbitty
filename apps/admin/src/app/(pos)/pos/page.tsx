@@ -309,6 +309,11 @@ export default function PosPage() {
   const [detectedMembership, setDetectedMembership] = useState<any | null>(null);
   const [membershipModalOpen, setMembershipModalOpen] = useState(false);
   const memberSeenRef = useRef<Set<string>>(new Set());
+  // Barista (15.2+): favorito del cliente en ESTE negocio (solo si dio opt-in).
+  const { data: customerFavorite } = trpc.pos.customerFavorite.useQuery(
+    { customerId: selectedRabbitter?.id ?? "" },
+    { enabled: Boolean(selectedRabbitter?.id), staleTime: 120_000 },
+  );
   const memberBenefitsForBanner = trpc.memberships.getMembershipBenefits.useQuery(
     { businessId: posBizCtx.data?.businessId ?? "", customerId: selectedRabbitter?.id ?? "" },
     { enabled: Boolean(posBizCtx.data?.businessId && selectedRabbitter?.id && !detectedMembership) },
@@ -2689,6 +2694,14 @@ export default function PosPage() {
                         <span>{selectedRabbitter.phoneNumber || selectedRabbitter.telegramId || "Cuenta Verificada"}</span>
                         <span>•</span>
                         <span className="text-emerald-400 font-bold">{selectedRabbitter.currentRewardRate}% Cashback</span>
+                        {customerFavorite?.favorites?.[0]?.label && (
+                          <>
+                            <span>•</span>
+                            <span className="text-fuchsia-300 font-bold truncate" title="Favorito declarado por el cliente (opt-in)">
+                              Suele pedir: {customerFavorite.favorites[0].label}
+                            </span>
+                          </>
+                        )}
                         {draftOrderId && (
                           <>
                             <span>•</span>

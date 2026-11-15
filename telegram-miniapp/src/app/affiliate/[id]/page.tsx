@@ -150,6 +150,8 @@ function AffiliateProfileContent() {
   // (PLAN_VISIT reciente en business_interactions, ventana antispam 12h).
   const [planVisitSent, setPlanVisitSent] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  // Preferencias (15.2+): producto favorito aprendido en este negocio.
+  const [favoriteProduct, setFavoriteProduct] = useState<{ refId: string; label: string } | null>(null);
 
   // Initialize table number from searchParams safely without calling setState in render or synchronous effect
   const initialTableParam = searchParams.get('table');
@@ -326,6 +328,30 @@ function AffiliateProfileContent() {
       window.removeEventListener('rabbitty:presence-confirmed', onPresenceConfirmed);
     };
   }, [affiliate?.id]);
+
+  useEffect(() => {
+    if (!affiliate?.id) return;
+    let alive = true;
+    void PlatformBridge.getAuthHeaders()
+      .then((headers) => fetch('/api/preferences', { headers, cache: 'no-store' }))
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || !d?.success) return;
+        const top = d.byBusiness?.[affiliate.id]?.products?.[0];
+        if (top?.refId && top?.label) setFavoriteProduct({ refId: String(top.refId), label: String(top.label) });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [affiliate?.id]);
+
+  const favoriteItem = useMemo(() => {
+    if (!favoriteProduct?.refId) return null;
+    for (const cat of categories) {
+      const found = cat.items?.find((i) => i.id === favoriteProduct.refId);
+      if (found) return found;
+    }
+    return null;
+  }, [favoriteProduct, categories]);
 
   const handleAddToCart = (
     item: CatalogItem,
@@ -790,6 +816,25 @@ function AffiliateProfileContent() {
             <span className="text-[10px] font-black text-white/90 tracking-tight">Mensaje</span>
           </motion.button>
         </div>
+
+        {/* Tu favorito (se aprende de tus pedidos) */}
+        {favoriteProduct && (
+          <div className="mx-1 mb-2 flex items-center justify-between gap-2 rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-2">
+            <div className="min-w-0">
+              <p className="m-0 text-[9px] font-black uppercase tracking-wider text-fuchsia-300/80">Tu favorito aquí</p>
+              <p className="m-0 truncate text-[12.5px] font-bold text-white">{favoriteProduct.label}</p>
+            </div>
+            {favoriteItem && (
+              <button
+                type="button"
+                onClick={() => handleAddToCart(favoriteItem, 1, [], '')}
+                className="shrink-0 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 px-3 py-1.5 text-[11px] font-black text-fuchsia-200 active:scale-95 transition-transform"
+              >
+                Lo de siempre
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Interactive Segmented Experience Tabs */}
         <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[#0D0D15]/95 backdrop-blur-xl">

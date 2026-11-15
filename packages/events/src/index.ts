@@ -102,6 +102,7 @@ export const PushCategory = {
   ORDERS: "orders",           // órdenes, cuenta enviada, propinas
   PROXIMITY: "proximity",     // llegada al local, prompt de check-in
   MEMBERSHIPS: "memberships", // altas/renovaciones/revocaciones
+  FAVORITES: "favorites",     // "ya te alcanza para tu favorito", recomendaciones
   MARKETING: "marketing",     // ofertas flash y campañas
 } as const;
 
@@ -132,6 +133,9 @@ export function categoryForType(type: string): PushCategoryKey {
     case "MEMBERSHIP_RENEWED":
     case "MEMBERSHIP_REVOKED":
       return PushCategory.MEMBERSHIPS;
+    case "PREFERENCE_ALERT":
+    case "PREFERENCE_PROMO":
+      return PushCategory.FAVORITES;
     case "OFFER_FLASH":
     default:
       return PushCategory.MARKETING;

@@ -24,7 +24,7 @@ import {
   mapUberStatus,
   type UberAddress,
 } from "../services/uberDirect";
-import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages } from "@rabbitty/database-core/schema";
+import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages, userPreferences as coreUserPreferences } from "@rabbitty/database-core/schema";
 /** Split DIVIDIDA activo? */
 function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolean {
   return typeof input.splitBunz === "number" && input.splitBunz > 0;
@@ -3201,6 +3201,46 @@ export const posRouter = router({
         rewardQueued: (totalAwardedBunz > 0) || Boolean((order as any)?.bunzReward && (order as any).bunzReward > 0),
         claimToken,
       };
+    }),
+
+  /**
+   * Favoritos del cliente en ESTE negocio (Fase 3 · barista).
+   * Solo se muestran al personal del negocio donde el cliente consumió.
+   * Requiere opt-in del Rabbitter (`pushRules.favoriteAlerts`) por privacidad.
+   */
+  customerFavorite: posProcedure
+    .input(z.object({ customerId: z.string().min(1), limit: z.number().int().min(1).max(5).optional() }))
+    .query(async ({ ctx, input }) => {
+      const businessId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+      const [user] = await ctx.coreDb
+        .select({ rules: coreUsers.pushRules })
+        .from(coreUsers)
+        .where(eq(coreUsers.id, input.customerId))
+        .limit(1);
+
+      let optedIn = false;
+      try {
+        const rules = JSON.parse(String(user?.rules ?? "{}")) as Record<string, unknown>;
+        optedIn = rules?.favoriteAlerts === true;
+      } catch {
+        optedIn = false;
+      }
+      if (!optedIn) return { optedIn: false, favorites: [] as Array<{ label: string; score: number }> };
+
+      const rows = await ctx.coreDb
+        .select({ label: coreUserPreferences.label, score: coreUserPreferences.score })
+        .from(coreUserPreferences)
+        .where(
+          and(
+            eq(coreUserPreferences.userId, input.customerId),
+            eq(coreUserPreferences.businessId, businessId),
+            eq(coreUserPreferences.kind, "PRODUCT"),
+          ),
+        )
+        .orderBy(desc(coreUserPreferences.score))
+        .limit(input.limit ?? 3);
+
+      return { optedIn: true, favorites: rows.map((r) => ({ label: r.label, score: Number(r.score) })) };
     }),
 
   createPaymentIntent: posProcedure

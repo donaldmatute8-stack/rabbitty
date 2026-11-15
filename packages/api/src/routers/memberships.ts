@@ -4,6 +4,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { router, posProcedure, posPermission } from "../trpc";
 import {
+  userPreferences,
   membershipPlans,
   membershipPlanVersions,
   membershipSubscriptions,
@@ -1650,6 +1651,23 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         .orderBy(desc(sql`count(*)`))
         .limit(5);
 
+      // Favoritos más comunes (agregado, sin exponer individuos)
+      const topFavorites = await ctx.coreDb
+        .select({
+          label: userPreferences.label,
+          members: sql<number>`count(distinct ${userPreferences.userId})::int`,
+        })
+        .from(userPreferences)
+        .where(
+          and(
+            eq(userPreferences.businessId, input.businessId),
+            eq(userPreferences.kind, "PRODUCT"),
+          ),
+        )
+        .groupBy(userPreferences.label)
+        .orderBy(desc(sql`count(distinct ${userPreferences.userId})`))
+        .limit(5);
+
       const redemptions = Number(redemptionRow?.count ?? 0);
       const denominator = active.length + cancelledLast30;
 
@@ -1669,6 +1687,7 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         redemptions,
         redemptionsPerMember: active.length > 0 ? Math.round((redemptions / active.length) * 10) / 10 : 0,
         loyaltyTiers,
+        topFavorites: topFavorites.map((f) => ({ label: f.label, members: Number(f.members) })),
         topBenefits: topBenefits.map((b) => ({ type: b.type, count: Number(b.count) })),
       };
     }),
