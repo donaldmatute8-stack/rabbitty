@@ -350,4 +350,7 @@ varias cajas/dispositivos, empleados, contabilidad y administración) para ver q
   staff ve solo el suyo) y `RestaurantSwitcher` en el sidebar; cambiar restaurante cambia a su
   primera sucursal activa y persiste `activeBranchId`/`activeRestaurantId`.
 
-**Único pendiente**: modo offline POS/KDS (proyecto aparte por riesgo de doble cobro).
+**Único pendiente**: modo offline POS/KDS — **arranca 2026-11-17 con 626 Café**
+(operación real). Alcance en `Docs/POS-FASE-0/OFFLINE-POS-KDS.md`: en offline
+solo efectivo, outbox con `idempotencyKey` (la deduplicación del cobro ya existe
+en servidor) y bandeja de conciliación para lo que no se aplique solo.
