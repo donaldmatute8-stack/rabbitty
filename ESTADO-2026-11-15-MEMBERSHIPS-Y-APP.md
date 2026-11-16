@@ -346,5 +346,8 @@ varias cajas/dispositivos, empleados, contabilidad y administración) para ver q
   **Admin → Órdenes de compra** (crear con insumos y costo, aprobar, recibir, cancelar) con
   el router `suppliers.getPurchaseOrder`.
 
-**Siguiente lote**: conmutador multi-restaurante y modo offline (proyecto aparte por riesgo de
-doble cobro).
+- **Conmutador multi-restaurante (2026-11-16)**: `admin.getBusinessRestaurants` (con aislamiento:
+  staff ve solo el suyo) y `RestaurantSwitcher` en el sidebar; cambiar restaurante cambia a su
+  primera sucursal activa y persiste `activeBranchId`/`activeRestaurantId`.
+
+**Único pendiente**: modo offline POS/KDS (proyecto aparte por riesgo de doble cobro).
