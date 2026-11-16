@@ -95,8 +95,10 @@ export const posOperatorsRouter = router({
       const scope = `pin:pos-operator:${ctx.branchId}`;
       await assertPinNotLocked(ctx.restaurantDb, scope);
 
+      // Columnas explícitas: abrir turno no debe depender de columnas que no
+      // usa (un drift de esquema dejaba la caja sin poder abrir, 2026-11-16).
       const list = await ctx.restaurantDb
-        .select()
+        .select({ id: staffTable.id, name: staffTable.name, role: staffTable.role, pinCode: staffTable.pinCode })
         .from(staffTable)
         .where(and(eq(staffTable.branchId, ctx.branchId), eq(staffTable.isActive, true)));
 

@@ -14,7 +14,10 @@
     "security:audit": "pnpm audit --audit-level=high",
     "security:audit:all": "pnpm audit",
     "security:check": "npx --yes snyk test 2>/dev/null || echo 'Snyk no instalado. Ejecuta: npm install -g snyk && snyk auth'",
-    "security:deps": "pnpm audit --audit-level=moderate && pnpm outdated"
+    "security:deps": "pnpm audit --audit-level=moderate && pnpm outdated",
+    "db:migrate": "node scripts/sql-migrate.mjs",
+    "db:guard": "node scripts/schema-guard.mjs",
+    "db:predeploy": "node scripts/predeploy.mjs"
   },
   "keywords": [
     "web3",

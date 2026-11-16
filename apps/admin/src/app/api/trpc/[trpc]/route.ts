@@ -48,8 +48,12 @@ const handler = async (req: Request) => {
       let staffBranchId = null;
 
       if (session?.user?.email) {
+        // Columnas explícitas a propósito: esto corre en CADA request. Un
+        // `select()` traía la fila completa de `staff`, así que cualquier
+        // columna nueva (p. ej. hourlyRate) cuya migración no llegara a
+        // producción tumbaba el admin y el POS enteros (incidente 2026-11-16).
         const [staffRecord] = await restaurantDb
-          .select()
+          .select({ role: staff.role, branchId: staff.branchId })
           .from(staff)
           .where(and(eq(staff.email, session.user.email), eq(staff.isActive, true)));
         if (staffRecord) {

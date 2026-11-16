@@ -350,6 +350,28 @@ varias cajas/dispositivos, empleados, contabilidad y administración) para ver q
   staff ve solo el suyo) y `RestaurantSwitcher` en el sidebar; cambiar restaurante cambia a su
   primera sucursal activa y persiste `activeBranchId`/`activeRestaurantId`.
 
+### Incidente 2026-11-16 — POS sin abrir terminal (RESUELTO)
+
+Causa: `staff.hourlyRate`/`commissionPct` se agregaron al esquema y la migración
+`0024` se aplicó a **localhost**, no a producción. El contexto tRPC leía la fila
+completa de `staff` en cada request, así que el drift tumbó el POS entero.
+
+- Corregido aplicando `0024` a producción (POS verificado).
+- Candado nuevo: `railway.json` → `preDeployCommand` corre
+  `scripts/predeploy.mjs` (migra pendientes + guarda de esquema); si falla, el
+  despliegue **no procede** y producción sigue en la versión anterior.
+- Herramientas: `scripts/sql-migrate.mjs` (destino explícito, aborta si pides
+  `prod` con URL local), `scripts/schema-guard.mjs` (esquema del código vs base).
+- Barrido inicial encontró más drift **preexistente**: faltaba la tabla
+  `printers` (página de impresoras rota), `reservations` sin columnas de mesa y
+  `wishlist_shares.updatedAt`. Aplicadas `0023`, `0025` y `0018` (core).
+  Resultado: `restaurant` y `core` **sin desajustes**.
+- Endurecido: `staff` ya no se lee con `select()` en contexto tRPC ni al abrir
+  turno de caja.
+- Documento: `Docs/POS-FASE-0/MIGRACIONES-Y-GUARDA-DE-ESQUEMA.md`.
+- Deuda: `reservations` sirve a Bunz y a reservas de mesa a la vez; separarlas
+  queda como tarea aparte.
+
 **Único pendiente**: modo offline POS/KDS — **arranca 2026-11-17 con 626 Café**
 (operación real). Alcance en `Docs/POS-FASE-0/OFFLINE-POS-KDS.md`: en offline
 solo efectivo, outbox con `idempotencyKey` (la deduplicación del cobro ya existe
