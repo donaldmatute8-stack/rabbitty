@@ -66,33 +66,68 @@ const GQL = "https://backboard.railway.app/graphql/v2";
 let consecutiveDbCritical = 0;
 let rollbackAttempted = false;
 
+/**
+ * Railway tiene dos tipos de token y cada uno usa un header distinto:
+ *  - account/workspace token → `Authorization: Bearer`
+ *  - project token           → `Project-Access-Token`
+ * Con el header equivocado la respuesta es "Not Authorized", que parece un
+ * problema de permisos y en realidad es de transporte. Se prueban ambos.
+ */
 async function gql(token: string, query: string) {
-  const res = await fetch(GQL, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-  const json = (await res.json()) as { data?: unknown; errors?: Array<{ message?: string }> };
-  if (json.errors?.length) throw new Error(json.errors[0]?.message ?? "error GraphQL");
-  return json.data as Record<string, unknown>;
+  const headers: Array<Record<string, string>> = [
+    { Authorization: `Bearer ${token}` },
+    { "Project-Access-Token": token },
+  ];
+
+  let lastError = "error GraphQL";
+  for (const h of headers) {
+    const res = await fetch(GQL, {
+      method: "POST",
+      headers: { ...h, "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const json = (await res.json()) as { data?: unknown; errors?: Array<{ message?: string }> };
+    if (!json.errors?.length) return json.data as Record<string, unknown>;
+    lastError = json.errors[0]?.message ?? lastError;
+    if (!/Not Authorized|Unauthorized/i.test(lastError)) break;
+  }
+  throw new Error(lastError);
 }
 
-/** Commit anterior sano (ignora FAILED/CRASHED), o null. */
-async function previousGoodCommit(token: string, currentCommit: string): Promise<string | null> {
-  const data = (await gql(
-    token,
-    `query { deployments(first: 10, input: { projectId: "${PROJECT_ID}", environmentId: "${ENVIRONMENT_ID}", serviceId: "${SERVICE_ID}" }) {
-       edges { node { status meta } } } }`,
-  )) as { deployments?: { edges?: Array<{ node: { status: string; meta: Record<string, unknown> } }> } };
-
-  const edges = data.deployments?.edges ?? [];
-  for (const { node } of edges) {
-    const commit = String((node.meta?.commitHash as string) ?? "");
-    if (!commit || commit.startsWith(currentCommit)) continue;
-    if (node.status === "FAILED" || node.status === "CRASHED") continue;
-    return commit;
+/** Anota el commit actual en el historial (lo llama el arranque). */
+async function recordDeploy(commit: string) {
+  if (!commit) return;
+  try {
+    const { getCoreDb } = await import("@rabbitty/api/db");
+    const { sql } = await import("drizzle-orm");
+    await getCoreDb().execute(
+      sql.raw(
+        `insert into "ops_deploy_history" ("commit") values ('${commit.replace(/'/g, "")}')
+         on conflict ("commit") do update set "lastSeenAt" = now()`,
+      ),
+    );
+  } catch (e) {
+    console.warn("[ops-scheduler] no pude registrar el commit:", e instanceof Error ? e.message : e);
   }
-  return null;
+}
+
+/** Commit anterior distinto del actual, según nuestro historial. */
+async function previousCommitFromHistory(current: string): Promise<string | null> {
+  try {
+    const { getCoreDb } = await import("@rabbitty/api/db");
+    const { sql } = await import("drizzle-orm");
+    const res = (await getCoreDb().execute(
+      sql.raw(
+        `select "commit" from "ops_deploy_history"
+          where "commit" <> '${current.replace(/'/g, "")}'
+          order by "firstSeenAt" desc limit 1`,
+      ),
+    )) as { rows?: Array<{ commit: string }> } | Array<{ commit: string }>;
+    const rows = Array.isArray(res) ? res : res.rows ?? [];
+    return rows[0]?.commit ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -125,13 +160,13 @@ async function maybeRollback(invariants: Array<{ metric: string; status: string 
 
   rollbackAttempted = true;
   try {
-    const current = (process.env.RAILWAY_GIT_COMMIT_SHA ?? "").slice(0, 7);
-    const target = await previousGoodCommit(token, current);
+    const current = process.env.RAILWAY_GIT_COMMIT_SHA ?? "";
+    const target = await previousCommitFromHistory(current);
     if (!target) {
-      console.error("[ops-scheduler] no encontré commit anterior sano; sin rollback.");
+      console.error("[ops-scheduler] no hay commit anterior en el historial; sin rollback.");
       return;
     }
-    console.error(`[ops-scheduler] ROLLBACK automático ${current} → ${target.slice(0, 7)}`);
+    console.error(`[ops-scheduler] ROLLBACK automático ${current.slice(0, 7)} → ${target.slice(0, 7)}`);
     await gql(
       token,
       `mutation { serviceInstanceDeploy(serviceId: "${SERVICE_ID}", environmentId: "${ENVIRONMENT_ID}", commitSha: "${target}") }`,
@@ -153,6 +188,10 @@ export function startOpsScheduler() {
   console.log(
     "[ops-scheduler] activo (cada 15 min en horario de operación, 60 min fuera; respaldo cada ~6 h)",
   );
+
+  // Dejar constancia del commit en el que corremos: es el destino del rollback.
+  // SHA COMPLETO: serviceInstanceDeploy no acepta el corto.
+  void recordDeploy(process.env.RAILWAY_GIT_COMMIT_SHA ?? "");
 
   setTimeout(async () => {
     await tick("arranque");
