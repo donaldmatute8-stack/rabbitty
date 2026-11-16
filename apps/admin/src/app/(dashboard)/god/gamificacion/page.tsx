@@ -2,11 +2,19 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Gamepad2, RefreshCw, Plus, Sparkles } from "lucide-react";
+import { Gamepad2, RefreshCw, Plus, Sparkles, Trash2, Power, Pencil, Award } from "lucide-react";
 import { Card, Button, Input, cn, toast } from "@rabbitty/ui";
 
 interface Trick { id: string; title: string; description: string; rewardHops: number; rewardBunz: number; conditionType: string; conditionTarget: number; isActive: boolean }
 interface Level { id: string; name?: string; level?: number; requiredHops: number; bunzMultiplier: number }
+interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  iconUrl: string;
+  conditionType: string;
+  conditionTarget: number;
+}
 
 async function godQuery<T>(proc: string, input?: unknown, isMutation = false): Promise<T> {
   const url = `/api/trpc/${proc}?batch=1`;
@@ -31,6 +39,11 @@ async function godQuery<T>(proc: string, input?: unknown, isMutation = false): P
 export default function GodGamificacionPage() {
   const [tricks, setTricks] = useState<Trick[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
+  const [achievementsList, setAchievementsList] = useState<Achievement[]>([]);
+  const [achForm, setAchForm] = useState({ name: "", description: "", iconUrl: "/icons/first-visit.png", conditionType: "VISITS", conditionTarget: "1" });
+  const [showAchForm, setShowAchForm] = useState(false);
+  const [editingTrick, setEditingTrick] = useState<string | null>(null);
+  const [trickDraft, setTrickDraft] = useState({ title: "", rewardHops: "0", rewardBunz: "0", conditionTarget: "1" });
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,8 +66,8 @@ export default function GodGamificacionPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const d = await godQuery<{ levels: Level[]; tricks: Trick[] }>("god.getGamification");
-      setTricks(d.tricks || []); setLevels(d.levels || []);
+      const d = await godQuery<{ levels: Level[]; tricks: Trick[]; achievements?: Achievement[] }>("god.getGamification");
+      setTricks(d.tricks || []); setLevels(d.levels || []); setAchievementsList(d.achievements || []);
       const f = await godQuery<{ vibe_passport_enabled: boolean }>("god.getAppFlags");
       setFlags({ vibe_passport_enabled: Boolean(f?.vibe_passport_enabled) });
     } catch { /* noop */ } finally { setLoading(false); }
@@ -78,6 +91,64 @@ export default function GodGamificacionPage() {
       setForm({ title: "", description: "", rewardHops: "100", rewardBunz: "50", conditionTarget: "1" });
       await load();
     } catch (err) { toast.error(err instanceof Error ? err.message : "Error"); } finally { setSaving(false); }
+  };
+
+  const toggleTrick = async (t: Trick) => {
+    try {
+      await godQuery("god.updateHatTrick", { id: t.id, isActive: !t.isActive }, true);
+      toast.success(t.isActive ? "Misión desactivada" : "Misión activada");
+      await load();
+    } catch { toast.error("No se pudo cambiar el estado"); }
+  };
+
+  const deleteTrick = async (t: Trick) => {
+    if (!window.confirm(`¿Borrar la misión "${t.title}"?`)) return;
+    try {
+      await godQuery("god.deleteHatTrick", { id: t.id }, true);
+      toast.success("Misión borrada");
+      await load();
+    } catch { toast.error("No se pudo borrar"); }
+  };
+
+  const saveTrick = async (t: Trick) => {
+    try {
+      await godQuery("god.updateHatTrick", {
+        id: t.id,
+        title: trickDraft.title.trim() || t.title,
+        rewardHops: Number(trickDraft.rewardHops) || 0,
+        rewardBunz: Number(trickDraft.rewardBunz) || 0,
+        conditionTarget: Number(trickDraft.conditionTarget) || 1,
+      }, true);
+      toast.success("Misión actualizada");
+      setEditingTrick(null);
+      await load();
+    } catch { toast.error("No se pudo guardar"); }
+  };
+
+  const createAchievement = async () => {
+    if (!achForm.name.trim()) { toast.error("Nombre requerido"); return; }
+    try {
+      await godQuery("god.createAchievement", {
+        name: achForm.name.trim(),
+        description: achForm.description.trim() || achForm.name.trim(),
+        iconUrl: achForm.iconUrl.trim() || "/icons/first-visit.png",
+        conditionType: achForm.conditionType.trim() || "VISITS",
+        conditionTarget: Number(achForm.conditionTarget) || 1,
+      }, true);
+      toast.success("Logro creado");
+      setShowAchForm(false);
+      setAchForm({ name: "", description: "", iconUrl: "/icons/first-visit.png", conditionType: "VISITS", conditionTarget: "1" });
+      await load();
+    } catch { toast.error("No se pudo crear el logro"); }
+  };
+
+  const deleteAchievement = async (a: Achievement) => {
+    if (!window.confirm(`¿Borrar el logro "${a.name}"?`)) return;
+    try {
+      await godQuery("god.deleteAchievement", { id: a.id }, true);
+      toast.success("Logro borrado");
+      await load();
+    } catch { toast.error("No se pudo borrar"); }
   };
 
   const updateLevel = async (id: string, multiplier: number, hops: number) => {
@@ -155,12 +226,27 @@ export default function GodGamificacionPage() {
           )}
           <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
             {tricks.map((t) => (
-              <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-black/40 border border-white/5 text-[11px]">
-                <div className="min-w-0">
-                  <p className="font-black text-gray-200 truncate">{t.title}</p>
-                  <p className="text-gray-500 truncate">{t.description}</p>
+              <div key={t.id} className="rounded-lg bg-black/40 border border-white/5 text-[11px]">
+                <div className="flex items-center justify-between px-3 py-2 gap-2">
+                  <div className="min-w-0">
+                    <p className={cn("font-black truncate", t.isActive ? "text-gray-200" : "text-gray-500 line-through")}>{t.title}</p>
+                    <p className="text-gray-500 truncate">{t.description}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-amber-400 font-black">+{t.rewardBunz} Bunz · +{t.rewardHops} Hops</span>
+                    <button type="button" title="Editar" onClick={() => { setEditingTrick(t.id); setTrickDraft({ title: t.title, rewardHops: String(t.rewardHops), rewardBunz: String(t.rewardBunz), conditionTarget: String(t.conditionTarget) }); }} className="text-gray-400 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button type="button" title={t.isActive ? "Desactivar" : "Activar"} onClick={() => void toggleTrick(t)} className={t.isActive ? "text-emerald-400" : "text-gray-500"}><Power className="h-3.5 w-3.5" /></button>
+                    <button type="button" title="Borrar" onClick={() => void deleteTrick(t)} className="text-rose-400/80 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
                 </div>
-                <span className="text-amber-400 font-black shrink-0">+{t.rewardBunz} Bunz · +{t.rewardHops} Hops</span>
+                {editingTrick === t.id && (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2 px-3 pb-3">
+                    <Input value={trickDraft.title} onChange={(e) => setTrickDraft({ ...trickDraft, title: e.target.value })} className="bg-black/50 border-white/10 text-white text-xs h-8 lg:col-span-2" />
+                    <Input value={trickDraft.rewardHops} onChange={(e) => setTrickDraft({ ...trickDraft, rewardHops: e.target.value.replace(/\D/g, "") })} placeholder="Hops" className="bg-black/50 border-white/10 text-white text-xs h-8" />
+                    <Input value={trickDraft.rewardBunz} onChange={(e) => setTrickDraft({ ...trickDraft, rewardBunz: e.target.value.replace(/\D/g, "") })} placeholder="Bunz" className="bg-black/50 border-white/10 text-white text-xs h-8" />
+                    <Button onClick={() => void saveTrick(t)} className="rounded-lg h-8 text-[11px] font-black bg-pink-600 text-white cursor-pointer">Guardar</Button>
+                  </div>
+                )}
               </div>
             ))}
             {!loading && tricks.length === 0 && <p className="text-xs text-gray-500 py-2">Sin trucos aún</p>}
@@ -175,6 +261,39 @@ export default function GodGamificacionPage() {
               <LevelRow key={l.id} level={l} index={i} onSave={updateLevel} />
             ))}
             {!loading && levels.length === 0 && <p className="text-xs text-gray-500 py-2">Sin niveles configurados</p>}
+          </div>
+        </Card>
+
+        {/* Logros */}
+        <Card className="p-5 border border-white/10 bg-white/5">
+          <div className="flex items-center justify-between pb-3">
+            <h2 className="text-sm font-black text-white uppercase tracking-wider">🏅 Logros ({achievementsList.length})</h2>
+            <Button onClick={() => setShowAchForm(!showAchForm)} className="rounded-xl px-3 py-1.5 text-[11px] font-black bg-pink-600 text-white cursor-pointer">
+              <Plus className="h-3.5 w-3.5 mr-1" /> Nuevo
+            </Button>
+          </div>
+          {showAchForm && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2 pb-4">
+              <Input placeholder="Nombre" value={achForm.name} onChange={(e) => setAchForm({ ...achForm, name: e.target.value })} className="bg-black/50 border-white/10 text-white text-xs h-9 lg:col-span-2" />
+              <Input placeholder="Descripción" value={achForm.description} onChange={(e) => setAchForm({ ...achForm, description: e.target.value })} className="bg-black/50 border-white/10 text-white text-xs h-9 lg:col-span-2" />
+              <Input placeholder="Meta (n)" inputMode="numeric" value={achForm.conditionTarget} onChange={(e) => setAchForm({ ...achForm, conditionTarget: e.target.value.replace(/\D/g, "") })} className="bg-black/50 border-white/10 text-white text-xs h-9" />
+              <Button onClick={() => void createAchievement()} className="rounded-lg h-9 text-[11px] font-black bg-linear-to-r from-pink-600 to-purple-600 text-white cursor-pointer lg:col-span-5">Guardar logro</Button>
+            </div>
+          )}
+          <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+            {achievementsList.map((a) => (
+              <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-black/40 border border-white/5 text-[11px]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Award className="h-4 w-4 text-amber-300 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-black text-gray-200 truncate">{a.name}</p>
+                    <p className="text-gray-500 truncate">{a.description} · {a.conditionType} {a.conditionTarget}</p>
+                  </div>
+                </div>
+                <button type="button" title="Borrar" onClick={() => void deleteAchievement(a)} className="text-rose-400/80 hover:text-rose-300 shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+            {!loading && achievementsList.length === 0 && <p className="text-xs text-gray-500 py-2">Sin logros aún</p>}
           </div>
         </Card>
 

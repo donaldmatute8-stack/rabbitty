@@ -297,4 +297,10 @@ Documento: `DOCS/GAMIFICACION-CUADRE.md`.
   comisión estimada del 8 %.
 - Al guardar un premio se avisa a los socios activos del negocio (dedupe por premio+socio).
 
-**Pendiente**: CRUD de logros globales en GOD, listas por insignia (quién la ganó) y A/B del aviso.
+**Cierre 2026-11-16**: CRUD de logros en God, editar/activar/borrar misiones globales,
+lista de miembros por insignia con export CSV y contabilidad de lealtad/deseos en God → Economía.
+Pendiente único: A/B del aviso (en pausa).
+
+**Premios de retos**: los define **cada afiliado** por negocio (coste de su bolsillo, se
+honra en mostrador). Si no define premio, el reto se muestra con su insignia y **sin chip de
+premio**: la app nunca promete algo que el negocio no ofreció.

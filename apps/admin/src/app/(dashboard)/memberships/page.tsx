@@ -1565,6 +1565,27 @@ function MissionRewardsCard({ businessId }: { businessId: string }) {
   ];
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [badgeView, setBadgeView] = useState<"explorer" | "regular" | "veteran" | null>(null);
+  const { data: badgeMembers } = trpc.memberships.missionBadgeMembers.useQuery(
+    { businessId, badge: badgeView ?? "explorer" },
+    { enabled: Boolean(badgeView) },
+  );
+
+  const downloadCsv = () => {
+    if (!badgeView || !badgeMembers?.members?.length) return;
+    const rows = [
+      ["socio", "progreso", "meta", "cumplido"],
+      ...badgeMembers.members.map((m) => [m.name, String(m.progress), String(m.target), m.achieved ? "si" : "no"]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `insignia-${badgeView}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const next: Record<string, string> = {};
@@ -1621,17 +1642,51 @@ function MissionRewardsCard({ businessId }: { businessId: string }) {
 
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/50">
         <span className="font-bold uppercase tracking-wider text-white/35">Insignias otorgadas</span>
-        <span className="rounded-full px-2 py-0.5" style={{ color: "#22D3EE", background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.35)" }}>
-          Explorador {badges?.explorer ?? 0}
-        </span>
-        <span className="rounded-full px-2 py-0.5" style={{ color: "#A855F7", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.35)" }}>
-          Constante {badges?.regular ?? 0}
-        </span>
-        <span className="rounded-full px-2 py-0.5" style={{ color: "#FFD166", background: "rgba(255,209,102,0.12)", border: "1px solid rgba(255,209,102,0.35)" }}>
-          Veterano {badges?.veteran ?? 0}
-        </span>
+        {([
+          ["explorer", "Explorador", badges?.explorer ?? 0, "#22D3EE"] as const,
+          ["regular", "Constante", badges?.regular ?? 0, "#A855F7"] as const,
+          ["veteran", "Veterano", badges?.veteran ?? 0, "#FFD166"] as const,
+        ]).map(([id, label, count, color]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setBadgeView(badgeView === id ? null : id)}
+            className="rounded-full px-2 py-0.5 active:scale-95"
+            style={{
+              color,
+              background: badgeView === id ? `${color}2e` : `${color}1f`,
+              border: `1px solid ${color}${badgeView === id ? "88" : "55"}`,
+            }}
+          >
+            {label} {count}
+          </button>
+        ))}
         <span className="ml-1">de {badges?.members ?? 0} socios activos</span>
       </div>
+
+      {badgeView && (
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="m-0 text-[11px] font-bold text-white/70">
+              {badgeView === "explorer" ? "Explorador · 3 visitas/semana" : badgeView === "regular" ? "Constante · 2 beneficios/mes" : "Veterano · 2 renovaciones"}
+            </p>
+            <button type="button" onClick={downloadCsv} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-black text-white/70 hover:text-white">
+              Descargar CSV
+            </button>
+          </div>
+          <div className="max-h-56 space-y-1 overflow-y-auto">
+            {(badgeMembers?.members ?? []).map((m) => (
+              <div key={m.name} className="flex items-center justify-between rounded-lg px-2 py-1 text-[11px]">
+                <span className={m.achieved ? "text-white" : "text-white/45"}>{m.name}</span>
+                <span className={m.achieved ? "font-black text-emerald-300" : "text-white/35"}>
+                  {m.progress}/{m.target}{m.achieved ? " ✓" : ""}
+                </span>
+              </div>
+            ))}
+            {(badgeMembers?.members ?? []).length === 0 && <p className="m-0 px-2 py-1 text-[11px] text-white/35">Sin socios todavía</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

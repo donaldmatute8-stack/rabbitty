@@ -9,6 +9,7 @@ import {
   transactions,
   levels,
   hatTricks,
+  achievements,
   presenceSessions,
   systemSettings,
   auditEntries,
@@ -1262,8 +1263,69 @@ export const godRouter = router({
   getGamification: godAdminProcedure.query(async ({ ctx }) => {
     const allLevels = await ctx.coreDb.select().from(levels).orderBy(levels.requiredHops);
     const allTricks = await ctx.coreDb.select().from(hatTricks).orderBy(desc(hatTricks.createdAt));
-    return { levels: allLevels, tricks: allTricks };
+    const allAchievements = await ctx.coreDb.select().from(achievements);
+    return { levels: allLevels, tricks: allTricks, achievements: allAchievements };
   }),
+
+  /** GOD: logros globales (crear / editar / borrar). */
+  createAchievement: godAdminProcedure
+    .input(z.object({
+      name: z.string().min(2).max(60),
+      description: z.string().min(2).max(200),
+      iconUrl: z.string().min(1).max(300),
+      conditionType: z.string().min(2).max(40),
+      conditionTarget: z.number().int().min(1).max(1000000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [row] = await ctx.coreDb.insert(achievements).values(input).returning();
+      return row;
+    }),
+
+  updateAchievement: godAdminProcedure
+    .input(z.object({
+      id: z.string(),
+      name: z.string().min(2).max(60).optional(),
+      description: z.string().min(2).max(200).optional(),
+      iconUrl: z.string().min(1).max(300).optional(),
+      conditionType: z.string().min(2).max(40).optional(),
+      conditionTarget: z.number().int().min(1).max(1000000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...patch } = input;
+      await ctx.coreDb.update(achievements).set(patch).where(eq(achievements.id, id));
+      return { success: true };
+    }),
+
+  deleteAchievement: godAdminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.coreDb.delete(achievements).where(eq(achievements.id, input.id));
+      return { success: true };
+    }),
+
+  /** GOD: editar y borrar misiones globales (hatTricks). */
+  updateHatTrick: godAdminProcedure
+    .input(z.object({
+      id: z.string(),
+      title: z.string().min(2).max(80).optional(),
+      description: z.string().min(2).max(200).optional(),
+      rewardHops: z.number().int().min(0).max(100000).optional(),
+      rewardBunz: z.number().int().min(0).max(100000).optional(),
+      conditionTarget: z.number().int().min(1).max(1000000).optional(),
+      isActive: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...patch } = input;
+      await ctx.coreDb.update(hatTricks).set(patch).where(eq(hatTricks.id, id));
+      return { success: true };
+    }),
+
+  deleteHatTrick: godAdminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.coreDb.delete(hatTricks).where(eq(hatTricks.id, input.id));
+      return { success: true };
+    }),
 
   /**
    * ── Flags de producto (systemSettings) ──

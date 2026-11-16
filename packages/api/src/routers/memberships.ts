@@ -1892,6 +1892,91 @@ return await ctx.coreDb.transaction(async (tx: any) => {
       return row;
     }),
 
+  /** Admin: lista de miembros por insignia (con progreso) para operar/exportar. */
+  missionBadgeMembers: posProcedure
+    .input(z.object({
+      businessId: z.string().uuid(),
+      badge: z.enum(["explorer", "regular", "veteran"]),
+    }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+
+      const subs = await ctx.coreDb
+        .select({
+          id: membershipSubscriptions.id,
+          userId: membershipSubscriptions.userId,
+          createdAt: membershipSubscriptions.createdAt,
+          interval: membershipPlanVersions.billingInterval,
+          name: users.firstName,
+          username: users.username,
+        })
+        .from(membershipSubscriptions)
+        .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+        .leftJoin(users, eq(users.id, membershipSubscriptions.userId))
+        .where(
+          and(
+            eq(membershipSubscriptions.businessId, input.businessId),
+            eq(membershipSubscriptions.status, "ACTIVE"),
+          ),
+        );
+
+      if (subs.length === 0) return { members: [] as Array<{ name: string; progress: number; target: number; achieved: boolean }> };
+
+      const since7 = new Date(Date.now() - 7 * 86_400_000);
+      const since30 = new Date(Date.now() - 30 * 86_400_000);
+
+      const usageDays = await ctx.coreDb
+        .select({
+          subscriptionId: entitlementUsages.subscriptionId,
+          day: sql<string>`to_char(${entitlementUsages.redeemedAt}, 'YYYY-MM-DD')`,
+        })
+        .from(entitlementUsages)
+        .where(gte(entitlementUsages.redeemedAt, since7));
+      const daysBySub = new Map<string, Set<string>>();
+      for (const row of usageDays) {
+        const set = daysBySub.get(row.subscriptionId) ?? new Set<string>();
+        set.add(row.day);
+        daysBySub.set(row.subscriptionId, set);
+      }
+
+      const usageUnits = await ctx.coreDb
+        .select({
+          subscriptionId: entitlementUsages.subscriptionId,
+          units: sql<number>`COALESCE(SUM(${entitlementUsages.quantityUsed}), 0)::int`,
+        })
+        .from(entitlementUsages)
+        .where(gte(entitlementUsages.redeemedAt, since30))
+        .groupBy(entitlementUsages.subscriptionId);
+      const unitsBySub = new Map(usageUnits.map((r) => [r.subscriptionId, Number(r.units)]));
+
+      const monthsOf = (interval?: string | null) =>
+        interval === "QUARTERLY" ? 3 : interval === "SEMIANNUAL" ? 6 : interval === "ANNUAL" || interval === "YEARLY" ? 12 : 1;
+
+      const members = subs.map((sub) => {
+        const name = [sub.name, sub.username].filter(Boolean).join(" ") || "Socio";
+        if (input.badge === "explorer") {
+          const days = daysBySub.get(sub.id)?.size ?? 0;
+          return { name, progress: Math.min(days, 3), target: 3, achieved: days >= 3 };
+        }
+        if (input.badge === "regular") {
+          const units = unitsBySub.get(sub.id) ?? 0;
+          return { name, progress: Math.min(units, 2), target: 2, achieved: units >= 2 };
+        }
+        const renewals = Math.max(
+          0,
+          Math.floor(
+            ((Date.now() - new Date(sub.createdAt as unknown as string).getTime()) / (30.44 * 86_400_000)) /
+              monthsOf(sub.interval),
+          ),
+        );
+        return { name, progress: Math.min(renewals, 2), target: 2, achieved: renewals >= 2 };
+      });
+
+      return {
+        members: members.sort((a, b) => Number(b.achieved) - Number(a.achieved) || b.progress - a.progress),
+      };
+    }),
+
   /** Admin: insignias de retos ganadas por sus miembros (agregado). */
   missionBadges: posProcedure
     .input(z.object({ businessId: z.string().uuid() }))
