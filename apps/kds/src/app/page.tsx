@@ -9,6 +9,9 @@ import { useKdsRealtime } from "../hooks/useKdsRealtime";
 import { OrderTimer } from "../components/OrderTimer";
 import { CompletedOrders } from "../components/CompletedOrders";
 
+/** Campos opcionales que la API puede devolver y el esquema del KDS no tipa. */
+type KdsItemExtras = { guestName?: string | null; allergies?: string | null };
+
 const itemStatusConfig: Record<"PENDING" | "IN_PROGRESS" | "READY" | "SERVED", { label: string; color: string; dot: string; next: "PENDING" | "IN_PROGRESS" | "READY" | "SERVED" | null }> = {
   PENDING: { label: "Pendiente", color: "border-yellow-600/50 bg-yellow-900/20", dot: "bg-yellow-500", next: "IN_PROGRESS" as const },
   IN_PROGRESS: { label: "Preparando", color: "border-blue-600/50 bg-blue-900/20", dot: "bg-blue-500", next: "READY" as const },
@@ -28,6 +31,9 @@ export default function KdsPage() {
   // Estación de esta pantalla (ADR-023). Se recuerda en el dispositivo.
   const [stationId, setStationId] = useState<string>("");
   useEffect(() => {
+    // Leer localStorage SOLO puede hacerse en el cliente; inicializar el estado
+    // con él rompería la hidratación. La regla de lint es un falso positivo aquí.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStationId(window.localStorage.getItem("rabbitty_kds_station") ?? "");
   }, []);
   const { data: stationsList, error: stationsError } = trpc.stations.list.useQuery();
@@ -112,11 +118,17 @@ export default function KdsPage() {
     (n, order) => n + (order.items ?? []).filter((i) => i.status !== "SERVED").length,
     0,
   );
-  const lastActiveRef = useRef<number>(Date.now());
+  const lastActiveRef = useRef<number>(0);
+  useEffect(() => {
+    lastActiveRef.current = Date.now();
+  }, []);
 
   useEffect(() => {
     if (activeItems > 0) {
       lastActiveRef.current = Date.now();
+      // Salir del reposo al llegar una comanda nueva: es una reacción al cambio
+      // de datos, no un render en cascada.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (resting) setResting(false);
     }
   }, [activeItems, resting]);
@@ -320,17 +332,17 @@ export default function KdsPage() {
                             <span className="text-sm font-medium">
                               {item.quantity}x {item.name}
                             </span>
-                            {(item as any).guestName && (
+                            {(item as KdsItemExtras).guestName && (
                               <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/80">
-                                Para {(item as any).guestName}
+                                Para {(item as KdsItemExtras).guestName}
                               </span>
                             )}
                           </div>
                           <span className="text-xs text-gray-400">{config.label}</span>
                         </div>
-                        {(item as any).allergies && (
+                        {(item as KdsItemExtras).allergies && (
                           <p className="mt-1 rounded-lg bg-red-500/20 px-2 py-1 text-xs font-bold text-red-300">
-                            ⚠ Alergias: {(item as any).allergies}
+                            ⚠ Alergias: {(item as KdsItemExtras).allergies}
                           </p>
                         )}
                         {item.notes && (

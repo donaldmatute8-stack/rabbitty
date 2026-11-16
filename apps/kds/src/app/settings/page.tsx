@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFullscreen } from "../../hooks/useFullscreen";
-import { Monitor, Bell, Volume2, Maximize, ChefHat } from "lucide-react";
+import { Monitor, Volume2, Maximize, ChefHat } from "lucide-react";
 
 export default function KdsSettingsPage() {
   const { isFullscreen, toggle } = useFullscreen();

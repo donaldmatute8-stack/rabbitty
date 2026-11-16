@@ -63,21 +63,20 @@ function tokenFetcher(stationId: string) {
 }
 
 export function useKdsRealtime({ stationId, onEvent, paused = false }: Options): RealtimeState {
-  const [state, setState] = useState<RealtimeState>("off");
+  const [connection, setConnection] = useState<RealtimeState>("off");
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+
+  // Mantener el callback fresco sin escribir refs durante el render
+  // (react-hooks/refs): se sincroniza después de cada render.
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+
+  const url = process.env.NEXT_PUBLIC_CENTRIFUGO_URL;
+  const disabled = !stationId || paused;
 
   useEffect(() => {
-    if (!stationId || paused) {
-      setState("off");
-      return;
-    }
-
-    const url = process.env.NEXT_PUBLIC_CENTRIFUGO_URL;
-    if (!url) {
-      setState("error");
-      return;
-    }
+    if (disabled || !url) return;
 
     let cancelled = false;
     let debounce: ReturnType<typeof setTimeout> | null = null;
@@ -101,7 +100,7 @@ export function useKdsRealtime({ stationId, onEvent, paused = false }: Options):
       try {
         first = await getTokens();
       } catch {
-        if (!cancelled) setState("error");
+        if (!cancelled) setConnection("error");
         return;
       }
       if (cancelled || stopped) return;
@@ -111,24 +110,23 @@ export function useKdsRealtime({ stationId, onEvent, paused = false }: Options):
         getToken: async () => (await getTokens()).token,
       });
 
-      client.on("connecting", () => !cancelled && setState("connecting"));
-      client.on("connected", () => !cancelled && setState("live"));
-      client.on("disconnected", () => !cancelled && setState("connecting"));
-      client.on("error", () => !cancelled && setState("error"));
+      client.on("connecting", () => !cancelled && setConnection("connecting"));
+      client.on("connected", () => !cancelled && setConnection("live"));
+      client.on("disconnected", () => !cancelled && setConnection("connecting"));
+      client.on("error", () => !cancelled && setConnection("error"));
 
       const sub = client.newSubscription(first.channel, {
         token: first.subscriptionToken,
         getToken: async () => (await getTokens()).subscriptionToken,
       });
       sub.on("publication", scheduleInvalidate);
-      sub.on("subscribed", () => !cancelled && setState("live"));
-      sub.on("unsubscribed", () => !cancelled && setState("connecting"));
-      sub.on("error", () => !cancelled && setState("error"));
+      sub.on("subscribed", () => !cancelled && setConnection("live"));
+      sub.on("unsubscribed", () => !cancelled && setConnection("connecting"));
+      sub.on("error", () => !cancelled && setConnection("error"));
 
       client.connect();
     };
 
-    setState("connecting");
     void start();
 
     // Al volver del segundo plano: refresca ya y reconecta si hace falta.
@@ -150,9 +148,12 @@ export function useKdsRealtime({ stationId, onEvent, paused = false }: Options):
       } catch {
         /* el cliente ya estaba cerrado */
       }
-      setState("off");
+      setConnection("off");
     };
-  }, [stationId, paused]);
+  }, [stationId, paused, disabled, url]);
 
-  return state;
+  // Derivado, no estado: sin estación o en pausa no hay conexión que mostrar.
+  if (disabled) return "off";
+  if (!url) return "error";
+  return connection;
 }
