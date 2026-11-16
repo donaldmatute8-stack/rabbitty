@@ -8,6 +8,8 @@ import {
   ownedBusinesses,
   userPreferences,
   users,
+  wishlistItems,
+  wishlists,
 } from "@rabbitty/database-core";
 import { canSendEngagement } from "@rabbitty/api/services/notificationPacing";
 
@@ -162,7 +164,82 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, campaigns: campaigns.length, sent, skipped });
+    // ── Segunda pasada: "tu deseo está en promo" ──
+    // Cruza cada campaña con los deseos activos de ese negocio (los productos
+    // que alguien quiere y hoy tienen cashback extra).
+    let wishSent = 0;
+    const wishSkipped = { noOptIn: 0, muted: 0, pacing: 0, already: 0 };
+
+    for (const campaign of campaigns) {
+      const wishes = await coreDb
+        .select({
+          itemId: wishlistItems.id,
+          title: wishlistItems.title,
+          price: wishlistItems.priceSnapshot,
+          userId: wishlists.userId,
+          rules: users.pushRules,
+          muted: users.pushMutedCategories,
+          balance: sql<number>`GREATEST(0, COALESCE(${users.totalBunzEarned}, 0) - COALESCE(${users.totalBunzSpent}, 0))`,
+        })
+        .from(wishlistItems)
+        .innerJoin(wishlists, eq(wishlists.id, wishlistItems.wishlistId))
+        .innerJoin(users, eq(users.id, wishlists.userId))
+        .where(
+          and(
+            eq(wishlistItems.businessId, campaign.businessId),
+            eq(wishlistItems.status, "ACTIVE"),
+            eq(wishlists.isActive, true),
+          ),
+        )
+        .limit(200);
+
+      for (const w of wishes) {
+        const rules = parseJson<Record<string, boolean>>(w.rules, {});
+        if (rules.favoriteAlerts !== true) { wishSkipped.noOptIn += 1; continue; }
+        const muted = parseJson<string[]>(w.muted, []);
+        if (muted.includes("favorites")) { wishSkipped.muted += 1; continue; }
+
+        const dedupeKey = `wishlist_promo:${campaign.id}:${w.itemId}`;
+        const [prior] = await coreDb
+          .select({ id: notificationsOutbox.id })
+          .from(notificationsOutbox)
+          .where(eq(notificationsOutbox.dedupeKey, dedupeKey))
+          .limit(1);
+        if (prior) { wishSkipped.already += 1; continue; }
+
+        if (!(await canSendEngagement(coreDb, w.userId, PACING_HOURS))) { wishSkipped.pacing += 1; continue; }
+
+        const price = Number(w.price ?? 0);
+        await coreDb
+          .insert(notificationsOutbox)
+          .values({
+            userId: w.userId,
+            type: "WISHLIST_PROMO",
+            title: `Tu deseo tiene +${campaign.rewardPercentage}% Bunz`,
+            message: `"${w.title}" en ${campaign.businessName ?? "tu lugar"} hoy paga cashback extra${price > 0 ? ` (cuesta ${Math.round(price)})` : ""}. Vence ${new Date(campaign.expiresAt).toLocaleDateString("es-MX")}.`,
+            route: `/affiliate/${campaign.businessId}`,
+            data: {
+              businessId: campaign.businessId,
+              itemId: w.itemId,
+              campaignId: campaign.id,
+              rewardPercentage: campaign.rewardPercentage,
+            },
+            dedupeKey,
+            priority: "normal",
+          })
+          .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+
+        wishSent += 1;
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      campaigns: campaigns.length,
+      sent,
+      skipped,
+      wishlist: { sent: wishSent, skipped: wishSkipped },
+    });
   } catch (error) {
     console.error("[PREFERENCE_PROMOS]", error);
     return NextResponse.json({ success: false, error: "No se pudieron avisar las promos" }, { status: 500 });

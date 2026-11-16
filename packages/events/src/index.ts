@@ -139,6 +139,7 @@ export function categoryForType(type: string): PushCategoryKey {
     case "WISHLIST_ADDED":
     case "WISHLIST_PLEDGED":
     case "WISHLIST_BIRTHDAY":
+    case "WISHLIST_PROMO":
       return PushCategory.FAVORITES;
     case "OFFER_FLASH":
     default:
