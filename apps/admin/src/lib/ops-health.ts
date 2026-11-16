@@ -1,5 +1,6 @@
 import { AwsClient } from "aws4fetch";
 import { sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 /**
  * ── Invariantes operativos ("¿el negocio se está moviendo?") ────────────────
@@ -62,7 +63,7 @@ async function scalar(db: Db, query: unknown): Promise<number> {
  * Último respaldo en el bucket: si el cron de respaldos deja de correr, esto lo
  * delata aunque GitHub Actions no avise.
  */
-async function backupAgeHours(): Promise<number | null> {
+export async function backupAgeHours(): Promise<number | null> {
   const endpoint = process.env.BACKUP_S3_ENDPOINT;
   const bucket = process.env.BACKUP_S3_BUCKET;
   const accessKeyId = process.env.BACKUP_S3_ACCESS_KEY_ID;
@@ -243,3 +244,118 @@ export async function sendOpsEmail(subject: string, html: string): Promise<boole
 }
 
 export const OPS_REMINDER_MS = 6 * 60 * MINUTE;
+
+/**
+ * Ejecuta la revisión completa: recolecta, guarda foto, aplica dedupe y avisa.
+ * Vive aquí (y no en la ruta) para que el planificador interno y el endpoint
+ * de cron hagan EXACTAMENTE lo mismo.
+ */
+export async function runOpsHealthCheck({
+  restaurantDb,
+  coreDb,
+}: {
+  restaurantDb: Db;
+  coreDb: Db;
+}): Promise<{
+  status: InvariantStatus;
+  invariants: Invariant[];
+  alerted: string[];
+  emailed: boolean;
+}> {
+  const invariants = await collectInvariants({ restaurantDb, coreDb });
+
+  const esc = (v: string) => v.replace(/'/g, " ").slice(0, 300);
+  const values = invariants
+    .map(
+      (i) =>
+        `('${randomUUID()}','${i.metric}',${i.value ?? "null"},'${i.status}','${esc(i.detail ?? "")}')`,
+    )
+    .join(",");
+  if (values) {
+    await coreDb
+      .execute(
+        sql.raw(
+          `insert into "ops_health_snapshots" ("id","metric","value","status","detail") values ${values}`,
+        ),
+      )
+      .catch((e: unknown) => console.error("[ops-health] no se pudo guardar snapshot:", e));
+  }
+
+  const prevRes = (await coreDb
+    .execute(sql.raw(`select "metric","status","lastAlertAt" from "ops_alert_state"`))
+    .catch(() => ({ rows: [] }))) as { rows?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+  const prevRows = Array.isArray(prevRes) ? prevRes : prevRes.rows ?? [];
+  const prev = new Map(
+    prevRows.map((r) => [
+      String(r.metric),
+      { status: String(r.status), lastAlertAt: r.lastAlertAt ? new Date(String(r.lastAlertAt)) : null },
+    ]),
+  );
+
+  const toAlert: Invariant[] = [];
+  const now = Date.now();
+
+  for (const inv of invariants) {
+    const before = prev.get(inv.metric);
+    const changed = before?.status !== inv.status;
+    const stillBroken =
+      inv.status !== "ok" &&
+      (!before?.lastAlertAt || now - before.lastAlertAt.getTime() > OPS_REMINDER_MS);
+    if (inv.status !== "ok" && (changed || stillBroken)) toAlert.push(inv);
+
+    const lastAlertAt =
+      inv.status !== "ok" && (changed || stillBroken) ? new Date() : before?.lastAlertAt ?? null;
+
+    await coreDb
+      .execute(
+        sql.raw(
+          `insert into "ops_alert_state" ("metric","status","lastAlertAt","lastOkAt","detail")
+           values ('${inv.metric}','${inv.status}',` +
+            `${lastAlertAt ? `'${lastAlertAt.toISOString()}'` : "null"},` +
+            `${inv.status === "ok" ? "now()" : "null"},'${esc(inv.detail ?? "")}')
+           on conflict ("metric") do update set
+             "status" = excluded."status",
+             "lastAlertAt" = excluded."lastAlertAt",
+             "lastOkAt" = excluded."lastOkAt",
+             "detail" = excluded."detail"`,
+        ),
+      )
+      .catch((e: unknown) => console.error("[ops-health] no se pudo guardar estado:", e));
+  }
+
+  let emailed = false;
+  if (toAlert.length > 0) {
+    const critical = toAlert.filter((i) => i.status === "critical");
+    const subject = `${critical.length > 0 ? "🔴" : "🟠"} Rabbitty ops: ${toAlert.map((i) => i.metric).join(", ")}`;
+    const rows = toAlert
+      .map(
+        (i) =>
+          `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee"><b>${i.metric}</b></td>
+           <td style="padding:6px 10px;border-bottom:1px solid #eee;color:${i.status === "critical" ? "#b91c1c" : "#b45309"}">${i.status}</td>
+           <td style="padding:6px 10px;border-bottom:1px solid #eee">${i.detail ?? ""}</td></tr>`,
+      )
+      .join("");
+    emailed = await sendOpsEmail(
+      subject,
+      `<div style="font-family:system-ui,sans-serif">
+         <h2 style="margin:0 0 4px">Invariantes operativos</h2>
+         <p style="color:#555;margin:0 0 12px">${new Date().toISOString()}</p>
+         <table style="border-collapse:collapse;font-size:13px">${rows}</table>
+         <p style="color:#777;font-size:12px;margin-top:14px">
+           Revisa /api/health?strict=1 y el panel de Railway. Si el problema sigue, se reenviará cada 6 h.
+         </p>
+       </div>`,
+    );
+  }
+
+  return {
+    status: invariants.some((i) => i.status === "critical")
+      ? "critical"
+      : invariants.some((i) => i.status === "warn")
+        ? "warn"
+        : "ok",
+    invariants,
+    alerted: toAlert.map((i) => i.metric),
+    emailed,
+  };
+}
