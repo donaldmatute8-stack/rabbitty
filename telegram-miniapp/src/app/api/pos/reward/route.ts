@@ -363,6 +363,11 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Error in /api/pos/reward:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    // El detalle se devuelve SOLO a quien ya presentó el secreto de API (este
+    // endpoint lo exige arriba), así que no queda expuesto al público. Sin esto
+    // un 500 en el camino de emisión de Bunz es indiagnosticable desde fuera:
+    // los logs de Vercel no son accesibles desde el POS.
+    const detail = error instanceof Error ? `${error.message}`.slice(0, 300) : String(error).slice(0, 300);
+    return NextResponse.json({ error: 'Internal Server Error', detail }, { status: 500 });
   }
 }
