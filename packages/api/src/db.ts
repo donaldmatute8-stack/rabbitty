@@ -64,6 +64,20 @@ const RESTAURANT_COLUMNS: string[] = [
 ];
 
 async function ensureRestaurantColumns(client: ReturnType<typeof postgres>) {
+  // ── DDL EN RUNTIME: apagado por defecto (2026-11-16) ──────────────────────
+  //
+  // Este bloque hace `ALTER TABLE` / `CREATE TABLE` cuando la app arranca. Eso
+  // obliga a que el runtime use el rol DUEÑO de la base, que puede hacer
+  // `DROP TABLE`: cualquier bug tiene permiso de destrucción total.
+  //
+  // El esquema ahora lo gobiernan las migraciones: `preDeployCommand` aplica
+  // `packages/*/migrations` y `schema-guard` verifica que el código y la base
+  // coincidan antes de promover un despliegue. Por eso el DDL de aquí sobra.
+  //
+  // Escape hatch: `DB_RUNTIME_DDL=1` lo reactiva (solo para una base nueva sin
+  // migraciones). No usarlo en producción.
+  if (process.env.DB_RUNTIME_DDL !== "1") return;
+
   // Configurar client_min_messages = 'warning' para que postgres no envíe spam de
   // NOTICE 42701 ("column already exists, skipping") en los logs de producción (Railway).
   try {

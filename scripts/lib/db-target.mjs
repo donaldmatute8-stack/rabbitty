@@ -85,8 +85,12 @@ export function resolveTargetUrl({ target, db }) {
 
   let url;
   if (target === "env") {
-    url = process.env[cfg.urlVar];
-    if (!url) fail(`${cfg.urlVar} no está en el entorno`);
+    // En el pre-deploy las migraciones necesitan DDL, y el runtime ya no corre
+    // con el rol dueño. `MIGRATE_<VAR>` es la credencial de migraciones; si no
+    // existe se cae a la de la app (comportamiento anterior).
+    const migrateVar = `MIGRATE_${cfg.urlVar}`;
+    url = process.env[migrateVar] || process.env[cfg.urlVar];
+    if (!url) fail(`${migrateVar} / ${cfg.urlVar} no están en el entorno`);
   } else if (target === "local") {
     url = readEnvLocal(cfg.urlVar);
   } else if (target === "prod" || target === "staging") {
