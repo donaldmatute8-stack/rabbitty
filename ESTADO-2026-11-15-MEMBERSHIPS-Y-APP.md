@@ -212,3 +212,29 @@ apps/admin/src/app/(pos)/pos/page.tsx                    # escaneo de pase + cob
 - Insights por cohorte/segmento (hoy hay favoritos por producto/categoría y demanda semanal).
 - A/B test del aviso (hoy se mide conversión, no contra grupo de control).
 - Notificaciones de "día-parte" para negocios sin historial horario (hoy solo si existe `DAY_PART`).
+
+---
+
+## 9. Lista de deseos (2026-11-16)
+
+**Dónde vive (integración, no pantalla suelta)**: se entra desde **Perfil** y desde el
+**corazón de cada producto** del menú; comparte el lenguaje visual del pase y usa los
+**grupos de chat** como "madriguera". No hay tab nuevo ni módulo aparte.
+
+**Datos**: `wishlists`, `wishlist_items` (PRODUCT/CUSTOM con monto), `wishlist_shares`,
+`wishlist_pledges`. Migración `0013_wishlists.sql` aplicada. Una lista por usuario,
+deseos a **90 días**, máximo 20 activos.
+
+**Flujo actual**
+1. Corazón en un producto → deseo con negocio, foto y precio; o deseo libre con monto.
+2. Compartir con grupos (explícito, revocable) → aviso a los miembros (dedupe diario).
+3. “Me apunto a regalarlo” (sin pago todavía) → aviso al dueño.
+4. Cumpleaños (opcional, solo si comparte) → 7 días antes se avisa al grupo con 3 deseos.
+5. Cron `wishlist-nudges` (workflow diario 09:00 MX): caduca, cumpleaños y “actualiza tu lista”.
+
+**Decisiones tomadas**: grupos primero · “me apunto” antes que prepago · cumpleaños solo
+para listas compartidas · 8 % de comisión cuando exista el vale · deseos libres con monto ·
+caducidad 90 días.
+
+**Siguiente (fase 3)**: vale prepagado (Stripe/Bunz) con canje en POS y reembolso si no se
+canjea; promos sobre deseos (“tu deseo está en promo”) y “ya te alcanza”.
