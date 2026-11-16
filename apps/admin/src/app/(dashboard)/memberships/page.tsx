@@ -219,6 +219,20 @@ export default function MembershipsPage() {
             </div>
           </div>
 
+          {/* A/B del aviso: tratamiento vs control */}
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/60">
+            <span className="font-bold uppercase tracking-wider text-white/35">A/B aviso</span>
+            <span className="ml-2">
+              Tratamiento <b className="text-white">{analytics.ab?.treatment?.rate == null ? "—" : `${analytics.ab.treatment.rate}%`}</b>
+              {" "}({analytics.ab?.treatment?.converted ?? 0}/{analytics.ab?.treatment?.sent ?? 0})
+            </span>
+            <span className="ml-3">
+              Control <b className="text-white">{analytics.ab?.control?.rate == null ? "—" : `${analytics.ab.control.rate}%`}</b>
+              {" "}({analytics.ab?.control?.converted ?? 0}/{analytics.ab?.control?.sent ?? 0})
+            </span>
+            <span className="ml-3 text-white/35">control = sin envío, misma medición</span>
+          </div>
+
           {/* Desempeño de los avisos "ya te alcanza" */}
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">

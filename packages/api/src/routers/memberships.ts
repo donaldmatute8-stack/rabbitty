@@ -1763,6 +1763,26 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         .innerJoin(wishlistItems, eq(wishlistItems.id, wishlistGifts.itemId))
         .where(eq(wishlistItems.businessId, input.businessId));
 
+      // A/B del aviso: conversión por brazo (control también se mide)
+      const abRows = await ctx.coreDb
+        .select({
+          arm: preferenceNudges.arm,
+          sent: sql<number>`count(*)::int`,
+          opened: sql<number>`count(${preferenceNudges.openedAt})::int`,
+          converted: sql<number>`count(${preferenceNudges.convertedAt})::int`,
+        })
+        .from(preferenceNudges)
+        .where(and(eq(preferenceNudges.businessId, input.businessId), gte(preferenceNudges.sentAt, cutoff)))
+        .groupBy(preferenceNudges.arm);
+
+      const ab = { treatment: { sent: 0, opened: 0, converted: 0, rate: null as number | null }, control: { sent: 0, opened: 0, converted: 0, rate: null as number | null } };
+      for (const row of abRows) {
+        const key = row.arm === "control" ? "control" : "treatment";
+        const sentN = Number(row.sent);
+        const conv = Number(row.converted);
+        ab[key] = { sent: sentN, opened: Number(row.opened), converted: conv, rate: sentN > 0 ? Math.round((conv / sentN) * 1000) / 10 : null };
+      }
+
       const nudgeSent = Number(nudgeRow?.sent ?? 0);
       const nudgeOpened = Number(nudgeRow?.opened ?? 0);
       const nudgeConverted = Number(nudgeRow?.converted ?? 0);
@@ -1799,6 +1819,7 @@ return await ctx.coreDb.transaction(async (tx: any) => {
           unitsPerWeek: Math.round((Number(d.units) / 4) * 10) / 10,
         })),
         favoriteMembersShare,
+        ab,
         nudges: {
           sent: nudgeSent,
           opened: nudgeOpened,

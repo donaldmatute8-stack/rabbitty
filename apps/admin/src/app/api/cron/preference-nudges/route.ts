@@ -38,6 +38,23 @@ const BALANCE_MARGIN = 1.05;
 const MIN_SCORE = 0.25;
 const MIN_SIGNALS = 3;
 
+/**
+ * Brazo del A/B: estable por usuario (hash FNV) y configurable.
+ * `BUNZY_AB=off` apaga el experimento; `AB_CONTROL_PCT` (default 20) define
+ * qué porcentaje queda en control (se registra la oportunidad pero no se envía).
+ */
+function armFor(userId: string): "control" | "treatment" {
+  if (process.env.BUNZY_AB === "off") return "treatment";
+  const pct = Number(process.env.AB_CONTROL_PCT ?? 20);
+  if (!Number.isFinite(pct) || pct <= 0) return "treatment";
+  let hash = 2166136261;
+  for (let i = 0; i < userId.length; i += 1) {
+    hash ^= userId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash) % 100 < pct ? "control" : "treatment";
+}
+
 function authorize(req: NextRequest): boolean {
   const auth = (req.headers.get("authorization") || "").replace(/^Bearer /, "").trim();
   return Boolean(CRON_SECRET && auth === CRON_SECRET);
@@ -164,6 +181,7 @@ export async function POST(req: NextRequest) {
     const dateKey = new Date().toISOString().slice(0, 10);
     const weekKey = `${new Date().getUTCFullYear()}-W${String(Math.ceil((now / 86_400_000 + 3) / 7)).padStart(2, "0")}`;
     let sent = 0;
+    let control = 0;
     const skipped = { noOptIn: 0, muted: 0, notEnough: 0, unavailable: 0, frequent: 0, weeklyCap: 0, offSchedule: 0, churn: 0, pacing: 0 };
 
     for (const p of prefs) {
@@ -193,6 +211,29 @@ export async function POST(req: NextRequest) {
       if (!(await canSendEngagement(coreDb, p.userId, 24))) { skipped.pacing += 1; continue; }
 
       const dedupeKey = `pref_alert:${p.userId}:${p.id}:${dateKey}`;
+      const arm = armFor(p.userId);
+
+      // Control: se registra la oportunidad (para medir conversión base) pero
+      // no se envía nada. Es lo que permite comparar de verdad.
+      if (arm === "control") {
+        await coreDb
+          .insert(preferenceNudges)
+          .values({
+            userId: p.userId,
+            businessId: p.businessId,
+            preferenceId: p.id,
+            reason: "BALANCE_ENOUGH",
+            channel: "control",
+            arm: "control",
+            dedupeKey,
+          })
+          .onConflictDoNothing({ target: preferenceNudges.dedupeKey });
+
+        blockedPrefs.add(p.id);
+        weeklyByUser.set(p.userId, (weeklyByUser.get(p.userId) ?? 0) + 1);
+        control += 1;
+        continue;
+      }
 
       await coreDb
         .insert(preferenceNudges)
@@ -202,6 +243,7 @@ export async function POST(req: NextRequest) {
           preferenceId: p.id,
           reason: "BALANCE_ENOUGH",
           channel: "push",
+          arm: "treatment",
           dedupeKey,
         })
         .onConflictDoNothing({ target: preferenceNudges.dedupeKey });
@@ -246,6 +288,25 @@ export async function POST(req: NextRequest) {
       if ((weeklyByUser.get(p.userId) ?? 0) >= WEEKLY_CAP) { skipped.weeklyCap += 1; continue; }
 
       const dedupeKey = `pref_churn:${p.userId}:${p.id}:${weekKey}`;
+      const churnArm = armFor(p.userId);
+
+      if (churnArm === "control") {
+        await coreDb
+          .insert(preferenceNudges)
+          .values({
+            userId: p.userId,
+            businessId: p.businessId,
+            preferenceId: p.id,
+            reason: "CHURN_RISK",
+            channel: "control",
+            arm: "control",
+            dedupeKey,
+          })
+          .onConflictDoNothing({ target: preferenceNudges.dedupeKey });
+        weeklyByUser.set(p.userId, (weeklyByUser.get(p.userId) ?? 0) + 1);
+        control += 1;
+        continue;
+      }
 
       await coreDb
         .insert(preferenceNudges)
@@ -255,6 +316,7 @@ export async function POST(req: NextRequest) {
           preferenceId: p.id,
           reason: "CHURN_RISK",
           channel: "push",
+          arm: "treatment",
           dedupeKey,
         })
         .onConflictDoNothing({ target: preferenceNudges.dedupeKey });
@@ -277,7 +339,7 @@ export async function POST(req: NextRequest) {
       sent += 1;
     }
 
-    return NextResponse.json({ success: true, candidates: prefs.length, sent, skipped });
+    return NextResponse.json({ success: true, candidates: prefs.length, sent, control, skipped });
   } catch (error) {
     console.error("[PREFERENCE_NUDGES]", error);
     return NextResponse.json({ success: false, error: "No se pudieron enviar los avisos" }, { status: 500 });

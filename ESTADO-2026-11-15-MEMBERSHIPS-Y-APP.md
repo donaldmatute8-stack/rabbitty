@@ -299,7 +299,11 @@ Documento: `DOCS/GAMIFICACION-CUADRE.md`.
 
 **Cierre 2026-11-16**: CRUD de logros en God, editar/activar/borrar misiones globales,
 lista de miembros por insignia con export CSV y contabilidad de lealtad/deseos en God → Economía.
-Pendiente único: A/B del aviso (en pausa).
+**A/B del aviso (2026-11-16)**: `preference_nudges.arm` (migración `0016`). Cada usuario cae
+en `treatment` o `control` por hash estable; el control **registra la oportunidad sin enviar**,
+así que su conversión también se mide (visita al negocio). Interruptores:
+`BUNZY_AB=off` apaga el experimento y `AB_CONTROL_PCT` (default 20) define el tamaño del control.
+El panel de Admin muestra conversión por brazo.
 
 **Premios de retos**: los define **cada afiliado** por negocio (coste de su bolsillo, se
 honra en mostrador). Si no define premio, el reto se muestra con su insignia y **sin chip de

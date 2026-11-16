@@ -1276,6 +1276,8 @@ export const preferenceNudges = pgTable("preference_nudges", {
   /** BALANCE_ENOUGH | PROMO | CHURN_RISK | DAY_PART */
   reason: text("reason").notNull(),
   channel: text("channel").default("push").notNull(),
+  /** treatment | control — A/B del aviso (control se registra pero no se envía). */
+  arm: text("arm").default("treatment").notNull(),
   sentAt: timestamp("sentAt").defaultNow().notNull(),
   openedAt: timestamp("openedAt"),
   convertedAt: timestamp("convertedAt"),
