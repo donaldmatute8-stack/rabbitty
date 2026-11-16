@@ -262,4 +262,10 @@ También se avisa al destinatario.
 (`announce_wishlist_rabbitters_v1` → ALL_RABBITTERS y `announce_wishlist_affiliates_v1`
 → ALL_AFFILIATES), categoría NEWS, para publicar desde Admin → God → Bunzy Connect.
 
-**Pendiente menor**: promo automática sobre deseos de campañas flash y A/B del aviso (en pausa).
+**Cruce con campañas flash (cerrado 2026-11-16)**: `preference-promos` avisa a quien tiene un
+**deseo activo** de un negocio con `FLASH_OFFER` vigente ("tu deseo tiene +X % Bunz") y a quien
+tiene ese producto como **favorito**. Reglas: opt-in `favoriteAlerts`, categoría `favorites` no
+silenciada, ritmo de 48 h, dedupe por campaña+deseo y una sola vez por campaña.
+
+**Pendiente**: A/B del aviso (en pausa) y el mapeo de gamificación ↔ niveles de membresía
+(documentar qué señal alimenta qué métrica antes de tocar código).
