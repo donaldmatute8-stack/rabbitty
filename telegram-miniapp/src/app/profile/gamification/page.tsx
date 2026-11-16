@@ -42,6 +42,7 @@ interface MembershipMissionItem {
   target: number;
   done: boolean;
   badge: { id: string; label: string; color: string };
+  reward?: { label: string; description: string | null } | null;
 }
 
 interface MembershipMissionsBlock {
@@ -238,14 +239,24 @@ export default function GamificationPage() {
                                     }}
                                   />
                                 </div>
-                                {mission.done && (
-                                  <span
-                                    className="mt-1.5 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
-                                    style={{ color: mission.badge.color, background: `${mission.badge.color}1f`, border: `1px solid ${mission.badge.color}44` }}
-                                  >
-                                    {mission.badge.label}
-                                  </span>
-                                )}
+                                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                  {mission.done && (
+                                    <span
+                                      className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                                      style={{ color: mission.badge.color, background: `${mission.badge.color}1f`, border: `1px solid ${mission.badge.color}44` }}
+                                    >
+                                      {mission.badge.label}
+                                    </span>
+                                  )}
+                                  {mission.reward && (
+                                    <span
+                                      className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-black text-amber-300"
+                                      title={mission.reward.description ?? undefined}
+                                    >
+                                      🎁 {mission.reward.label}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}

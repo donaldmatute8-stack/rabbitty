@@ -17,6 +17,10 @@ import {
   merchantRecoveryProposals,
   merchantRecoveryTerms,
   affiliateReonboardingTokens,
+  membershipSubscriptions,
+  membershipPlanVersions,
+  wishlistGifts,
+  wishlistItems,
 } from "@rabbitty/database-core";
 import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
 import {
@@ -1178,6 +1182,83 @@ export const godRouter = router({
   }),
 
   // ── Gamificación: trucos del sombrero + niveles ──
+  /**
+   * Contabilidad de lealtad y deseos (GOD, solo lectura).
+   * MRR de membresías, bono de lealtad otorgado, pozo autorizado y vales de
+   * regalo por estado (con comisión estimada del 8 %).
+   */
+  getLoyaltyAccounting: godAdminProcedure.query(async ({ ctx }) => {
+    const since30 = new Date(Date.now() - 30 * 86_400_000);
+
+    const subs = await ctx.coreDb
+      .select({
+        sub: membershipSubscriptions,
+        version: membershipPlanVersions,
+      })
+      .from(membershipSubscriptions)
+      .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId));
+
+    const active = subs.filter((r) => r.sub.status === "ACTIVE");
+    const monthsOf = (interval?: string | null) =>
+      interval === "QUARTERLY" ? 3 : interval === "SEMIANNUAL" ? 6 : interval === "ANNUAL" || interval === "YEARLY" ? 12 : 1;
+
+    let mrr = 0;
+    let poolTotal = 0;
+    for (const r of active) {
+      const price = Number(r.version?.priceFiat ?? 0);
+      if (price <= 0) continue;
+      const months = monthsOf(r.version?.billingInterval);
+      mrr += price / months;
+      poolTotal += Math.floor((price * 0.92 * 0.1) / months);
+    }
+
+    const [bonusRow] = await ctx.coreDb
+      .select({ total: sql<number>`COALESCE(SUM((${ledgerEntries.metadata}->>'loyaltyBonus')::numeric), 0)` })
+      .from(ledgerEntries)
+      .where(gte(ledgerEntries.createdAt, since30));
+
+    const voucherRows = await ctx.coreDb
+      .select({
+        status: wishlistGifts.status,
+        count: sql<number>`count(*)::int`,
+        amount: sql<number>`COALESCE(SUM(${wishlistGifts.amount}), 0)`,
+      })
+      .from(wishlistGifts)
+      .groupBy(wishlistGifts.status);
+
+    const [wishRow] = await ctx.coreDb
+      .select({ active: sql<number>`count(*)::int` })
+      .from(wishlistItems)
+      .where(eq(wishlistItems.status, "ACTIVE"));
+
+    const vouchers = Object.fromEntries(
+      voucherRows.map((v) => [v.status, { count: Number(v.count), amount: Math.round(Number(v.amount)) }]),
+    ) as Record<string, { count: number; amount: number }>;
+
+    const paid = vouchers.PAID ?? { count: 0, amount: 0 };
+    const redeemed = vouchers.REDEEMED ?? { count: 0, amount: 0 };
+    const refunded = vouchers.REFUNDED ?? { count: 0, amount: 0 };
+
+    return {
+      memberships: {
+        active: active.length,
+        issued: subs.length,
+        mrr: Math.round(mrr * 100) / 100,
+      },
+      loyalty: {
+        bonusLast30d: Math.round(Number(bonusRow?.total ?? 0)),
+        poolMonthly: poolTotal,
+      },
+      wishlist: {
+        activeWishes: Number(wishRow?.active ?? 0),
+        vouchers,
+        platformFeesRedeemed: Math.round(redeemed.amount * 0.08),
+        pendingVolume: paid.amount,
+        refundedVolume: refunded.amount,
+      },
+    };
+  }),
+
   getGamification: godAdminProcedure.query(async ({ ctx }) => {
     const allLevels = await ctx.coreDb.select().from(levels).orderBy(levels.requiredHops);
     const allTricks = await ctx.coreDb.select().from(hatTricks).orderBy(desc(hatTricks.createdAt));

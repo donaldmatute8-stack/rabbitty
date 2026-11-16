@@ -9,13 +9,14 @@
  * exactamente lo mismo (antes había dos superficies de "misiones").
  */
 
-import { and, eq, gte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import {
   entitlementUsages,
   membershipPlanVersions,
   membershipPlans,
   membershipSubscriptions,
+  membershipMissionRewards,
   ownedBusinesses,
   transactions,
 } from '@/db/schema';
@@ -31,6 +32,8 @@ export interface MembershipMission {
   unit: string;
   done: boolean;
   badge: { id: string; label: string; color: string };
+  /** Premio tangible que define el negocio (no emite Bunz). */
+  reward?: { label: string; description: string | null } | null;
 }
 
 export interface MembershipMissionsBlock {
@@ -67,6 +70,23 @@ export async function getMembershipMissions(userId: string): Promise<MembershipM
     .where(and(eq(membershipSubscriptions.userId, userId), eq(membershipSubscriptions.status, 'ACTIVE')));
 
   if (subs.length === 0) return [];
+
+  // Premios tangibles definidos por cada negocio (una consulta para todos)
+  const businessIds = [...new Set(subs.map((s) => s.businessId).filter(Boolean))] as string[];
+  const rewardRows = businessIds.length
+    ? await db
+        .select({
+          businessId: membershipMissionRewards.businessId,
+          missionId: membershipMissionRewards.missionId,
+          label: membershipMissionRewards.label,
+          description: membershipMissionRewards.description,
+        })
+        .from(membershipMissionRewards)
+        .where(and(inArray(membershipMissionRewards.businessId, businessIds), eq(membershipMissionRewards.isActive, true)))
+    : [];
+  const rewardMap = new Map(
+    rewardRows.map((r) => [`${r.businessId}|${r.missionId}`, { label: r.label, description: r.description }]),
+  );
 
   const now = Date.now();
   const since7 = new Date(now - 7 * 86_400_000);
@@ -121,6 +141,7 @@ export async function getMembershipMissions(userId: string): Promise<MembershipM
         unit: 'visitas',
         done: visits >= 3,
         badge: { id: 'EXPLORER', label: 'Explorador', color: '#22D3EE' },
+        reward: sub.businessId ? rewardMap.get(`${sub.businessId}|VISITS_WEEK`) ?? null : null,
       },
       {
         id: 'BENEFITS_MONTH',
@@ -131,6 +152,7 @@ export async function getMembershipMissions(userId: string): Promise<MembershipM
         unit: 'beneficios',
         done: benefitsUsed >= 2,
         badge: { id: 'REGULAR', label: 'Constante', color: '#A855F7' },
+        reward: sub.businessId ? rewardMap.get(`${sub.businessId}|BENEFITS_MONTH`) ?? null : null,
       },
       {
         id: 'RENEWAL',
@@ -141,6 +163,7 @@ export async function getMembershipMissions(userId: string): Promise<MembershipM
         unit: 'renovaciones',
         done: renewals >= 2,
         badge: { id: 'VETERAN', label: 'Veterano', color: '#FFD166' },
+        reward: sub.businessId ? rewardMap.get(`${sub.businessId}|RENEWAL`) ?? null : null,
       },
     ];
 

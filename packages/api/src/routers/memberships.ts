@@ -8,6 +8,7 @@ import {
   preferenceNudges,
   wishlistGifts,
   wishlistItems,
+  membershipMissionRewards,
   membershipPlans,
   membershipPlanVersions,
   membershipSubscriptions,
@@ -1807,6 +1808,163 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         },
         topBenefits: topBenefits.map((b) => ({ type: b.type, count: Number(b.count) })),
       };
+    }),
+
+  /** Admin: premios tangibles configurados por reto de membresía. */
+  listMissionRewards: posProcedure
+    .input(z.object({ businessId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+      const rows = await ctx.coreDb
+        .select()
+        .from(membershipMissionRewards)
+        .where(eq(membershipMissionRewards.businessId, input.businessId));
+      return rows;
+    }),
+
+  /** Admin: define/edita el premio de un reto (no emite Bunz). */
+  setMissionReward: posProcedure
+    .input(
+      z.object({
+        businessId: z.string().uuid(),
+        missionId: z.enum(["VISITS_WEEK", "BENEFITS_MONTH", "RENEWAL"]),
+        label: z.string().min(2).max(80),
+        description: z.string().max(200).optional(),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+      const [row] = await ctx.coreDb
+        .insert(membershipMissionRewards)
+        .values({
+          businessId: input.businessId,
+          missionId: input.missionId,
+          label: input.label.trim(),
+          description: input.description?.trim() || null,
+          isActive: input.isActive ?? true,
+        })
+        .onConflictDoUpdate({
+          target: [membershipMissionRewards.businessId, membershipMissionRewards.missionId],
+          set: {
+            label: input.label.trim(),
+            description: input.description?.trim() || null,
+            isActive: input.isActive ?? true,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+
+      if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo guardar el premio" });
+
+      try {
+        const subs = await ctx.coreDb
+          .select({ userId: membershipSubscriptions.userId })
+          .from(membershipSubscriptions)
+          .where(
+            and(
+              eq(membershipSubscriptions.businessId, input.businessId),
+              eq(membershipSubscriptions.status, "ACTIVE"),
+            ),
+          )
+          .limit(200);
+
+        const [biz] = await ctx.coreDb
+          .select({ name: ownedBusinesses.name })
+          .from(ownedBusinesses)
+          .where(eq(ownedBusinesses.id, input.businessId))
+          .limit(1);
+
+        for (const sub of subs) {
+          await miniappClient.sendNotification({
+            userId: sub.userId,
+            title: "🎁 Nuevo premio en tus retos",
+            message: `${biz?.name ?? "Tu negocio"} definió un premio para un reto de membresía: "${row.label}". Ábrelo en Gamificación.`,
+            type: "MEMBERSHIP_RENEWED",
+            route: "/profile/gamification",
+            dedupeKey: `mission_reward:${row.id}:${sub.userId}`,
+          } as never);
+        }
+      } catch (notifyErr) {
+        console.warn("[memberships] aviso de premio de reto falló:", notifyErr);
+      }
+
+      return row;
+    }),
+
+  /** Admin: insignias de retos ganadas por sus miembros (agregado). */
+  missionBadges: posProcedure
+    .input(z.object({ businessId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      await assertBusinessOwner(ctx, input.businessId);
+
+      const subs = await ctx.coreDb
+        .select({
+          id: membershipSubscriptions.id,
+          userId: membershipSubscriptions.userId,
+          createdAt: membershipSubscriptions.createdAt,
+          interval: membershipPlanVersions.billingInterval,
+        })
+        .from(membershipSubscriptions)
+        .leftJoin(membershipPlanVersions, eq(membershipPlanVersions.id, membershipSubscriptions.planVersionId))
+        .where(
+          and(
+            eq(membershipSubscriptions.businessId, input.businessId),
+            eq(membershipSubscriptions.status, "ACTIVE"),
+          ),
+        );
+
+      if (subs.length === 0) return { explorer: 0, regular: 0, veteran: 0, members: 0 };
+
+      const since7 = new Date(Date.now() - 7 * 86_400_000);
+      const since30 = new Date(Date.now() - 30 * 86_400_000);
+
+      const usageRows = await ctx.coreDb
+        .select({
+          subscriptionId: entitlementUsages.subscriptionId,
+          units: sql<number>`COALESCE(SUM(${entitlementUsages.quantityUsed}), 0)::int`,
+        })
+        .from(entitlementUsages)
+        .where(gte(entitlementUsages.redeemedAt, since30))
+        .groupBy(entitlementUsages.subscriptionId);
+      const unitsBySub = new Map(usageRows.map((r) => [r.subscriptionId, Number(r.units)]));
+
+      const usageDays = await ctx.coreDb
+        .select({
+          subscriptionId: entitlementUsages.subscriptionId,
+          day: sql<string>`to_char(${entitlementUsages.redeemedAt}, 'YYYY-MM-DD')`,
+        })
+        .from(entitlementUsages)
+        .where(gte(entitlementUsages.redeemedAt, since7));
+      const daysBySub = new Map<string, Set<string>>();
+      for (const row of usageDays) {
+        const set = daysBySub.get(row.subscriptionId) ?? new Set<string>();
+        set.add(row.day);
+        daysBySub.set(row.subscriptionId, set);
+      }
+
+      const monthsOf = (interval?: string | null) =>
+        interval === "QUARTERLY" ? 3 : interval === "SEMIANNUAL" ? 6 : interval === "ANNUAL" || interval === "YEARLY" ? 12 : 1;
+
+      let explorer = 0;
+      let regular = 0;
+      let veteran = 0;
+
+      for (const sub of subs) {
+        const days = daysBySub.get(sub.id)?.size ?? 0;
+        if (days >= 3) explorer += 1;
+        if ((unitsBySub.get(sub.id) ?? 0) >= 2) regular += 1;
+        const renewals = Math.max(
+          0,
+          Math.floor(
+            ((Date.now() - new Date(sub.createdAt as unknown as string).getTime()) / (30.44 * 86_400_000)) /
+              monthsOf(sub.interval),
+          ),
+        );
+        if (renewals >= 2) veteran += 1;
+      }
+
+      return { explorer, regular, veteran, members: subs.length };
     }),
 
   /**

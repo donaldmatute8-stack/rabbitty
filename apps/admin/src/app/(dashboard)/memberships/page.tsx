@@ -401,6 +401,8 @@ export default function MembershipsPage() {
         </section>
       )}
 
+      {enabled && <MissionRewardsCard businessId={businessId} />}
+
       {enabled && <ReferralProgramCard businessId={businessId} />}
 
       {enabled && tab === "plans" && (
@@ -1544,5 +1546,92 @@ function ReferralProgramCard({ businessId }: { businessId: string }) {
         {save.isPending ? "Guardando…" : "Guardar programa de referidos"}
       </Button>
     </div>
+  );
+}
+
+/**
+ * Premios tangibles de los retos de membresía + insignias ganadas.
+ * El premio lo define el negocio (upgrade, prioridad, cortesía). No emite Bunz.
+ */
+function MissionRewardsCard({ businessId }: { businessId: string }) {
+  const utils = trpc.useUtils();
+  const { data: rewards } = trpc.memberships.listMissionRewards.useQuery({ businessId });
+  const { data: badges } = trpc.memberships.missionBadges.useQuery({ businessId });
+
+  const MISSIONS = [
+    { id: "VISITS_WEEK" as const, name: "Visita 3 veces esta semana", badge: "Explorador" },
+    { id: "BENEFITS_MONTH" as const, name: "Usa 2 beneficios este mes", badge: "Constante" },
+    { id: "RENEWAL" as const, name: "Sostén tu membresía", badge: "Veterano" },
+  ];
+
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const r of rewards ?? []) next[r.missionId] = r.label;
+    setDrafts(next);
+  }, [rewards]);
+
+  const save = trpc.memberships.setMissionReward.useMutation({
+    onSuccess: () => {
+      toast.success("Premio guardado");
+      utils.memberships.listMissionRewards.invalidate({ businessId });
+      utils.memberships.missionBadges.invalidate({ businessId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4">
+      <div>
+        <h2 className="text-sm font-bold text-white m-0">Retos de membresía</h2>
+        <p className="text-[11px] text-white/45 m-0 mt-0.5">
+          Elige el premio tangible de cada reto. Los clientes lo ven en Gamificación; no emite Bunz.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {MISSIONS.map((m) => (
+          <div key={m.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="m-0 text-[12.5px] font-bold text-white truncate">{m.name}</p>
+                <p className="m-0 mt-0.5 text-[10.5px] text-white/40">Insignia: {m.badge}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-1 justify-end">
+                <input
+                  value={drafts[m.id] ?? ""}
+                  onChange={(e) => setDrafts((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                  placeholder="Premio (ej. Upgrade de tamaño)"
+                  className="w-full max-w-64 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-[11.5px] text-white outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={save.isPending || !(drafts[m.id] ?? "").trim()}
+                  onClick={() => save.mutate({ businessId, missionId: m.id, label: (drafts[m.id] ?? "").trim() })}
+                  className="shrink-0 rounded-lg bg-[#E91E63] px-3 py-1.5 text-[11px] font-black text-white disabled:opacity-40"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/50">
+        <span className="font-bold uppercase tracking-wider text-white/35">Insignias otorgadas</span>
+        <span className="rounded-full px-2 py-0.5" style={{ color: "#22D3EE", background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.35)" }}>
+          Explorador {badges?.explorer ?? 0}
+        </span>
+        <span className="rounded-full px-2 py-0.5" style={{ color: "#A855F7", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.35)" }}>
+          Constante {badges?.regular ?? 0}
+        </span>
+        <span className="rounded-full px-2 py-0.5" style={{ color: "#FFD166", background: "rgba(255,209,102,0.12)", border: "1px solid rgba(255,209,102,0.35)" }}>
+          Veterano {badges?.veteran ?? 0}
+        </span>
+        <span className="ml-1">de {badges?.members ?? 0} socios activos</span>
+      </div>
+    </section>
   );
 }

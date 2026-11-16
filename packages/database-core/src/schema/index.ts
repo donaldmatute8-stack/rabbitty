@@ -1285,6 +1285,23 @@ export const preferenceNudges = pgTable("preference_nudges", {
  * Vale de regalo prepagado (Fase 3). Se paga con Stripe Connect al negocio
  * (comisión 8 % de plataforma) y se canjea en caja con el código.
  */
+/**
+ * Premio tangible por reto de membresía (definido por el negocio).
+ * No emite Bunz: es un gesto en mostrador (upgrade, prioridad, cortesía).
+ */
+export const membershipMissionRewards = pgTable("membership_mission_rewards", {
+  id: id(),
+  businessId: text("businessId").notNull().references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  /** VISITS_WEEK | BENEFITS_MONTH | RENEWAL */
+  missionId: text("missionId").notNull(),
+  label: text("label").notNull(),
+  description: text("description"),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("mission_rewards_uq").on(t.businessId, t.missionId),
+]);
+
 export const wishlistGifts = pgTable("wishlist_gifts", {
   id: id(),
   itemId: uuid("itemId").notNull().references(() => wishlistItems.id, { onDelete: "cascade" }),

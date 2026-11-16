@@ -284,3 +284,17 @@ Documento: `DOCS/GAMIFICACION-CUADRE.md`.
 - **Fórmula única**: sin campaña `total = floor(base × nivel) + bono`; con campaña
   flash se usa la campaña y **no** se apila nivel ni bono. El bono siempre se
   calcula sobre el base sin nivel.
+
+### 12. Premios de retos, insignias y contabilidad GOD (2026-11-16)
+
+- **Premio tangible por reto**: tabla `membership_mission_rewards` (migración `0015`), editable
+  por el afiliado en **Admin → Memberships → Retos de membresía**. El cliente lo ve en
+  Gamificación como “🎁 premio”. No emite Bunz (regla del cuadre).
+- **Insignias otorgadas**: `memberships.missionBadges` agrega Explorador/Constante/Veterano
+  por negocio y se muestra en la misma tarjeta.
+- **Contabilidad GOD**: `god.getLoyaltyAccounting` + tarjeta en **God → Economía → Resumen**:
+  MRR, socios activos, bono de 30 días contra pozo, vales pagados/canjeados/reembolsados y
+  comisión estimada del 8 %.
+- Al guardar un premio se avisa a los socios activos del negocio (dedupe por premio+socio).
+
+**Pendiente**: CRUD de logros globales en GOD, listas por insignia (quién la ganó) y A/B del aviso.

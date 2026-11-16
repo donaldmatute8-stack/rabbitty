@@ -275,6 +275,7 @@ export default function GodEconomyPage() {
 
       {tab === "resumen" && (
         <div className="space-y-4">
+          <LoyaltyAccountingCard />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Card className="p-4 bg-white/5 border-white/10">
               <p className="text-[10px] uppercase font-black tracking-[0.16em] text-gray-500">Ledger</p>
@@ -651,5 +652,85 @@ export default function GodEconomyPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/**
+ * Contabilidad de lealtad y lista de deseos (GOD, solo lectura).
+ * Responde: cuánto MRR hay, cuánto bono se pagó contra el pozo, y cuánto
+ * volumen de vales está pendiente, canjeado o reembolsado (con la comisión 8 %).
+ */
+function LoyaltyAccountingCard() {
+  const [data, setData] = useState<{
+    memberships: { active: number; issued: number; mrr: number };
+    loyalty: { bonusLast30d: number; poolMonthly: number };
+    wishlist: {
+      activeWishes: number;
+      vouchers: Record<string, { count: number; amount: number }>;
+      platformFeesRedeemed: number;
+      pendingVolume: number;
+      refundedVolume: number;
+    };
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const d = await godQuery("god.getLoyaltyAccounting");
+        if (alive) setData(d);
+      } catch {
+        /* silencioso: la tarjeta es informativa */
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (loading) return <Card className="p-4 bg-white/5 border-white/10 text-xs text-gray-400">Cargando lealtad y deseos…</Card>;
+  if (!data) return null;
+
+  const paid = data.wishlist.vouchers.PAID ?? { count: 0, amount: 0 };
+  const redeemed = data.wishlist.vouchers.REDEEMED ?? { count: 0, amount: 0 };
+  const poolUse = data.loyalty.poolMonthly > 0
+    ? Math.round((data.loyalty.bonusLast30d / Math.max(1, data.loyalty.poolMonthly)) * 100)
+    : null;
+
+  return (
+    <Card className="p-4 bg-white/5 border-white/10">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[11px] font-black uppercase tracking-[0.16em] text-gray-500 m-0">Lealtad y lista de deseos</h3>
+        <Link href="/memberships" className="text-[10px] font-bold text-[#FF7DBB] hover:underline">Ver membresías →</Link>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+          <p className="text-[9px] uppercase font-black tracking-[0.14em] text-emerald-300/60 m-0">MRR</p>
+          <p className="text-lg font-black text-emerald-300 m-0">${Math.round(data.memberships.mrr).toLocaleString()}</p>
+          <p className="text-[10px] text-gray-500 m-0">{data.memberships.active} socios activos</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-[9px] uppercase font-black tracking-[0.14em] text-gray-500 m-0">Bono 30 d</p>
+          <p className="text-lg font-black text-white m-0">{data.loyalty.bonusLast30d.toLocaleString()} B</p>
+          <p className="text-[10px] text-gray-500 m-0">
+            pozo {data.loyalty.poolMonthly.toLocaleString()} B{poolUse == null ? "" : ` · ${poolUse}%`}
+          </p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-[9px] uppercase font-black tracking-[0.14em] text-gray-500 m-0">Vales pagados</p>
+          <p className="text-lg font-black text-white m-0">${paid.amount.toLocaleString()}</p>
+          <p className="text-[10px] text-gray-500 m-0">{paid.count} pendientes de canje</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-[9px] uppercase font-black tracking-[0.14em] text-gray-500 m-0">Canjeado</p>
+          <p className="text-lg font-black text-white m-0">${redeemed.amount.toLocaleString()}</p>
+          <p className="text-[10px] text-gray-500 m-0">
+            comisión ${data.wishlist.platformFeesRedeemed.toLocaleString()} · reembolsado ${data.wishlist.refundedVolume.toLocaleString()}
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }
