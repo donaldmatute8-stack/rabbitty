@@ -19,6 +19,9 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { phone, amount_usd, order_id, business_id } = body;
+    // Una conciliación corrige un acreditado previo; el mensaje al Rabbitter
+    // debe decir eso y no "recibiste Bunz por tu compra".
+    const isReconciliation = body.source === "reconciliation" || body.source === "RECONCILIATION";
 
     if (!phone || !amount_usd) {
       return NextResponse.json({ error: "Missing phone or amount_usd" }, { status: 400 });
@@ -331,8 +334,12 @@ export async function POST(request: Request) {
       // bloquea el UNIQUE de la outbox) — la tormenta de "8 Bunz" al pagar.
       await sendEcosystemNotification({
         userId: existingUser.id,
-        title: `✨ ¡Recibiste +${bunzToMint.toLocaleString()} Bunz!`,
-        message: `Por tu compra de $${amount_usd} en caja se han acreditado ${bunzToMint.toLocaleString()} Bunz a tu cuenta.`,
+        title: isReconciliation
+          ? `✅ Tus Bunz ya han sido actualizados`
+          : `✨ ¡Recibiste +${bunzToMint.toLocaleString()} Bunz!`,
+        message: isReconciliation
+          ? `Se corrigió el acreditado de tu compra de $${amount_usd}: +${bunzToMint.toLocaleString()} Bunz ya están en tu cuenta. Tu saldo se actualizó.`
+          : `Por tu compra de $${amount_usd} en caja se han acreditado ${bunzToMint.toLocaleString()} Bunz a tu cuenta.`,
         type: 'REWARD',
         route: '/profile/wallet',
         pushData: { bunzAmount: bunzToMint, orderId: order_id || '' },

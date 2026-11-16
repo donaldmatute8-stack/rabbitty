@@ -209,7 +209,7 @@ export const reconciliationRouter = router({
         if (!secret || !process.env.RABBITTY_MINIAPP_URL) {
           throw new Error("RABBITTY_MINIAPP_URL/RABBITTY_API_SECRET no configurados en admin");
         }
-        const res = await miniappClient.rewardBunz(phone, Number(order?.total || 0), req.orderId, req.businessId);
+        const res = await miniappClient.rewardBunz(phone, Number(order?.total || 0), req.orderId, req.businessId, "reconciliation");
         if (!res?.success) throw new Error(res?.message || "El mint no confirmó éxito");
 
         // Verificación contable: el ledger DEBE tener el movimiento

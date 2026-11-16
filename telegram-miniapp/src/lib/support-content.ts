@@ -13,6 +13,14 @@ export const FAQS: FaqItem[] = [
     a: '¡Es automático! Cada vez que pagas en un restaurante o negocio con el sistema Rabbitty POS, muestras el código QR de tu billetera o das tu número de teléfono. El cajero lo escanea y un porcentaje de tu cuenta se regresa en Bunz, conforme a la recompensa publicada por el negocio.',
   },
   {
+    q: 'Pagué y no me llegaron mis Bunz, ¿qué hago?',
+    a: 'Avisa en el negocio con tu ticket (folio RBBTY). El comercio abre una **conciliación** desde su panel: ahí se compara lo que la orden debía acreditar contra lo que realmente se acreditó. Si estás de acuerdo, el negocio la aprueba y el equipo Rabbitty autoriza la entrega; los Bunz se acreditan con la misma llave de la orden original, así que **nunca se duplican**. Te llega una notificación diciendo “Tus Bunz ya han sido actualizados” con el monto corregido.',
+  },
+  {
+    q: '¿Qué es una conciliación de Bunz?',
+    a: 'Es el mecanismo para corregir un acreditado que no cuadra (se cobró y no se emitieron Bunz, o se emitió de menos). Tiene dos pasos: el negocio revisa y decide, y Rabbitty autoriza la entrega. Queda registrada en la bitácora con quién, cuándo y cuánto. Sirve para que el ajuste no dependa de “un favor” por mensaje: queda auditado y visible para el comensal en su billetera.',
+  },
+  {
     q: '¿Tienen fecha de vencimiento?',
     a: 'Los Bunz en tu cuenta registrada no vencen. Sin embargo, si un negocio te emite Bunz a tu número telefónico y aún no has creado tu cuenta (Bóveda Temporal), tienes 3 meses para registrarte antes de que expiren.',
   },

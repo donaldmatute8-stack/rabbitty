@@ -132,10 +132,22 @@ export interface NotificationResult {
 }
 
 export const miniappClient = {
-  async rewardBunz(phone: string, amountUsd: number, orderId?: string, businessId?: string): Promise<RewardResult> {
+  /**
+   * Acredita Bunz. `source` distingue una compra normal de una conciliación:
+   * el mensaje al Rabbitter debe ser distinto ("tus Bunz ya se actualizaron"
+   * en vez de "recibiste Bunz por tu compra"), porque en una conciliación la
+   * compra ya ocurrió y lo que se corrige es el acreditado.
+   */
+  async rewardBunz(
+    phone: string,
+    amountUsd: number,
+    orderId?: string,
+    businessId?: string,
+    source: "rabbitty_pos" | "reconciliation" = "rabbitty_pos",
+  ): Promise<RewardResult> {
     return fetchApi("/api/pos/reward", {
       method: "POST",
-      body: JSON.stringify({ phone, amount_usd: amountUsd, order_id: orderId, business_id: businessId, source: "rabbitty_pos" }),
+      body: JSON.stringify({ phone, amount_usd: amountUsd, order_id: orderId, business_id: businessId, source }),
     });
   },
 
