@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/db';
-import { wishlistItems, wishlistPledges, wishlistShares, wishlists } from '@/db/schema';
+import { wishlistGifts, wishlistItems, wishlistPledges, wishlistShares, wishlists } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export const runtime = 'nodejs';
@@ -46,11 +46,43 @@ export async function GET(req: NextRequest) {
       : [];
     const countByItem = new Map(pledgeCounts.map((p) => [p.itemId, Number(p.count)]));
 
+    // Vales recibidos (para mis deseos) y enviados (regalos que hice)
+    const itemIds = items.map((i) => i.id);
+    const received = itemIds.length
+      ? await db
+          .select({
+            id: wishlistGifts.id,
+            itemId: wishlistGifts.itemId,
+            status: wishlistGifts.status,
+            amount: wishlistGifts.amount,
+            voucherCode: wishlistGifts.voucherCode,
+            expiresAt: wishlistGifts.expiresAt,
+          })
+          .from(wishlistGifts)
+          .where(and(inArray(wishlistGifts.itemId, itemIds), inArray(wishlistGifts.status, ['PAID', 'REDEEMED'])))
+      : [];
+
+    const sent = await db
+      .select({
+        id: wishlistGifts.id,
+        itemId: wishlistGifts.itemId,
+        status: wishlistGifts.status,
+        amount: wishlistGifts.amount,
+        voucherCode: wishlistGifts.voucherCode,
+        title: wishlistItems.title,
+      })
+      .from(wishlistGifts)
+      .innerJoin(wishlistItems, eq(wishlistItems.id, wishlistGifts.itemId))
+      .where(eq(wishlistGifts.giverId, caller.id))
+      .orderBy(desc(wishlistGifts.createdAt))
+      .limit(20);
+
     return NextResponse.json({
       success: true,
       wishlist: list,
       items: items.map((i) => ({ ...i, pledges: countByItem.get(i.id) ?? 0 })),
       shares,
+      gifts: { received, sent },
     });
   } catch (err) {
     console.error('[wishlist] GET error:', err);

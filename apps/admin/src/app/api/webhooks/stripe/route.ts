@@ -299,6 +299,80 @@ export async function POST(req: Request) {
         }
 
         // ── Membresías one-time: pago único, vigencia de 12 meses ──
+        // ── Lista de deseos: vale de regalo prepagado ──
+        if (meta.kind === "WISHLIST_GIFT" && session.mode === "payment") {
+          const coreDb = getCoreDb();
+          const { wishlistGifts, wishlistItems, notificationsOutbox } = await import("@rabbitty/database-core/schema");
+          const giftId = String(meta.giftId || "");
+          if (giftId) {
+            const [gift] = await coreDb
+              .select()
+              .from(wishlistGifts)
+              .where((await import("drizzle-orm")).eq(wishlistGifts.id, giftId))
+              .limit(1);
+
+            if (gift && gift.status === "PENDING") {
+              const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+              const code = Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+              const expiresAt = new Date(Date.now() + 60 * 86_400_000);
+
+              await coreDb
+                .update(wishlistGifts)
+                .set({
+                  status: "PAID",
+                  voucherCode: code,
+                  paidAt: new Date(),
+                  providerPaymentIntentId: session.payment_intent ? String(session.payment_intent) : null,
+                  expiresAt,
+                  updatedAt: new Date(),
+                })
+                .where((await import("drizzle-orm")).eq(wishlistGifts.id, gift.id));
+
+              await coreDb
+                .update(wishlistItems)
+                .set({ status: "GIFTED", updatedAt: new Date() })
+                .where((await import("drizzle-orm")).eq(wishlistItems.id, gift.itemId));
+
+              const [item] = await coreDb
+                .select({ title: wishlistItems.title, wishlistId: wishlistItems.wishlistId })
+                .from(wishlistItems)
+                .where((await import("drizzle-orm")).eq(wishlistItems.id, gift.itemId))
+                .limit(1);
+
+              if (meta.recipientId) {
+                await coreDb
+                  .insert(notificationsOutbox)
+                  .values({
+                    userId: String(meta.recipientId),
+                    type: "WISHLIST_GIFTED",
+                    title: "🎁 Te regalaron algo de tu lista",
+                    message: `Tienes un vale para "${item?.title ?? "tu deseo"}". Muestra el código ${code} en caja.`,
+                    route: "/profile/wishlist",
+                    data: { giftId: gift.id, code },
+                    dedupeKey: `wishlist_gift_paid:${gift.id}`,
+                    priority: "high",
+                  })
+                  .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+              }
+              if (meta.giverId) {
+                await coreDb
+                  .insert(notificationsOutbox)
+                  .values({
+                    userId: String(meta.giverId),
+                    type: "WISHLIST_GIFTED",
+                    title: "✅ Tu regalo está listo",
+                    message: `Le enviamos el código ${code} a ${item?.title ?? "su deseo"}. Le avisamos para que lo recoja.`,
+                    route: "/profile/wishlist",
+                    data: { giftId: gift.id },
+                    dedupeKey: `wishlist_gift_giver:${gift.id}`,
+                    priority: "normal",
+                  })
+                  .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+              }
+            }
+          }
+        }
+
         if (meta.kind === "MEMBERSHIP_ONE_TIME" && session.mode === "payment") {
           const coreDb = getCoreDb();
           const [dup] = await coreDb

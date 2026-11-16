@@ -24,7 +24,7 @@ import {
   mapUberStatus,
   type UberAddress,
 } from "../services/uberDirect";
-import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages, userPreferences as coreUserPreferences } from "@rabbitty/database-core/schema";
+import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages, userPreferences as coreUserPreferences, wishlistGifts as coreWishlistGifts, wishlistItems as coreWishlistItems } from "@rabbitty/database-core/schema";
 /** Split DIVIDIDA activo? */
 function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolean {
   return typeof input.splitBunz === "number" && input.splitBunz > 0;
@@ -3200,6 +3200,57 @@ export const posRouter = router({
         loyaltyBonus: awardedLoyaltyBunz,
         rewardQueued: (totalAwardedBunz > 0) || Boolean((order as any)?.bunzReward && (order as any).bunzReward > 0),
         claimToken,
+      };
+    }),
+
+  /**
+   * Canjear un vale de regalo de la lista de deseos (POS).
+   * Valida que el vale sea de este negocio, que esté pagado y no canjeado.
+   */
+  redeemWishlistGift: posProcedure
+    .input(z.object({ code: z.string().min(4).max(16) }))
+    .mutation(async ({ ctx, input }) => {
+      const businessId = (await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId)) || ctx.branchId;
+      const code = input.code.trim().toUpperCase();
+
+      const [row] = await ctx.coreDb
+        .select({
+          gift: coreWishlistGifts,
+          item: coreWishlistItems,
+        })
+        .from(coreWishlistGifts)
+        .innerJoin(coreWishlistItems, eq(coreWishlistItems.id, coreWishlistGifts.itemId))
+        .where(eq(coreWishlistGifts.voucherCode, code))
+        .limit(1);
+
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Vale no encontrado" });
+      if (row.item.businessId && row.item.businessId !== businessId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Ese vale es de otro negocio" });
+      }
+      if (row.gift.status === "REDEEMED") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Ese vale ya fue canjeado" });
+      }
+      if (row.gift.status !== "PAID") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Ese vale no está pagado" });
+      }
+      if (row.gift.expiresAt && new Date(row.gift.expiresAt) < new Date()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Ese vale está vencido" });
+      }
+
+      await ctx.coreDb
+        .update(coreWishlistGifts)
+        .set({ status: "REDEEMED", claimedAt: new Date(), updatedAt: new Date() })
+        .where(eq(coreWishlistGifts.id, row.gift.id));
+
+      await ctx.coreDb
+        .update(coreWishlistItems)
+        .set({ status: "PURCHASED", updatedAt: new Date() })
+        .where(eq(coreWishlistItems.id, row.item.id));
+
+      return {
+        success: true,
+        title: row.item.title,
+        amount: Number(row.gift.amount ?? 0),
       };
     }),
 

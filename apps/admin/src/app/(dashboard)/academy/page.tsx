@@ -17,6 +17,65 @@ interface Guide {
 
 const guides: Guide[] = [
   {
+    id: "memberships-wishlist",
+    icon: Gift,
+    label: "Membresías, lista de deseos y avisos",
+    desc: "Crea planes que se venden solos, regalos entre clientes y avisos que sí convierten",
+    role: "all",
+    content: `## Membresías, lista de deseos y avisos inteligentes
+
+### 1) Membresías (tu ingreso recurrente)
+
+1. **Admin → Memberships → Crear plan**: nombre, precio, periodicidad y beneficios
+   (consumo incluido, descuento %, crédito o acceso).
+2. **Publicar**: al publicar la versión el plan aparece en **Descubrir** de la app.
+   Si no quieres que se vea, apaga *Visible en el marketplace*.
+3. **Venta en caja**: en el POS elige el plan, cobra y la membresía queda activa al
+   instante (el cliente la ve en su Pass).
+4. **Canje**: el cliente muestra su pase; el POS lo escanea y **aplica los beneficios
+   automáticamente**. El consumo es atómico: no se puede canjear dos veces.
+5. **Ticket**: si la membresía cubre todo, **no imprime Bunz ni QR** (no hay compra que
+   recompensar). Si hay productos pagados además de la membresía, imprime el desglose
+   de pago y el QR de recompensa solo si no hubo crédito automático.
+
+**Métricas que debes mirar** (Admin → Memberships): miembros activos, MRR, churn 30d,
+retención 30d, renovaciones, canjes por socio y distribución Bronce/Plata/Oro.
+
+### 2) Bono de lealtad (crece con la antigüedad)
+
+- **Plata** (2-4 renovaciones): +10 % de Bunz sobre el cashback de esa compra.
+- **Oro** (5+): +20 %.
+- Se paga de un **pozo mensual** equivalente al 10 % del neto de esa membresía; si el
+  pozo se agota, no hay bono hasta el siguiente mes. **Nunca se emite Bunz sin respaldo.**
+- Cortesías y promociones **no** generan bono. El ticket imprime "Incluye +X Bunz por lealtad".
+
+### 3) Lista de deseos y regalos (nuevo canal de venta)
+
+- El cliente guarda deseos desde el **corazón de cada producto** o uno libre con monto.
+- Comparte su lista con **un grupo** (madriguera). Los miembros ven sus deseos.
+- **Me apunto**: alguien se compromete a regalarlo; al dueño le llega el aviso.
+- **Regalar pagando**: se cobra con Stripe (comisión 8 %) y el destinatario recibe un
+  **código**; se canjea en el POS con **Canjear vale**. Vence a los 60 días.
+- Caducidad de deseos: 90 días (se renueva al actualizar la lista).
+
+### 4) Avisos que sí convierten
+
+- **"Ya te alcanza"**: cuando el saldo del cliente cubre su favorito, y está en su
+  horario habitual o cerca. Máximo 1 por negocio cada 3 días, 3 por semana.
+- **"Hace 21 días que no vienes"**, **cumpleaños**, **promo sobre su favorito**.
+- El cliente debe **activar** el aviso en Ajustes → Notificaciones (opt-in explícito).
+- Respeta silencio 21:00–09:00 y no manda nada si la app está abierta (sale in-app).
+
+### 5) Lo que NO debes hacer
+
+- No prometas Bunz "por venir": solo se emiten por consumo pagado o bono con pozo.
+- No compartas listas de deseos de clientes: son privadas; tú solo ves el vale al canjear.
+- No cambies precios de un plan activo: crea una nueva versión (los miembros conservan
+  sus condiciones).
+`,
+  },
+
+  {
     id: "comandero",
     icon: Monitor,
     label: "Comandero digital y reloj checador",

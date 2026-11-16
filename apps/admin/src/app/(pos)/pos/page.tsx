@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock, MembershipCard } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -305,6 +305,17 @@ export default function PosPage() {
     currentRewardRate: number;
   } | null>(null);
   const [rabbitterModalOpen, setRabbitterModalOpen] = useState(false);
+  // Canje de vale de regalo (lista de deseos)
+  const [showGiftRedeem, setShowGiftRedeem] = useState(false);
+  const [giftCode, setGiftCode] = useState("");
+  const redeemGift = trpc.pos.redeemWishlistGift.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Vale canjeado: ${d.title}`);
+      setShowGiftRedeem(false);
+      setGiftCode("");
+    },
+    onError: (e) => toast.error(e.message),
+  });
   // Membresía detectada por QR: datos para el aviso grande y el ticket.
   const [detectedMembership, setDetectedMembership] = useState<any | null>(null);
   const [membershipModalOpen, setMembershipModalOpen] = useState(false);
@@ -2794,6 +2805,14 @@ export default function PosPage() {
                     >
                       <Search className="h-3 w-3" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowGiftRedeem(true)}
+                      className="flex items-center justify-center p-1 rounded-lg bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 transition-all cursor-pointer active:scale-95"
+                      title="Canjear vale de regalo"
+                    >
+                      <Gift className="h-3 w-3" />
+                    </button>
                   </div>
                 </div>
               )}
@@ -4556,6 +4575,35 @@ export default function PosPage() {
           </div>
         )}
       </Dialog>
+
+      {/* ── Canje de vale de regalo (lista de deseos) ── */}
+      {showGiftRedeem && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setShowGiftRedeem(false)}>
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#141016] p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="m-0 text-sm font-black text-white">Canjear vale de regalo</p>
+              <button type="button" onClick={() => setShowGiftRedeem(false)} className="text-white/40 hover:text-white">✕</button>
+            </div>
+            <p className="m-0 mb-3 text-[11px] text-white/45">Escribe el código que muestra el cliente (8 caracteres).</p>
+            <input
+              autoFocus
+              value={giftCode}
+              onChange={(e) => setGiftCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
+              placeholder="ABC12345"
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center text-lg font-black tracking-[0.25em] text-white outline-none"
+            />
+            <button
+              type="button"
+              disabled={giftCode.length < 4 || redeemGift.isPending}
+              onClick={() => redeemGift.mutate({ code: giftCode })}
+              className="mt-3 w-full rounded-2xl py-3 text-sm font-black text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)' }}
+            >
+              {redeemGift.isPending ? 'Canjeando…' : 'Canjear vale'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal de Identificación y Vinculación de Rabbitter ── */}
       <Dialog

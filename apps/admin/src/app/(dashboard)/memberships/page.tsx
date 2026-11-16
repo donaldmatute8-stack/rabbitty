@@ -274,6 +274,16 @@ export default function MembershipsPage() {
             </div>
           )}
 
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/60">
+            <span className="font-bold uppercase tracking-wider text-white/35">Lista de deseos</span>
+            <span><b className="text-white">{analytics.wishlist.active}</b> activos</span>
+            <span><b className="text-white">{analytics.wishlist.giftsPaid}</b> regalos pagados</span>
+            <span><b className="text-emerald-300">{analytics.wishlist.giftsRedeemed}</b> canjeados</span>
+            {analytics.wishlist.redeemedValue > 0 && (
+              <span className="text-emerald-300">${analytics.wishlist.redeemedValue.toLocaleString()} canjeado</span>
+            )}
+          </div>
+
           {analytics.topFavorites && analytics.topFavorites.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/45">
               <span className="font-bold uppercase tracking-wider text-white/35">Favoritos</span>

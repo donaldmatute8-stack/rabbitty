@@ -6,6 +6,8 @@ import { router, posProcedure, posPermission } from "../trpc";
 import {
   userPreferences,
   preferenceNudges,
+  wishlistGifts,
+  wishlistItems,
   membershipPlans,
   membershipPlanVersions,
   membershipSubscriptions,
@@ -1744,6 +1746,22 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         ? Math.round((favoriteMembers / favoriteUsers.length) * 1000) / 10
         : null;
 
+      // Lista de deseos (fase 3): deseos activos y vales de regalo
+      const [wishRow] = await ctx.coreDb
+        .select({ count: sql<number>`count(*)::int` })
+        .from(wishlistItems)
+        .where(and(eq(wishlistItems.businessId, input.businessId), eq(wishlistItems.status, "ACTIVE")));
+
+      const [giftRow] = await ctx.coreDb
+        .select({
+          paid: sql<number>`count(*) FILTER (WHERE ${wishlistGifts.status} = 'PAID')::int`,
+          redeemed: sql<number>`count(*) FILTER (WHERE ${wishlistGifts.status} = 'REDEEMED')::int`,
+          value: sql<number>`COALESCE(SUM(CASE WHEN ${wishlistGifts.status} = 'REDEEMED' THEN ${wishlistGifts.amount} ELSE 0 END), 0)`,
+        })
+        .from(wishlistGifts)
+        .innerJoin(wishlistItems, eq(wishlistItems.id, wishlistGifts.itemId))
+        .where(eq(wishlistItems.businessId, input.businessId));
+
       const nudgeSent = Number(nudgeRow?.sent ?? 0);
       const nudgeOpened = Number(nudgeRow?.opened ?? 0);
       const nudgeConverted = Number(nudgeRow?.converted ?? 0);
@@ -1769,6 +1787,12 @@ return await ctx.coreDb.transaction(async (tx: any) => {
         loyaltyTiers,
         topFavorites: topFavorites.map((f) => ({ label: f.label, members: Number(f.members) })),
         topCategories: topCategories.map((c) => ({ label: c.label, members: Number(c.members) })),
+        wishlist: {
+          active: Number(wishRow?.count ?? 0),
+          giftsPaid: Number(giftRow?.paid ?? 0),
+          giftsRedeemed: Number(giftRow?.redeemed ?? 0),
+          redeemedValue: Math.round(Number(giftRow?.value ?? 0)),
+        },
         weeklyDemand: demandRows.map((d) => ({
           label: d.label,
           unitsPerWeek: Math.round((Number(d.units) / 4) * 10) / 10,

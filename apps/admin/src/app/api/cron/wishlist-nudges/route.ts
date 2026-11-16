@@ -5,6 +5,7 @@ import {
   conversationMembers,
   notificationsOutbox,
   users,
+  wishlistGifts,
   wishlistItems,
   wishlistShares,
   wishlists,
@@ -58,6 +59,81 @@ export async function POST(req: NextRequest) {
 
     let birthdaysSent = 0;
     let refreshSent = 0;
+
+    // 1b) Vales de regalo vencidos (60 días sin canjear)
+    let giftsExpired = 0;
+    try {
+      const stale = await coreDb
+        .select({ id: wishlistGifts.id, giverId: wishlistGifts.giverId, itemId: wishlistGifts.itemId })
+        .from(wishlistGifts)
+        .where(and(eq(wishlistGifts.status, "PAID"), lt(wishlistGifts.expiresAt, now)))
+        .limit(200);
+
+      for (const g of stale) {
+        await coreDb
+          .update(wishlistGifts)
+          .set({ status: "EXPIRED", updatedAt: now })
+          .where(eq(wishlistGifts.id, g.id));
+        giftsExpired += 1;
+      }
+    } catch (giftErr) {
+      console.warn("[WISHLIST_NUDGES] vencimiento de vales:", giftErr);
+    }
+
+    // 1c) "Ya te alcanza para tu deseo": saldo >= precio × 1.05
+    let wishBalanceSent = 0;
+    try {
+      const candidates = await coreDb
+        .select({
+          itemId: wishlistItems.id,
+          userId: wishlists.userId,
+          title: wishlistItems.title,
+          price: wishlistItems.priceSnapshot,
+          balance: sql<number>`GREATEST(0, COALESCE(${users.totalBunzEarned}, 0) - COALESCE(${users.totalBunzSpent}, 0))`,
+          rules: users.pushRules,
+        })
+        .from(wishlistItems)
+        .innerJoin(wishlists, eq(wishlists.id, wishlistItems.wishlistId))
+        .innerJoin(users, eq(users.id, wishlists.userId))
+        .where(
+          and(
+            eq(wishlistItems.status, "ACTIVE"),
+            isNotNull(wishlistItems.priceSnapshot),
+            lt(wishlistItems.createdAt, new Date(Date.now() - 2 * 86_400_000)),
+          ),
+        )
+        .limit(200);
+
+      const week = `${now.getUTCFullYear()}-W${Math.ceil(now.getTime() / 86_400_000 / 7)}`;
+      for (const c of candidates) {
+        const price = Number(c.price ?? 0);
+        if (price <= 0) continue;
+        if (Number(c.balance ?? 0) < price * 1.05) continue;
+        let optedIn = false;
+        try {
+          optedIn = JSON.parse(String(c.rules ?? "{}"))?.favoriteAlerts === true;
+        } catch { optedIn = false; }
+        if (!optedIn) continue;
+        if (!(await canSendEngagement(coreDb, c.userId, 24))) continue;
+
+        await coreDb
+          .insert(notificationsOutbox)
+          .values({
+            userId: c.userId,
+            type: "WISHLIST_ADDED",
+            title: `Ya te alcanza para tu ${c.title}`,
+            message: `Tienes ${Math.round(Number(c.balance))} Bunz y tu deseo cuesta ${Math.round(price)}.`,
+            route: "/profile/wishlist",
+            data: { itemId: c.itemId, kind: "wishlist_balance" },
+            dedupeKey: `wishlist_balance:${c.itemId}:${week}`,
+            priority: "normal",
+          })
+          .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+        wishBalanceSent += 1;
+      }
+    } catch (balErr) {
+      console.warn("[WISHLIST_NUDGES] aviso de saldo:", balErr);
+    }
 
     // 2) Cumpleaños: avisar al grupo
     const birthdayLists = await coreDb
@@ -167,6 +243,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       expired: expired.length,
+      giftsExpired,
+      wishBalanceSent,
       birthdaysSent,
       refreshSent,
     });

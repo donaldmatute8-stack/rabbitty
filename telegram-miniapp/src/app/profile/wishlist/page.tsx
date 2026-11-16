@@ -40,6 +40,15 @@ interface Wishlist {
   birthdayAt: string | null;
 }
 
+interface GiftRow {
+  id: string;
+  itemId: string;
+  status: string;
+  amount: number;
+  voucherCode: string | null;
+  title?: string;
+}
+
 interface CircleItem {
   id: string;
   title: string;
@@ -69,6 +78,7 @@ export default function WishlistPage() {
   const [list, setList] = useState<Wishlist | null>(null);
   const [items, setItems] = useState<WishItem[]>([]);
   const [circle, setCircle] = useState<CircleItem[]>([]);
+  const [giftsReceived, setGiftsReceived] = useState<GiftRow[]>([]);
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [sharedGroupIds, setSharedGroupIds] = useState<string[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -93,6 +103,7 @@ export default function WishlistPage() {
       setItems(Array.isArray(data.items) ? data.items : []);
       setSharedGroupIds(Array.isArray(data.shares) ? data.shares.map((s: { groupId: string }) => s.groupId) : []);
       if (data.wishlist?.birthdayAt) setBirthday(String(data.wishlist.birthdayAt).slice(0, 10));
+      setGiftsReceived(Array.isArray(data.gifts?.received) ? data.gifts.received : []);
     }
   }, [authFetch]);
 
@@ -131,6 +142,11 @@ export default function WishlistPage() {
   }, [authFetch]);
 
   const activeItems = useMemo(() => items.filter((i) => i.status === 'ACTIVE'), [items]);
+  const giftByItem = useMemo(() => {
+    const map = new Map<string, GiftRow>();
+    for (const g of giftsReceived) map.set(g.itemId, g);
+    return map;
+  }, [giftsReceived]);
 
   const addWish = async () => {
     if (!title.trim()) return;
@@ -207,6 +223,22 @@ export default function WishlistPage() {
       await loadMine();
     } catch {
       showToast('No se pudo guardar', 'error');
+    }
+  };
+
+  const giftWithPayment = async (item: CircleItem) => {
+    try {
+      PlatformBridge.hapticFeedback('medium');
+      const res = await authFetch('/api/wishlist/gift/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item.id }),
+      });
+      const data = await res.json();
+      if (!data?.success || !data?.url) throw new Error(data?.error || 'No se pudo iniciar el pago');
+      window.location.href = data.url as string;
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo regalar', 'error');
     }
   };
 
@@ -347,6 +379,11 @@ export default function WishlistPage() {
                       <span className="text-[9.5px] text-(--text-muted)">
                         hasta {new Date(item.expiresAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
                       </span>
+                      {giftByItem.get(item.id)?.voucherCode && (
+                        <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-[9.5px] font-black text-amber-300">
+                          Vale {giftByItem.get(item.id)?.voucherCode}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <button
@@ -408,18 +445,30 @@ export default function WishlistPage() {
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => pledge(item)}
-                    className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-2xl py-2.5 text-[11.5px] font-black active:scale-[0.99]"
-                    style={
-                      item.iPledged
-                        ? { background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)' }
-                        : { background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)', color: '#fff' }
-                    }
-                  >
-                    {item.iPledged ? <><Check size={13} /> Ya me apunté</> : <><Gift size={13} /> Me apunto a regalarlo</>}
-                  </button>
+                  <div className="mt-2.5 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => pledge(item)}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl py-2.5 text-[11.5px] font-black active:scale-[0.99]"
+                      style={
+                        item.iPledged
+                          ? { background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(16,185,129,0.35)' }
+                          : { background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }
+                      }
+                    >
+                      {item.iPledged ? <><Check size={13} /> Ya me apunté</> : <><Gift size={13} /> Me apunto</>}
+                    </button>
+                    {item.priceSnapshot != null && Number(item.priceSnapshot) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => giftWithPayment(item)}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl py-2.5 text-[11.5px] font-black text-white active:scale-[0.99]"
+                        style={{ background: 'linear-gradient(135deg, #E91E63 0%, #8B5CF6 100%)' }}
+                      >
+                        <Sparkles size={13} /> Regalar ${Number(item.priceSnapshot).toFixed(0)}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

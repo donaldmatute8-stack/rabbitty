@@ -1281,6 +1281,31 @@ export const preferenceNudges = pgTable("preference_nudges", {
   convertedAt: timestamp("convertedAt"),
   dedupeKey: text("dedupeKey").notNull().unique(),
 });
+/**
+ * Vale de regalo prepagado (Fase 3). Se paga con Stripe Connect al negocio
+ * (comisión 8 % de plataforma) y se canjea en caja con el código.
+ */
+export const wishlistGifts = pgTable("wishlist_gifts", {
+  id: id(),
+  itemId: uuid("itemId").notNull().references(() => wishlistItems.id, { onDelete: "cascade" }),
+  giverId: text("giverId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  amount: real("amount").notNull(),
+  currency: text("currency").default("MXN").notNull(),
+  /** PENDING | PAID | REDEEMED | EXPIRED | REFUNDED */
+  status: text("status").default("PENDING").notNull(),
+  paymentProvider: text("paymentProvider"),
+  providerSessionId: text("providerSessionId"),
+  providerPaymentIntentId: text("providerPaymentIntentId"),
+  voucherCode: text("voucherCode").unique(),
+  paidAt: timestamp("paidAt"),
+  claimedAt: timestamp("claimedAt"),
+  expiresAt: timestamp("expiresAt"),
+  ...timestamps,
+}, (t) => [
+  index("wishlist_gifts_item_idx").on(t.itemId),
+  index("wishlist_gifts_code_idx").on(t.voucherCode),
+]);
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🔮 WEB2.5 - NOT ACTIVE

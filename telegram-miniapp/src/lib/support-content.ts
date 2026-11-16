@@ -120,6 +120,22 @@ export const FAQS: FaqItem[] = [
     q: '¿Qué pasa si se me vence la membresía?',
     a: 'Cuando termina tu periodo pagado, la membresía pasa a "Expirada" y deja de canjear. Puedes renovarte desde el perfil del negocio en cualquier momento.',
   },
+  {
+    q: '¿Cómo funcionan las membresías de Rabbitty?',
+    a: 'Una membresía es un plan de un negocio afiliado que te da beneficios durante tu ciclo: consumo incluido (por ejemplo un café al día), descuentos, crédito o acceso a eventos. Se compra desde la app en Descubrir o en caja; tu pase vive en Mis Membresías con un QR que el negocio escanea. Al escanearlo se aplican tus beneficios automáticamente y el sistema lleva la cuenta de la cuota: no puedes canjear dos veces el mismo beneficio.',
+  },
+  {
+    q: '¿Qué es el bono de lealtad y cómo lo gano?',
+    a: 'Es un extra de Bunz por mantener tu membresía. Con 2 a 4 renovaciones entras a Plata (+10 % sobre el cashback de tus compras) y con 5 o más a Oro (+20 %). No es emisión libre: se paga de un pozo mensual equivalente al 10 % del neto de tu membresía, así que si se agota se detiene hasta el siguiente mes. Las cortesías y promociones no generan bono.',
+  },
+  {
+    q: '¿Qué es la lista de deseos y cómo me regalan algo?',
+    a: 'En Perfil → Mi lista de deseos guardas lo que quieres de tus lugares (toca el corazón en un producto) o un deseo libre con monto. Puedes compartirla con un grupo de tu madriguera; ellos ven tus deseos y pueden "apuntarse" a regalarte o pagarlo de una vez: al pagar se genera un código que tú muestras en caja para recogerlo. Los deseos caducan a los 90 días y los vales a los 60.',
+  },
+  {
+    q: '¿Por qué no me llegan avisos de "ya te alcanza"?',
+    a: 'Porque son opt-in: actívalos en Ajustes → Notificaciones → "Avisarme cuando me alcance para mi favorito". Además solo se envían si tu saldo cubre el precio, si estás en tu horario habitual o cerca del local, máximo uno por negocio cada 3 días y tres por semana. Nunca llegan entre 21:00 y 09:00, ni como push si tienes la app abierta (salen in-app).',
+  },
 ];
 
 export const DOC_SECTIONS: { title: string; body: string }[] = [
@@ -196,6 +212,27 @@ export const DOC_SECTIONS: { title: string; body: string }[] = [
     title: 'Seguridad de Última Generación',
     body: 'Protección con biometría nativa (Face ID / Touch ID / WebAuthn), PIN local de 4 dígitos hasheado con PBKDF2 y sal criptográfica, y verificación en dos pasos (2FA) real mediante OTP por correo, SignalWire SMS o App Autenticadora TOTP.',
   },
+  {
+    title: 'Rabbitty Memberships — cómo opera por dentro',
+    body: 'Un negocio crea planes versionados (precio, periodicidad y beneficios). Al publicar una versión el plan aparece en Descubrir (marketplace) si está visible. La suscripción se paga con Stripe Connect (recurrente) o en caja (efectivo/promo). El pase del cliente lleva un QR firmado de 30 segundos; el POS lo escanea, resuelve sus beneficios y los aplica, y el canje es atómico e idempotente (no se duplica). El ticket no imprime Bunz ni QR cuando la membresía cubre todo; si hay productos pagados, imprime el desglose y el QR solo si no hubo crédito automático. Métricas: miembros activos, MRR, churn y retención a 30 días, renovaciones, canjes por socio y niveles Bronce/Plata/Oro.',
+  },
+  {
+    title: 'Bono de lealtad — regla económica',
+    body: 'El bono premia la antigüedad, no el gasto: Plata (2-4 renovaciones) suma 10 % y Oro (5+) 20 % sobre el cashback de una compra pagada. Se financia con un pozo mensual del 10 % del neto de la membresía (precio menos 8 % de comisión de plataforma); si el pozo se agota, no hay bono ese mes. No aplica a cortesías, invitaciones o promociones, ni a consumos cubiertos por la membresía. El ticket muestra "Incluye +X Bunz por lealtad". Los Bunz son fungibles y no vencen.',
+  },
+  {
+    title: 'Lista de deseos y regalos',
+    body: 'El cliente guarda deseos desde el corazón de un producto (con negocio, foto y precio) o como deseo libre con monto. La lista es privada; se comparte explícitamente con grupos de la madriguera. Otros miembros pueden "apuntarse" a regalar (compromiso) o pagar el regalo: se cobra con Stripe Connect al negocio con 8 % de comisión, se genera un código de 8 caracteres y el destinatario lo canjea en caja (POS → Canjear vale). El vale vence a los 60 días y los deseos a los 90. El negocio nunca ve la lista; solo ve el vale al canjear y métricas agregadas.',
+  },
+  {
+    title: 'Avisos inteligentes — qué se envía y cuándo',
+    body: 'Tipos: "ya te alcanza" (saldo cubre tu favorito, en tu franja o cerca), "hace 21 días que no vienes", cumpleaños (solo si compartiste tu lista), promo sobre tu favorito y "ya te alcanza para tu deseo". Todos son opt-in explícito en Ajustes → Notificaciones. Reglas: máximo un aviso de engagement al día, uno por negocio cada 72 horas, tres por semana, nada entre 21:00 y 09:00, y si la app está abierta el aviso sale in-app (no push duplicado). Los avisos transaccionales (pedidos, pagos, chat, seguridad) siempre llegan.',
+  },
+  {
+    title: 'Panel del afiliado — qué revisar cada semana',
+    body: 'En Admin → Memberships: miembros activos, MRR, churn y retención 30d, renovaciones, canjes por socio y niveles. En la tarjeta de lealtad: bono otorgado contra pozo disponible, órdenes bonificadas y detalle por socio. En preferencias: favoritos más comunes, categorías, demanda semanal por producto y % de quienes tienen favorito que son socios. En lista de deseos: deseos activos, regalos pagados y canjeados. En avisos: enviados, apertura y conversión. Si el consumo del pozo supera 90 % conviene ajustar el porcentaje; si la conversión es baja, revisar horarios y opt-in.',
+  },
+
 ];
 
 export const SUPPORT_QUICK_QUESTIONS: string[] = [

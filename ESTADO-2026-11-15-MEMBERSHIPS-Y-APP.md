@@ -238,3 +238,20 @@ caducidad 90 días.
 
 **Siguiente (fase 3)**: vale prepagado (Stripe/Bunz) con canje en POS y reembolso si no se
 canjea; promos sobre deseos (“tu deseo está en promo”) y “ya te alcanza”.
+
+### 10. Fase 3 de la lista de deseos (2026-11-16)
+
+- **Vale prepagado** (`wishlist_gifts`, migración `0014`): el giver paga con Stripe
+  Connect al negocio (comisión **8 %**), el webhook genera un **código de 8 caracteres**
+  y notifica al destinatario. Se canjea en el POS (**Canjear vale** → `pos.redeemWishlistGift`),
+  marca el deseo como `PURCHASED` y el vale como `REDEEMED`. Vence a **60 días**.
+- **“Me apunto”** sigue disponible: compromiso sin pago.
+- Avisos: “**ya te alcanza para tu deseo**” (saldo ≥ precio × 1.05, opt-in, pacing) y
+  vencimiento de vales en el cron `wishlist-nudges`.
+- **Analítica del negocio**: deseos activos, regalos pagados, canjeados y valor canjeado.
+- **Conocimiento**: guía nueva en Admin Academy (“Membresías, lista de deseos y avisos”)
+  y 4 FAQ + 5 secciones de documentación en el knowledge base de Bunzy
+  (`telegram-miniapp/src/lib/support-content.ts`), re-ingestadas con `/api/bunzy/kb`.
+
+**Pendiente**: reembolso automático de vales vencidos (hoy quedan `EXPIRED` y se avisa),
+promo automática sobre deseos de campañas flash, y A/B del aviso.
