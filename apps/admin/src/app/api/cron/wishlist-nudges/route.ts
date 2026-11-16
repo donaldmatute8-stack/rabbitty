@@ -11,6 +11,7 @@ import {
   wishlists,
 } from "@rabbitty/database-core";
 import { canSendEngagement } from "@rabbitty/api/services/notificationPacing";
+import { getStripeClient } from "@rabbitty/api/services/stripeConnect";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -64,17 +65,87 @@ export async function POST(req: NextRequest) {
     let giftsExpired = 0;
     try {
       const stale = await coreDb
-        .select({ id: wishlistGifts.id, giverId: wishlistGifts.giverId, itemId: wishlistGifts.itemId })
+        .select({
+          id: wishlistGifts.id,
+          giverId: wishlistGifts.giverId,
+          itemId: wishlistGifts.itemId,
+          amount: wishlistGifts.amount,
+          paymentIntentId: wishlistGifts.providerPaymentIntentId,
+          title: wishlistItems.title,
+          recipientId: wishlists.userId,
+        })
         .from(wishlistGifts)
+        .innerJoin(wishlistItems, eq(wishlistItems.id, wishlistGifts.itemId))
+        .innerJoin(wishlists, eq(wishlists.id, wishlistItems.wishlistId))
         .where(and(eq(wishlistGifts.status, "PAID"), lt(wishlistGifts.expiresAt, now)))
         .limit(200);
 
       for (const g of stale) {
+        // Reembolso automático al giver (el cargo fue directo a la cuenta del
+        // negocio con comisión): se reversa la transferencia y la comisión.
+        let refunded = false;
+        if (g.paymentIntentId) {
+          try {
+            const stripe = getStripeClient();
+            // La cuenta conectada se resuelve desde el propio payment intent.
+            const intent = await stripe.paymentIntents.retrieve(g.paymentIntentId, {
+              expand: ["transfer_data.destination"],
+            } as never);
+            const stripeAccount =
+              (intent as unknown as { transfer_data?: { destination?: string } }).transfer_data?.destination ?? undefined;
+            await stripe.refunds.create(
+              {
+                payment_intent: g.paymentIntentId,
+                refund_application_fee: true,
+                reverse_transfer: true,
+                reason: "requested_by_customer",
+                metadata: { kind: "WISHLIST_GIFT_EXPIRED", giftId: g.id },
+              },
+              stripeAccount ? { stripeAccount } : undefined,
+            );
+            refunded = true;
+          } catch (refundErr) {
+            console.warn("[WISHLIST_NUDGES] reembolso falló:", refundErr);
+          }
+        }
+
         await coreDb
           .update(wishlistGifts)
-          .set({ status: "EXPIRED", updatedAt: now })
+          .set({ status: refunded ? "REFUNDED" : "EXPIRED", updatedAt: now })
           .where(eq(wishlistGifts.id, g.id));
         giftsExpired += 1;
+
+        // Avisar al giver (dinero devuelto o pendiente de soporte)
+        await coreDb
+          .insert(notificationsOutbox)
+          .values({
+            userId: g.giverId,
+            type: "WISHLIST_GIFTED",
+            title: refunded ? "💸 Te devolvimos tu regalo" : "⚠️ Tu vale de regalo venció",
+            message: refunded
+              ? `El vale de "${g.title}" no se canjeó en 60 días. Reembolsamos ${Math.round(Number(g.amount))} MXN a tu método de pago.`
+              : `El vale de "${g.title}" no se canjeó y no pudimos reembolsarlo automáticamente. Escríbenos a soporte para resolverlo.`,
+            route: "/profile/wishlist",
+            data: { giftId: g.id, refunded },
+            dedupeKey: `wishlist_gift_expired:${g.id}`,
+            priority: "high",
+          })
+          .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+
+        // Avisar al destinatario (su vale ya no sirve)
+        await coreDb
+          .insert(notificationsOutbox)
+          .values({
+            userId: g.recipientId,
+            type: "WISHLIST_GIFTED",
+            title: "Tu vale de regalo venció",
+            message: `El vale de "${g.title}" no se canjeó a tiempo. Puedes pedirle a la persona que te lo regaló que lo intente de nuevo.`,
+            route: "/profile/wishlist",
+            data: { giftId: g.id },
+            dedupeKey: `wishlist_gift_expired_recipient:${g.id}`,
+            priority: "normal",
+          })
+          .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
       }
     } catch (giftErr) {
       console.warn("[WISHLIST_NUDGES] vencimiento de vales:", giftErr);

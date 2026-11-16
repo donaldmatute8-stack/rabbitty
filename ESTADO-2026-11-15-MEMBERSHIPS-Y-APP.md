@@ -253,5 +253,13 @@ canjea; promos sobre deseos (“tu deseo está en promo”) y “ya te alcanza�
   y 4 FAQ + 5 secciones de documentación en el knowledge base de Bunzy
   (`telegram-miniapp/src/lib/support-content.ts`), re-ingestadas con `/api/bunzy/kb`.
 
-**Pendiente**: reembolso automático de vales vencidos (hoy quedan `EXPIRED` y se avisa),
-promo automática sobre deseos de campañas flash, y A/B del aviso.
+**Reembolso automático (cerrado 2026-11-16)**: al vencer un vale (60 días) el cron intenta
+`refunds.create` con `refund_application_fee` + `reverse_transfer` en la cuenta conectada;
+si funciona queda `REFUNDED` y se avisa al giver, si no queda `EXPIRED` con aviso para soporte.
+También se avisa al destinatario.
+
+**Comunicados listos para enviar**: dos borradores en `bunzyBroadcasts`
+(`announce_wishlist_rabbitters_v1` → ALL_RABBITTERS y `announce_wishlist_affiliates_v1`
+→ ALL_AFFILIATES), categoría NEWS, para publicar desde Admin → God → Bunzy Connect.
+
+**Pendiente menor**: promo automática sobre deseos de campañas flash y A/B del aviso (en pausa).
