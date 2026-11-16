@@ -1,0 +1,128 @@
+name: Auto-rollback (watchdog de despliegue)
+
+# Vigila la salud del admin cada 10 minutos. Si un despliegue RECIÉN hecho dejó
+# el servicio insano, vuelve al commit anterior sin esperar a que alguien mire.
+#
+# Reglas (para no empeorar las cosas):
+#   1. Se requieren 2 lecturas fallidas de 3 (evita falsos positivos por red).
+#   2. Solo actúa si el despliegue tiene menos de 90 min (uptime bajo). Si el
+#      servicio lleva horas sano y de pronto falla, NO es el deploy: es otra cosa
+#      (base caída, proveedor) y revertir no ayuda — para eso está el aviso de
+#      invariantes.
+#   3. Un solo rollback por corrida; luego verifica y reporta.
+#
+# Requiere el secret RAILWAY_API_TOKEN (Account → Tokens en Railway).
+# Sin ese secret el workflow NO falla: avisa y se salta (no queremos un cron en
+# rojo permanente que todos ignoren).
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: auto-rollback
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: 9bd0f11b-264a-4de0-b3d6-e9074a1ee673
+  ENVIRONMENT: production
+  SERVICE: rabbitty-admin
+  HEALTH_URL: https://admin.rabbitty.me/api/health?strict=1
+
+jobs:
+  watchdog:
+    name: Salud + rollback si aplica
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Medir salud (3 lecturas)
+        id: probe
+        run: |
+          fails=0
+          uptime=""
+          commit=""
+          for i in 1 2 3; do
+            BODY=$(curl -sS -m 20 "$HEALTH_URL" 2>/dev/null || echo '{}')
+            STATUS=$(echo "$BODY" | jq -r '.status // "sin_respuesta"')
+            if [ "$STATUS" = "ok" ]; then
+              echo "lectura $i: ok"
+            else
+              echo "lectura $i: $STATUS"
+              fails=$((fails+1))
+            fi
+            uptime=$(echo "$BODY" | jq -r '.uptimeSec // empty')
+            commit=$(echo "$BODY" | jq -r '.commit // empty')
+            sleep 20
+          done
+          echo "fallos=$fails uptime=${uptime:-?} commit=${commit:-?}"
+          echo "fails=$fails" >> "$GITHUB_OUTPUT"
+          echo "uptime=${uptime:-0}" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Decidir
+        id: decide
+        run: |
+          FAILS="${{ steps.probe.outputs.fails }}"
+          UPTIME="${{ steps.probe.outputs.uptime }}"
+          if [ "$FAILS" -lt 2 ]; then
+            echo "Servicio sano (o fallo aislado). Nada que hacer."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "${UPTIME:-0}" -gt 5400 ]; then
+            echo "Insano, pero el despliegue tiene $((UPTIME/60)) min: no es el deploy."
+            echo "::warning::Salud degradada sin despliegue reciente — revisar base/proveedor."
+            echo "action=none" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Despliegue reciente ($((UPTIME/60)) min) e insano → rollback."
+          echo "action=rollback" >> "$GITHUB_OUTPUT"
+
+      - name: Instalar Railway CLI
+        if: steps.decide.outputs.action == 'rollback'
+        run: npm install -g @railway/cli
+
+      - name: Rollback al commit anterior
+        if: steps.decide.outputs.action == 'rollback'
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_API_TOKEN" ]; then
+            echo "::warning::Falta RAILWAY_API_TOKEN. Rollback OMITIDO. Agrégalo en Settings → Secrets → Actions."
+            exit 0
+          fi
+
+          railway link --project "$PROJECT_ID" --environment "$ENVIRONMENT" --service "$SERVICE"
+
+          CURRENT="${{ steps.probe.outputs.commit }}"
+          TARGET=$(railway deployment list --service "$SERVICE" --json \
+            | jq -r --arg cur "$CURRENT" '
+                [.[] | select(.status != "FAILED" and .status != "CRASHED")]
+                | map(select(.meta.commitHash != null))
+                | .[]
+                | select(.meta.commitHash[0:7] != $cur)
+                | .meta.commitHash' | head -n1)
+
+          if [ -z "$TARGET" ] || [ "$TARGET" = "null" ]; then
+            echo "::error::No encontré un commit anterior sano para volver."
+            exit 1
+          fi
+
+          echo "Rollback: $CURRENT → ${TARGET:0:7}"
+          railway redeploy --service "$SERVICE" --environment "$ENVIRONMENT" --commit "$TARGET" --yes
+
+      - name: Verificar resultado
+        if: steps.decide.outputs.action == 'rollback'
+        run: |
+          for i in $(seq 1 30); do
+            STATUS=$(curl -sS -m 20 "$HEALTH_URL" 2>/dev/null | jq -r '.status // "sin_respuesta"')
+            echo "intento $i: $STATUS"
+            [ "$STATUS" = "ok" ] && { echo "✔ Servicio recuperado con el commit anterior."; exit 0; }
+            sleep 20
+          done
+          echo "::error::El rollback no restauró la salud. Intervención manual requerida."
+          exit 1
