@@ -61,6 +61,23 @@ const baseOrder: Row = {
   bunzPaid: 0,
 };
 
+
+/**
+ * Stub de `select` para el `db` externo (fuera de la transacción).
+ * El código consulta `orders` después de liquidar (snapshot para ORDER_PAID y
+ * reconciliación de cashback); en estos tests eso debe devolver vacío, no
+ * reventar con "db.select is not a function".
+ */
+function emptySelect(): unknown {
+  const q: Record<string, unknown> = {};
+  q.from = () => q;
+  q.where = () => q;
+  q.orderBy = () => q;
+  q.limit = () => Promise.resolve([]);
+  q.for = () => Promise.resolve([]);
+  return q;
+}
+
 describe("P0-2 — solo se liquidan intents vigentes y órdenes abiertas", () => {
   it("rechaza un intent CANCELLED", async () => {
     const db = buildDb({ intent: { ...baseIntent, status: "CANCELLED" }, order: baseOrder });
@@ -175,6 +192,7 @@ describe("P0-2 — solo se liquidan intents vigentes y órdenes abiertas", () =>
       execute: vi.fn().mockResolvedValue(true),
     };
     const db = {
+      select: () => emptySelect() as never, // consultas fuera de la transacción
       transaction: async (cb: (t: unknown) => unknown) => {
         step = 0; // cada transacción reinicia el orden de selects
         return cb(tx);
@@ -244,7 +262,7 @@ describe("P0-2 — solo se liquidan intents vigentes y órdenes abiertas", () =>
       }),
       execute: vi.fn().mockResolvedValue(true),
     };
-    const db = { transaction: async (cb: (t: unknown) => unknown) => cb(tx) };
+    const db = { select: () => emptySelect() as never, transaction: async (cb: (t: unknown) => unknown) => cb(tx) };
 
     await expect(
       confirmPaymentIntentSettled(db as never, {
@@ -301,7 +319,7 @@ describe("P0-2 — solo se liquidan intents vigentes y órdenes abiertas", () =>
       insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(true) }),
       execute: vi.fn().mockResolvedValue(true),
     };
-    const db = { transaction: async (cb: (t: unknown) => unknown) => cb(tx) };
+    const db = { select: () => emptySelect() as never, transaction: async (cb: (t: unknown) => unknown) => cb(tx) };
 
     const res = await confirmPaymentIntentSettled(db as never, {
       paymentIntentId: "pi_1",

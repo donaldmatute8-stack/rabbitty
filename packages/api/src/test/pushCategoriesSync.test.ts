@@ -15,9 +15,9 @@ const ALL_TYPES = [
 ];
 
 describe("catálogo de categorías de push (v2.1)", () => {
-  it("las 6 categorías del plan existen", () => {
+  it("existen las 7 categorías del plan (favorites se sumó con las recomendaciones)", () => {
     expect(Object.values(PushCategory).sort()).toEqual(
-      ["chat", "marketing", "memberships", "orders", "proximity", "rewards"].sort(),
+      ["chat", "favorites", "marketing", "memberships", "orders", "proximity", "rewards"].sort(),
     );
   });
 

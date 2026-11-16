@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "description": "Trinquete de la frontera de escritura (ADR-018). Mide PROTECCI\u00d3N. Ambas listas solo pueden ENCOGER.",
+    "description": "Trinquete de la frontera de escritura (ADR-018). Mide PROTECCIÓN. Ambas listas solo pueden ENCOGER.",
     "generatedAt": "2026-11-11",
     "rules": {
       "ALLOWED": "orderIntegrity.ts",
@@ -63,7 +63,7 @@
       "importsHelper": true
     },
     "packages/api/src/services/paymentCore.ts": {
-      "count": 5,
+      "count": 6,
       "category": "ALLOWED_EXCEPTION",
       "importsHelper": false
     },
@@ -116,14 +116,36 @@
       "count": 1,
       "category": "PROTECTED",
       "importsHelper": true
+    },
+    "packages/api/src/routers/comandero.ts": {
+      "count": 3,
+      "category": "PENDING_MIGRATION",
+      "importsHelper": false
+    },
+    "telegram-miniapp/src/app/api/business/scan/charge/route.ts": {
+      "count": 1,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "telegram-miniapp/src/app/api/business/scan/charge/settle/route.ts": {
+      "count": 1,
+      "category": "ALLOWED_EXCEPTION",
+      "importsHelper": false
+    },
+    "packages/api/src/services/cfdi/index.ts": {
+      "count": 2,
+      "category": "PROTECTED",
+      "importsHelper": true
     }
   },
-  "pendingFiles": [],
+  "pendingFiles": [
+    "packages/api/src/routers/comandero.ts"
+  ],
   "pendingPosProcedures": [],
   "totals": {
-    "files": 21,
-    "writes": 85,
-    "pendingFiles": 0,
+    "files": 25,
+    "writes": 93,
+    "pendingFiles": 1,
     "pendingPosProcedures": 0
   },
   "deprecatedProcedures": [
