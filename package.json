@@ -18,7 +18,8 @@
     "db:migrate": "node scripts/sql-migrate.mjs",
     "db:guard": "node scripts/schema-guard.mjs",
     "db:predeploy": "node scripts/predeploy.mjs",
-    "db:rotate": "node scripts/rotate-app-role.mjs"
+    "db:rotate": "node scripts/rotate-app-role.mjs",
+    "rollback": "node scripts/rollback.mjs"
   },
   "keywords": [
     "web3",
