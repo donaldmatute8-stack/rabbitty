@@ -269,3 +269,18 @@ silenciada, ritmo de 48 h, dedupe por campaña+deseo y una sola vez por campaña
 
 **Pendiente**: A/B del aviso (en pausa) y el mapeo de gamificación ↔ niveles de membresía
 (documentar qué señal alimenta qué métrica antes de tocar código).
+
+### 11. Cuadre de gamificación ↔ membresías (2026-11-16)
+
+Documento: `DOCS/GAMIFICACION-CUADRE.md`.
+
+- **Una sola superficie de misiones**: los retos de membresía ahora se calculan en
+  `lib/membershipMissions.ts` y se muestran **dentro de Gamificación**; en Mis
+  Membresías queda un enlace (antes había dos paneles distintos).
+- **Multiplicador de nivel consistente**: `/api/pos/reward` aplica el mismo
+  `levels.bunzMultiplier` que el escaneo del negocio (antes el POS lo ignoraba).
+- **Tope de emisión**: `BUNZ_MAX_PCT` (40 % del ticket por defecto) recorta
+  cualquier combinación de nivel + campaña + bono, con log.
+- **Fórmula única**: sin campaña `total = floor(base × nivel) + bono`; con campaña
+  flash se usa la campaña y **no** se apila nivel ni bono. El bono siempre se
+  calcula sobre el base sin nivel.

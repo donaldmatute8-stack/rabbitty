@@ -34,11 +34,31 @@ interface AchievementItem {
   unlocked: boolean;
 }
 
+interface MembershipMissionItem {
+  id: string;
+  title: string;
+  hint: string;
+  progress: number;
+  target: number;
+  done: boolean;
+  badge: { id: string; label: string; color: string };
+}
+
+interface MembershipMissionsBlock {
+  subscriptionId: string;
+  businessName: string;
+  planName: string;
+  tier: 'BRONZE' | 'SILVER' | 'GOLD';
+  missions: MembershipMissionItem[];
+  badgesEarned: Array<{ id: string; label: string; color: string }>;
+}
+
 interface GamificationData {
   hops: number;
   level?: LevelInfo;
   missions?: MissionItem[];
   achievements?: AchievementItem[];
+  membershipMissions?: MembershipMissionsBlock[];
 }
 
 const ACHIEVEMENT_EMOJI: Record<string, string> = {
@@ -169,6 +189,73 @@ export default function GamificationPage() {
           {/* MISSIONS TAB */}
           {activeTab === 'MISSIONS' && (
             <div className="flex flex-col gap-3 pb-5">
+              {(data?.membershipMissions?.length ?? 0) > 0 && (
+                <div className="rounded-3xl border border-(--border-subtle) bg-(--bg-elevated) p-4">
+                  <div className="mb-3">
+                    <p className="m-0 text-[10px] font-black uppercase tracking-[0.16em] text-[#E91E63]">Lealtad en tus membresías</p>
+                    <p className="m-0 mt-0.5 text-[11px] text-(--text-muted)">Insignias de reconocimiento · no dan Bunz</p>
+                  </div>
+
+                  {(data?.membershipMissions ?? []).map((block) => {
+                    const tierLabel = block.tier === 'GOLD' ? 'Oro' : block.tier === 'SILVER' ? 'Plata' : 'Bronce';
+                    const tierColor = block.tier === 'GOLD' ? '#FFD166' : block.tier === 'SILVER' ? '#A8B3C1' : '#C97B4A';
+                    return (
+                      <div key={block.subscriptionId} className="mb-3 last:mb-0">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="truncate text-[12.5px] font-black text-(--text-primary)">{block.businessName}</span>
+                          <span
+                            className="rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                            style={{ color: tierColor, background: `${tierColor}1f`, border: `1px solid ${tierColor}44` }}
+                          >
+                            {tierLabel}
+                          </span>
+                          {block.badgesEarned.length > 0 && (
+                            <span className="ml-auto text-[10px] font-bold text-(--text-muted)">
+                              {block.badgesEarned.length} insignia{block.badgesEarned.length === 1 ? '' : 's'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          {block.missions.map((mission) => {
+                            const pct = Math.min(100, Math.round((mission.progress / mission.target) * 100));
+                            return (
+                              <div key={mission.id} className="rounded-2xl border border-(--border-subtle) bg-(--bg-primary) p-2.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="truncate text-[11.5px] font-bold text-(--text-primary)">{mission.title}</span>
+                                  <span className="shrink-0 text-[10.5px] font-black tabular-nums text-(--text-muted)">
+                                    {mission.progress}/{mission.target}
+                                  </span>
+                                </div>
+                                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-(--bg-elevated)">
+                                  <div
+                                    className="h-full rounded-full"
+                                    style={{
+                                      width: `${pct}%`,
+                                      background: mission.done
+                                        ? `linear-gradient(90deg, ${mission.badge.color} 0%, ${mission.badge.color}aa 100%)`
+                                        : 'linear-gradient(90deg, #A855F7 0%, #E91E63 100%)',
+                                    }}
+                                  />
+                                </div>
+                                {mission.done && (
+                                  <span
+                                    className="mt-1.5 inline-block rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                                    style={{ color: mission.badge.color, background: `${mission.badge.color}1f`, border: `1px solid ${mission.badge.color}44` }}
+                                  >
+                                    {mission.badge.label}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               {data?.missions?.map((m) => (
                 <div key={m.id} className="bg-(--bg-elevated) border border-(--border-subtle) rounded-2xl p-4 shadow-sm transition-all" style={{ opacity: m.isCompleted ? 0.6 : 1 }}>
                   <div className="flex justify-between items-start mb-2">

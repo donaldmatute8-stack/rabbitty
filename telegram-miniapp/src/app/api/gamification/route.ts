@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { users, levels, userAchievements, hatTricks, userHatTricks } from "@/db/schema";
+import { getMembershipMissions } from "@/lib/membershipMissions";
 import { eq } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
@@ -63,7 +64,9 @@ export async function GET(req: NextRequest) {
       hops: user.hops,
       level: currentLevel,
       achievements: achievementsData,
-      missions: missionsData
+      missions: missionsData,
+      // Retos de membresía: misma fuente que /api/memberships/missions
+      membershipMissions: await getMembershipMissions(caller.id).catch(() => []),
     });
   } catch (error) {
     console.error("GET gamification error:", error);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { users, pendingVaults, transactions, ownedBusinesses, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
+import { users, levels, pendingVaults, transactions, ownedBusinesses, affiliateCampaigns, campaignRedemptions } from "@/db/schema";
 import { eq, and, gte, sql, or, desc, gt } from "drizzle-orm";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
@@ -147,18 +147,53 @@ export async function POST(request: Request) {
       });
     }
 
+    // ── NIVEL RABBITER (gamificación) ─────────────────────────────────────
+    // Mismo multiplicador que usa el escaneo del negocio: el nivel aplica al
+    // cashback base, nunca encima de una campaña flash (para no apilar bonos).
+    const boostApplied = Boolean(boostCampaignId) || bunzToMint > baseBunzPos;
+    const baseBeforeLevel = baseBunzPos;
+    if (!boostApplied && existingUserId) {
+      try {
+        const [u] = await db.select({ levelId: users.levelId }).from(users).where(eq(users.id, existingUserId)).limit(1);
+        if (u?.levelId) {
+          const [lvl] = await db
+            .select({ multiplier: levels.bunzMultiplier })
+            .from(levels)
+            .where(eq(levels.id, u.levelId))
+            .limit(1);
+          const multiplier = Number(lvl?.multiplier ?? 1);
+          if (Number.isFinite(multiplier) && multiplier > 1) {
+            bunzToMint = Math.floor(baseBunzPos * multiplier);
+          }
+        }
+      } catch (levelErr) {
+        console.warn("[POS_REWARD] nivel no aplicado:", levelErr);
+      }
+    }
+
     // ── BONO DE LEALTAD (membresías) ──────────────────────────────────────
     // Se paga de un pozo mensual respaldado por el neto de la membresía ya
     // cobrada; nunca es emisión libre. No se acumula con campañas flash.
-    const boostApplied = bunzToMint > baseBunzPos;
     let loyalty: Awaited<ReturnType<typeof resolveLoyaltyBonus>> = null;
     if (!boostApplied && existingUserId && effectiveBusinessId) {
       loyalty = await resolveLoyaltyBonus({
         userId: existingUserId,
         businessId: effectiveBusinessId,
-        baseBunz: baseBunzPos,
+        // El bono se calcula sobre el cashback base, sin el multiplicador de nivel.
+        baseBunz: baseBeforeLevel,
       });
       if (loyalty?.bonus) bunzToMint += loyalty.bonus;
+    }
+
+    // ── TOPE DE EMISIÓN POR CUENTA ────────────────────────────────────────
+    // Ninguna combinación (nivel + campaña + bono) puede superar el % del ticket.
+    const maxPct = Number(process.env.BUNZ_MAX_PCT ?? 40);
+    if (Number.isFinite(maxPct) && maxPct > 0) {
+      const cap = Math.floor(amount_usd * (maxPct / 100));
+      if (bunzToMint > cap) {
+        console.warn(`[POS_REWARD] tope ${maxPct}% aplicado: ${bunzToMint} → ${cap} (order ${order_id})`);
+        bunzToMint = cap;
+      }
     }
 
     if (bunzToMint <= 0) {
