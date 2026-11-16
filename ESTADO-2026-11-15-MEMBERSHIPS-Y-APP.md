@@ -325,3 +325,18 @@ premio**: la app nunca promete algo que el negocio no ofreció.
 
 **Siguiente bloque**: revisar el nicho **restaurante** (cocinas/KDS, impresoras, multisucursal,
 varias cajas/dispositivos, empleados, contabilidad y administración) para ver qué falta.
+
+### 14. Nicho restaurante — cajas e impresoras (2026-11-16)
+
+- **Cajas múltiples operables**: `pos_terminals.registerId` (migración `0017`), `setRegister`,
+  `sessionContext.registerId`; el POS abre turno en la caja de su terminal; la pantalla de
+  terminales permite asignarla y el historial de turnos muestra la caja.
+- **Impresoras por sucursal y estación**: tabla `printers` (migración `0023` en BD restaurante),
+  router `printers` (list/upsert/remove/assignStation) y página **Admin → Impresoras &
+  estaciones** (catálogo + asignación a estaciones). Aditivo: sin impresoras configuradas se
+  imprime como hoy.
+- **CFDI**: se deja así a propósito; el afiliado conecta su PAC.
+
+**Siguiente lote del restaurante**: costo laboral/comisiones/propinas por empleado, órdenes de
+compra → inventario, conmutador multi-restaurante y modo offline (proyecto aparte por riesgo
+de doble cobro).
