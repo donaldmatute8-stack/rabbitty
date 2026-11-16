@@ -120,6 +120,18 @@ async function resolveOwnerBusinessForOnboarding(ctx: Context) {
   return { business, restaurantId };
 }
 
+// Las sucursales de entrenamiento NO deben usarse para operar de verdad: el
+// plan de membresía no las incluye y las ventas se registran ahí. Se marcan y
+// se ordenan al final para que el conmutador elija siempre una real.
+function sortBranchesForSwitcher<
+  T extends { id: string; name: string; isActive: boolean | null },
+>(list: T[]) {
+  const isSandbox = (b: T) => /sandbox|entrenamiento/i.test(b.name);
+  return [...list]
+    .sort((a, b) => Number(isSandbox(a)) - Number(isSandbox(b)) || a.name.localeCompare(b.name))
+    .map((b) => ({ id: b.id, name: b.name, isActive: b.isActive, isSandbox: isSandbox(b) }));
+}
+
 export const adminRouter = router({
   getProfile: protectedProcedure.query(async ({ ctx }) => {
     return {
@@ -519,9 +531,7 @@ export const adminRouter = router({
       const brs = await ctx.restaurantDb.select().from(branches).where(eq(branches.restaurantId, branch.restaurantId));
       return rows.map((r) => ({
         ...r,
-        branches: brs
-          .filter((b) => b.isActive)
-          .map((b) => ({ id: b.id, name: b.name, isActive: b.isActive })),
+        branches: sortBranchesForSwitcher(brs.filter((b) => b.isActive)),
       }));
     }
 
@@ -540,9 +550,7 @@ export const adminRouter = router({
 
     return rows.map((r) => ({
       ...r,
-      branches: brs
-        .filter((b) => b.restaurantId === r.id && b.isActive)
-        .map((b) => ({ id: b.id, name: b.name, isActive: b.isActive })),
+      branches: sortBranchesForSwitcher(brs.filter((b) => b.restaurantId === r.id && b.isActive)),
     }));
   }),
 

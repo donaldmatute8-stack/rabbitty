@@ -28,11 +28,26 @@ export default function RestaurantSwitcher({ collapsed = false }: { collapsed?: 
 
   if (!restaurants?.length || !active) return null;
 
+  // Elegir sucursal de operación: quedarse en la actual si pertenece al
+  // restaurante; si no, la primera que NO sea de entrenamiento. Las sandbox se
+  // excluyen porque el plan de membresía no las cubre y las ventas se registran
+  // ahí: cambiar a una de ellas hacía que el POS cobrara sin beneficios.
+  const isSandbox = (b: { name: string; isSandbox?: boolean }) =>
+    b.isSandbox ?? /sandbox|entrenamiento/i.test(b.name);
+
   const switchTo = (restaurantId: string) => {
     const next = restaurants.find((r) => r.id === restaurantId);
-    const firstBranch = next?.branches[0];
+    const current = next?.branches.find((b) => b.id === branchId);
+    const firstBranch =
+      (current && !isSandbox(current) ? current : undefined) ??
+      next?.branches.find((b) => !isSandbox(b)) ??
+      next?.branches[0];
     if (!next || !firstBranch) {
       toast.error("Ese restaurante no tiene sucursales activas");
+      return;
+    }
+    if (isSandbox(firstBranch)) {
+      toast.error("Ese restaurante solo tiene sucursales de entrenamiento. No se cambió.");
       return;
     }
     try {
