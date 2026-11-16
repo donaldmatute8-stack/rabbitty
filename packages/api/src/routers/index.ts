@@ -4,6 +4,7 @@ import { posTerminalsRouter } from "./posTerminals";
 import { posOperatorsRouter } from "./posOperators";
 import { kdsRouter } from "./kds";
 import { stationsRouter } from "./stations";
+import { printersRouter } from "./printers";
 import { adminRouter } from "./admin";
 import { staffRouter } from "./staff";
 import { inventoryRouter } from "./inventory";
@@ -54,6 +55,7 @@ export const appRouter = router({
   posOperators: posOperatorsRouter,
   kds: kdsRouter,
   stations: stationsRouter,
+  printers: printersRouter,
   admin: adminRouter,
   staff: staffRouter,
   inventory: inventoryRouter,

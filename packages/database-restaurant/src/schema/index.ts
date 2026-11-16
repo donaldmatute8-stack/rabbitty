@@ -92,6 +92,21 @@ export const branches = pgTable("branches", {
   ...timestamps,
 });
 
+/** Impresoras de la sucursal (ticket, cocina, barra). */
+export const printers = pgTable("printers", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  /** RECEIPT | KITCHEN | BAR | EXPO */
+  role: text("role").default("RECEIPT").notNull(),
+  /** BLE | SPP | USB | NETWORK */
+  connection: text("connection").default("BLE").notNull(),
+  identifier: text("identifier"),
+  paperWidth: integer("paperWidth").default(58).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+});
+
 /**
  * 🍳 Estaciones de preparación (ADR-023, migración 0039).
  * Sin configuración, la sucursal tiene una estación "Cocina" por defecto y todo

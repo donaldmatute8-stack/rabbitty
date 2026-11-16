@@ -127,7 +127,7 @@ export default function CashShiftsPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-white/5">
               <tr>
-                {["", "Apertura", "Cajero", "Fondo", "Esperado", "Contado", "Diferencia", "Cierre", "Autorizó", "Estado", "Acciones"].map((h) => (
+                {["", "Apertura", "Caja", "Cajero", "Fondo", "Esperado", "Contado", "Diferencia", "Cierre", "Autorizó", "Estado", "Acciones"].map((h) => (
                   <th key={h} className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-gray-400">{h}</th>
                 ))}
               </tr>
@@ -138,6 +138,11 @@ export default function CashShiftsPage() {
                   <tr key={s.id} className="hover:bg-white/5 transition-all cursor-pointer" onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
                     <td className="px-4 py-3 text-gray-500">{expanded === s.id ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-300">{dt(s.openedAt)}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] font-black text-cyan-300">
+                        {s.registerId ?? "MAIN"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 font-bold text-white">{s.openedByName ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-300">{fmt(s.openingFloat)}</td>
                     <td className="px-4 py-3 text-gray-300">{s.status === "CLOSED" ? fmt(s.expectedCash) : "—"}</td>
@@ -164,7 +169,7 @@ export default function CashShiftsPage() {
                   </tr>
                   {expanded === s.id && (
                     <tr key={`${s.id}-ev`}>
-                      <td colSpan={11} className="p-0"><ShiftEvents shiftId={s.id} /></td>
+                      <td colSpan={12} className="p-0"><ShiftEvents shiftId={s.id} /></td>
                     </tr>
                   )}
                 </>

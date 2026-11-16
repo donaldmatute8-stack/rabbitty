@@ -197,10 +197,22 @@ export const posTerminalsRouter = router({
         );
       }
 
+      // Caja/gaveta asignada a esta terminal (default MAIN)
+      let registerId = "MAIN";
+      if (ctx.posAuth?.terminalId) {
+        const [term] = await ctx.coreDb
+          .select({ registerId: posTerminals.registerId })
+          .from(posTerminals)
+          .where(eq(posTerminals.id, ctx.posAuth.terminalId))
+          .limit(1);
+        registerId = term?.registerId || "MAIN";
+      }
+
       return {
         mode: "terminal" as const,
         // Rol del empleado en turno. Sin turno no hay rol (la UI muestra el gate).
         role: resolvePosRole(ctx),
+        registerId,
         permissions: posPermissionsOf(ctx),
         // La terminal SIEMPRE aplica la matriz; el panel admin solo con el flag.
         enforceRole: true,
@@ -220,6 +232,7 @@ export const posTerminalsRouter = router({
       return {
         mode: "admin" as const,
         role: resolvePosRole(ctx),
+        registerId: "MAIN",
         permissions: posPermissionsOf(ctx),
         enforceRole: process.env.POS_ROLE_ENFORCEMENT === "1",
         // En admin el POS consulta admin.onboardingStatus (más completo).
@@ -244,6 +257,7 @@ export const posTerminalsRouter = router({
         platform: posTerminals.platform,
         status: posTerminals.status,
         stationId: posTerminals.stationId,
+        registerId: posTerminals.registerId,
         kind: posTerminals.kind,
         authorizedAt: posTerminals.authorizedAt,
         expiresAt: posTerminals.expiresAt,
@@ -392,6 +406,27 @@ export const posTerminalsRouter = router({
 
   /** Revoca una terminal de mi sucursal (bloquea nuevas sesiones). */
   /** Fija la estación de una terminal (0C-4b). null = elige el cliente. */
+  /** Admin: asigna la caja/gaveta que opera esta terminal (varias cajas). */
+  setRegister: adminOnlyProcedure
+    .input(z.object({ terminalId: z.string(), registerId: z.string().min(1).max(24) }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(ctx);
+      const [terminal] = await ctx.coreDb
+        .select({ id: posTerminals.id })
+        .from(posTerminals)
+        .where(and(eq(posTerminals.id, input.terminalId), eq(posTerminals.branchId, scope.branchId)))
+        .limit(1);
+      if (!terminal) throw new TRPCError({ code: "NOT_FOUND", message: "Terminal no encontrada" });
+
+      const registerId = input.registerId.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 24) || "MAIN";
+      const [updated] = await ctx.coreDb
+        .update(posTerminals)
+        .set({ registerId })
+        .where(eq(posTerminals.id, input.terminalId))
+        .returning({ id: posTerminals.id, registerId: posTerminals.registerId });
+      return updated;
+    }),
+
   setStation: adminOnlyProcedure
     .input(z.object({ terminalId: z.string(), stationId: z.string().nullable() }))
     .mutation(async ({ ctx, input }) => {
@@ -655,6 +690,7 @@ export const posTerminalsRouter = router({
         platform: posTerminals.platform,
         status: posTerminals.status,
         stationId: posTerminals.stationId,
+        registerId: posTerminals.registerId,
         kind: posTerminals.kind,
         authorizedAt: posTerminals.authorizedAt,
         expiresAt: posTerminals.expiresAt,

@@ -617,6 +617,8 @@ export const posTerminals = pgTable("pos_terminals", {
   stationId: text("stationId"),
   /** CASHIER | COMANDERO | KDS (ADR-025). */
   kind: text("kind").default("CASHIER").notNull(),
+  /** Caja/gaveta que opera esta terminal (varias cajas por sucursal). */
+  registerId: text("registerId").default("MAIN").notNull(),
   name: text("name").notNull(),
   platform: text("platform"),
   deviceKeyHash: text("deviceKeyHash").notNull(),

@@ -61,6 +61,11 @@ export default function PosTerminalsPage() {
     onError: (e: { message: string }) => toast.error(e.message),
   });
 
+  const setRegister = trpc.posTerminals.setRegister.useMutation({
+    onSuccess: () => { utils.posTerminals.overview.invalidate(); utils.posTerminals.list.invalidate(); toast.success("Caja de la terminal actualizada"); },
+    onError: (e: { message: string }) => toast.error(e.message),
+  });
+
   const revoke = trpc.posTerminals.revoke.useMutation({
     onSuccess: () => {
       toast.success("Terminal revocada. No podrá abrir nuevas sesiones.");
@@ -219,6 +224,28 @@ export default function PosTerminalsPage() {
                     <option value="COMANDERO">Comandero (solo toma pedidos)</option>
                     <option value="KDS">Pantalla de cocina</option>
                   </select>
+                </div>
+
+                <div className="mt-3">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                    Caja / gaveta
+                  </label>
+                  <div className="mt-1 flex gap-2">
+                    <input
+                      defaultValue={(t as { registerId?: string }).registerId ?? "MAIN"}
+                      placeholder="MAIN"
+                      maxLength={24}
+                      onBlur={(e) => {
+                        const next = e.target.value.trim().toUpperCase() || "MAIN";
+                        const current = (t as { registerId?: string }).registerId ?? "MAIN";
+                        if (next !== current) setRegister.mutate({ terminalId: t.id, registerId: next });
+                      }}
+                      className="w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white outline-none"
+                    />
+                  </div>
+                  <p className="m-0 mt-1 text-[10px] text-gray-500">
+                    Varias cajas por sucursal: la terminal abre el turno en esta gaveta.
+                  </p>
                 </div>
 
                 <div className="mt-3">

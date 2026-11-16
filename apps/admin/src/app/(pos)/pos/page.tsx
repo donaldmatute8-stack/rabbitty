@@ -4440,6 +4440,7 @@ export default function PosPage() {
         }}
         buildTicketHeader={buildTicketHeader}
         initialMode={corteInitialMode}
+        registerId={(posSession as { registerId?: string } | undefined)?.registerId ?? "MAIN"}
       />
       <Dialog
         open={!!qrPaymentModal}

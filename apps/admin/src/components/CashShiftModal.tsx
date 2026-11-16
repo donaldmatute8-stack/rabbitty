@@ -72,11 +72,14 @@ export function CashShiftModal({
   onClose,
   buildTicketHeader,
   initialMode,
+  registerId = "MAIN",
 }: {
   open: boolean;
   onClose: () => void;
   buildTicketHeader: () => Record<string, any>;
   initialMode?: "open" | "partial";
+  /** Caja/gaveta de esta terminal (varias cajas por sucursal). */
+  registerId?: string;
 }) {
   const utils = trpc.useUtils();
   const { data, refetch } = trpc.cashShifts.current.useQuery({}, { enabled: open, refetchInterval: open ? 15000 : false });
@@ -328,10 +331,12 @@ export function CashShiftModal({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              openMut.mutate({ pin, openingFloat: num });
+              openMut.mutate({ pin, openingFloat: num, registerId });
             }}
           >
-            <p className="text-xs text-gray-400">Ingresa tu PIN y el efectivo con el que inicia la gaveta (fondo de cambio).</p>
+            <p className="text-xs text-gray-400">
+              Caja <span className="font-black text-cyan-300">{registerId}</span> · Ingresa tu PIN y el efectivo con el que inicia la gaveta (fondo de cambio).
+            </p>
             <PinField id="cash-open-pin" label="Tu PIN de cajero" value={pin} onChange={setPin} autoFocus />
             <MoneyField id="cash-open-float" label="Fondo inicial ($)" value={amount} onChange={setAmount} />
             <div className="flex gap-2 justify-end pt-1">
