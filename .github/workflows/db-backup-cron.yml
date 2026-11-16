@@ -1,0 +1,66 @@
+name: Database Backups (pg_dump → S3)
+
+# Respaldo lógico de las dos bases cada 6 horas.
+#
+# Contexto (2026-11-16): el plan Hobby de Neon solo conserva 6 horas de historial
+# (instant restore). Pasado ese plazo no hay forma de recuperar un borrado
+# accidental. Este workflow produce `pg_dump -Fc` y los deja en un bucket
+# S3-compatible fuera de Neon.
+#
+# La retención (7 días cada 6 h, 30 días diario, 12 meses mensual) la aplica el
+# propio endpoint al final de cada corrida.
+#
+# Manual: Actions → "Database Backups" → Run workflow.
+
+on:
+  schedule:
+    - cron: '15 */6 * * *' # 00:15, 06:15, 12:15, 18:15 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Dump restaurant + core
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Trigger backup endpoint
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret CRON_SECRET del repositorio."
+            exit 1
+          fi
+
+          echo "Respaldando en $APP_URL ..."
+          RESPONSE=$(curl -sS -m 300 -w "\n%{http_code}" \
+            -X GET "$APP_URL/api/cron/db-backup?db=all" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP $HTTP_STATUS"
+          echo "$BODY"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::El respaldo falló (HTTP $HTTP_STATUS). Revisar el cuerpo arriba."
+            exit 1
+          fi
+
+          # Detalle legible por base + fallo explícito si alguna salió vacía.
+          echo "$BODY" | jq -r '.results[] | "  \(.db): \(.bytes // 0) bytes · \(.ms) ms · \(.key // "-")"'
+
+          BAD=$(echo "$BODY" | jq -r '[.results[] | select((.ok|not) or ((.bytes // 0) == 0))] | length')
+          if [ "$BAD" != "0" ]; then
+            echo "::error::Alguna base no generó un respaldo válido ($BAD)."
+            exit 1
+          fi
+          echo "Respaldos OK"

@@ -34,6 +34,7 @@
     "@trpc/next": "^11.17.0",
     "@trpc/react-query": "^11.17.0",
     "@trpc/server": "^11.17.0",
+    "aws4fetch": "^1.0.20",
     "cheerio": "^1.2.0",
     "framer-motion": "^12.40.0",
     "html5-qrcode": "^2.3.8",
