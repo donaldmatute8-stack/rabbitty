@@ -95,8 +95,12 @@ export function resolveTargetUrl({ target, db }) {
     url = readEnvLocal(cfg.urlVar);
   } else if (target === "prod" || target === "staging") {
     const env = target === "prod" ? "production" : "staging";
-    url = readRailwayVars(env)[cfg.urlVar];
-    if (!url) fail(`Railway (${env}) no tiene ${cfg.urlVar}`);
+    const vars = readRailwayVars(env);
+    // Las migraciones necesitan DDL: el runtime usa un rol restringido, así que
+    // se prefiere la credencial de migraciones si existe.
+    const migrateVar = `MIGRATE_${cfg.urlVar}`;
+    url = vars[migrateVar] || vars[cfg.urlVar];
+    if (!url) fail(`Railway (${env}) no tiene ${migrateVar} ni ${cfg.urlVar}`);
   } else {
     fail("Falta --target env|local|staging|prod");
   }

@@ -1,0 +1,65 @@
+name: Ops Health Invariants
+
+# Cada 15 minutos calcula los invariantes operativos y avisa si algo se rompió.
+#
+# Sin Sentry por ahora, esta es la capa que se entera ANTES que el comercio:
+#   · caja abierta y 0 cobros en la última hora  → algo se rompió
+#   · outbox de notificaciones atascado
+#   · el respaldo dejó de correr
+#   · una base no responde
+#
+# Dedupe: el endpoint solo avisa cuando el estado cambia (o cada 6 h si sigue
+# roto), así que correr cada 15 min no genera ruido.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ops-health
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Calcular invariantes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Consultar invariantes
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret CRON_SECRET del repositorio."
+            exit 1
+          fi
+
+          RESPONSE=$(curl -sS -m 120 -w "\n%{http_code}" \
+            "$APP_URL/api/cron/ops-health" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::El endpoint de invariantes respondió HTTP $HTTP"
+            echo "$BODY"
+            exit 1
+          fi
+
+          # Resumen legible: estado por invariante.
+          echo "$BODY" | jq -r '.invariants[] | "  \(.status | ascii_upcase)\t\(.metric)\t\(.detail // "")"'
+
+          STATUS=$(echo "$BODY" | jq -r '.status')
+          echo "estado global: $STATUS"
+          echo "$BODY" | jq -r '.alerted[]?' | sed 's/^/  avisado: /'
+
+          # Un invariante crítico se ve como fallo del workflow (queda en rojo en
+          # Actions). El correo lo manda la app; esto es la segunda señal.
+          if [ "$STATUS" = "critical" ]; then
+            echo "::error::Hay invariantes en estado crítico"
+            exit 1
+          fi
