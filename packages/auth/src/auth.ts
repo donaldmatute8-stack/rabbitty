@@ -103,8 +103,14 @@ async function ensureAdminUsersTable() {
   await pool.end();
 }
 
-// Run once at startup
-ensureAdminUsersTable().catch(e => console.error("[Auth] Failed to ensure adminAuthUsers table:", e));
+// Run once at startup — solo con DDL de runtime habilitado.
+//
+// Con el rol de aplicación (solo DML) esto falla con "permission denied for
+// schema public" y ensuciaba el log en cada arranque. La tabla ya existe y la
+// gobiernan las migraciones; `DB_RUNTIME_DDL=1` reactiva el bootstrap.
+if (process.env.DB_RUNTIME_DDL === "1") {
+  ensureAdminUsersTable().catch(e => console.error("[Auth] Failed to ensure adminAuthUsers table:", e));
+}
 
 const customAdapter: any = {
   createUser: async (user: any) => {
