@@ -59,6 +59,8 @@ export const staffRouter = router({
         email: z.string().optional(),
         role: z.enum(["WAITER", "CASHIER", "MANAGER", "ADMIN"]).optional(),
         pinCode: z.string().length(4).optional(),
+        hourlyRate: z.number().min(0).max(100000).optional(),
+        commissionPct: z.number().min(0).max(100).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -87,6 +89,8 @@ export const staffRouter = router({
       if (input.email) data.email = input.email;
       if (input.role) data.role = input.role;
       if (input.pinCode !== undefined) data.pinCode = input.pinCode ? hashPin(input.pinCode) : null;
+      if (input.hourlyRate !== undefined) data.hourlyRate = input.hourlyRate;
+      if (input.commissionPct !== undefined) data.commissionPct = input.commissionPct;
       await ctx.restaurantDb.update(staffTable).set(data).where(eq(staffTable.id, input.id));
       return { success: true };
     }),

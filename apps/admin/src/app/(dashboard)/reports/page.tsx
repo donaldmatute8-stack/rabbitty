@@ -144,6 +144,7 @@ export default function ReportsPage() {
   const { data: paymentMethods, isLoading: loadingPayments } = trpc.analytics.getPaymentMethods.useQuery({ branchId, ...dateFilter });
   // Propinas (cuenta vs propina separadas — sin gate de plan)
   const { data: tipsSummary } = trpc.analytics.getTipsSummary.useQuery({ branchId, ...dateFilter });
+  const { data: staffCosts } = trpc.analytics.getStaffCosts.useQuery({ branchId, ...dateFilter });
 
   // ── Analíticas Pro (plan vendible — gated server-side) ──
   const { data: checkoutPro } = trpc.analytics.getCheckoutConversionPro.useQuery({ branchId, days: daysRange });
@@ -1198,6 +1199,81 @@ export default function ReportsPage() {
                     <span className="text-sm font-black text-amber-400">${Number(p.revenue).toFixed(2)}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+
+        {/* ── Personal y costos ── */}
+        <motion.div variants={itemVariants}>
+          <Card className="print-card p-6 border border-(--border-subtle) bg-(--bg-subtle)">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xl font-bold text-(--text-primary) flex items-center gap-2 m-0">
+                <Users className="text-cyan-500" /> Personal y costos
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  const rows = [
+                    ["empleado", "rol", "horas", "costo_hora", "costo_laboral", "tickets", "ventas", "comision_pct", "comision", "propinas"],
+                    ...(staffCosts?.staff ?? []).map((r) => [
+                      r.name, r.role, String(r.hours), String(r.hourlyRate), String(r.laborCost),
+                      String(r.tickets), String(r.revenue), String(r.commissionPct), String(r.commission), String(r.tips),
+                    ]),
+                  ];
+                  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `Personal_${reportRange.from}_${reportRange.to}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="rounded-lg border border-(--border-subtle) bg-(--bg-elevated) px-2.5 py-1 text-[10px] font-bold text-(--text-muted) hover:text-(--text-primary)"
+              >
+                Exportar CSV
+              </button>
+            </div>
+
+            {!(staffCosts?.staff ?? []).length ? (
+              <p className="text-sm text-(--text-muted) m-0">Sin personal registrado en la sucursal.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-(--border-subtle)">
+                <table className="w-full text-xs">
+                  <thead className="bg-(--bg-elevated) text-(--text-muted) uppercase text-[9px]">
+                    <tr>
+                      <th className="text-left px-2 py-2">Empleado</th>
+                      <th className="text-right px-2 py-2">Horas</th>
+                      <th className="text-right px-2 py-2">Costo laboral</th>
+                      <th className="text-right px-2 py-2">Ventas</th>
+                      <th className="text-right px-2 py-2">Comisión</th>
+                      <th className="text-right px-2 py-2">Propinas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(staffCosts?.staff ?? []).map((r) => (
+                      <tr key={r.id} className="border-t border-(--border-subtle)">
+                        <td className="px-2 py-1.5 text-(--text-primary)">
+                          {r.name} <span className="text-[9px] text-(--text-muted)">· {r.role}</span>
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-(--text-primary)">{r.hours.toFixed(1)}</td>
+                        <td className="px-2 py-1.5 text-right text-rose-400">${r.laborCost.toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-right text-(--text-primary)">${r.revenue.toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-right text-amber-400">${r.commission.toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-right text-emerald-400">${r.tips.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t border-(--border-subtle) font-black">
+                      <td className="px-2 py-2 text-(--text-primary)">Total</td>
+                      <td className="px-2 py-2 text-right text-(--text-primary)">{staffCosts?.totals.hours.toFixed(1)}</td>
+                      <td className="px-2 py-2 text-right text-rose-400">${staffCosts?.totals.laborCost.toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right text-(--text-primary)">${staffCosts?.totals.revenue.toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right text-amber-400">${staffCosts?.totals.commission.toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right text-emerald-400">${staffCosts?.totals.tips.toFixed(2)}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
           </Card>

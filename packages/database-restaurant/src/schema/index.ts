@@ -188,6 +188,10 @@ export const staff = pgTable("staff", {
   email: text("email").notNull(),
   role: text("role").default("WAITER").notNull(),
   pinCode: text("pinCode"),
+  /** Costo por hora (MXN) para el reporte de personal. 0 = sin costo configurado. */
+  hourlyRate: real("hourlyRate").default(0).notNull(),
+  /** Comisión sobre ventas (%) para el mismo reporte. */
+  commissionPct: real("commissionPct").default(0).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   ...timestamps,
 });

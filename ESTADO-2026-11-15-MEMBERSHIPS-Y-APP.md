@@ -337,6 +337,14 @@ varias cajas/dispositivos, empleados, contabilidad y administración) para ver q
   imprime como hoy.
 - **CFDI**: se deja así a propósito; el afiliado conecta su PAC.
 
-**Siguiente lote del restaurante**: costo laboral/comisiones/propinas por empleado, órdenes de
-compra → inventario, conmutador multi-restaurante y modo offline (proyecto aparte por riesgo
-de doble cobro).
+- **Personal y costos (2026-11-16)**: `staff.hourlyRate` y `staff.commissionPct` (migración
+  `0024` en BD restaurante), edición en Admin → Personal y sección **“Personal y costos”** en
+  Reportes (horas del checador, costo laboral, ventas, comisión, propinas y CSV).
+- **Compras → inventario (2026-11-16)**: la recepción de órdenes ahora es **transaccional e
+  idempotente** (bloqueo de fila, no duplica stock) y deja bitácora en `inventory_movements`
+  (`PURCHASE`). Creación validada por sucursal y en transacción. Nueva página
+  **Admin → Órdenes de compra** (crear con insumos y costo, aprobar, recibir, cancelar) con
+  el router `suppliers.getPurchaseOrder`.
+
+**Siguiente lote**: conmutador multi-restaurante y modo offline (proyecto aparte por riesgo de
+doble cobro).

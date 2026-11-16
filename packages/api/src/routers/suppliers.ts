@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../trpc";
-import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems } from "@rabbitty/database-restaurant/schema";
+import { suppliers, purchaseOrders, purchaseOrderItems, inventoryItems, inventoryMovements } from "@rabbitty/database-restaurant/schema";
 
 export const suppliersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -75,6 +75,32 @@ export const suppliersRouter = router({
         .orderBy(purchaseOrders.orderedAt);
     }),
 
+  /** Detalle de una orden con sus insumos (para revisar antes de recibir). */
+  getPurchaseOrder: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select()
+        .from(purchaseOrders)
+        .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.branchId, ctx.branchId)))
+        .limit(1);
+      if (!order) return null;
+      const items = await ctx.restaurantDb
+        .select({
+          id: purchaseOrderItems.id,
+          inventoryItemId: purchaseOrderItems.inventoryItemId,
+          quantity: purchaseOrderItems.quantity,
+          unitCost: purchaseOrderItems.unitCost,
+          totalCost: purchaseOrderItems.totalCost,
+          name: inventoryItems.name,
+          unit: inventoryItems.unit,
+        })
+        .from(purchaseOrderItems)
+        .innerJoin(inventoryItems, eq(inventoryItems.id, purchaseOrderItems.inventoryItemId))
+        .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
+      return { order, items };
+    }),
+
   createPurchaseOrder: protectedProcedure
     .input(z.object({
       supplierId: z.string(),
@@ -87,62 +113,90 @@ export const suppliersRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const total = input.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
+      if (input.items.length === 0) throw new Error("Agrega al menos un insumo");
 
-      const [order] = await ctx.restaurantDb.insert(purchaseOrders).values({
-        branchId: ctx.branchId,
-        supplierId: input.supplierId,
-        total,
-        notes: input.notes ?? null,
-      }).returning();
-      if (!order) throw new Error("Error al crear orden de compra");
+      // Validación: todos los insumos deben ser de esta sucursal.
+      const ids = [...new Set(input.items.map((i) => i.inventoryItemId))];
+      const valid = await ctx.restaurantDb
+        .select({ id: inventoryItems.id })
+        .from(inventoryItems)
+        .where(and(eq(inventoryItems.branchId, ctx.branchId), inArray(inventoryItems.id, ids)));
+      if (valid.length !== ids.length) throw new Error("Hay insumos que no pertenecen a esta sucursal");
 
-      for (const item of input.items) {
-        await ctx.restaurantDb.insert(purchaseOrderItems).values({
-          purchaseOrderId: order.id,
-          inventoryItemId: item.inventoryItemId,
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          totalCost: item.quantity * item.unitCost,
-        });
-      }
+      return ctx.restaurantDb.transaction(async (tx) => {
+        const [order] = await tx
+          .insert(purchaseOrders)
+          .values({
+            branchId: ctx.branchId,
+            supplierId: input.supplierId,
+            total,
+            notes: input.notes ?? null,
+          })
+          .returning();
+        if (!order) throw new Error("Error al crear orden de compra");
 
-      return order;
+        for (const item of input.items) {
+          await tx.insert(purchaseOrderItems).values({
+            purchaseOrderId: order.id,
+            inventoryItemId: item.inventoryItemId,
+            quantity: item.quantity,
+            unitCost: item.unitCost,
+            totalCost: item.quantity * item.unitCost,
+          });
+        }
+        return order;
+      });
     }),
 
   receivePurchaseOrder: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [order] = await ctx.restaurantDb
-        .select()
-        .from(purchaseOrders)
-        .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.branchId, ctx.branchId)))
-        .limit(1);
+      // Idempotente: la fila se bloquea y el estado se re-verifica DENTRO de la
+      // transacción. Un reintento no vuelve a sumar inventario.
+      return ctx.restaurantDb.transaction(async (tx) => {
+        const [order] = await tx
+          .select()
+          .from(purchaseOrders)
+          .where(and(eq(purchaseOrders.id, input.id), eq(purchaseOrders.branchId, ctx.branchId)))
+          .for("update")
+          .limit(1);
 
-      if (!order || order.status !== "APPROVED") {
-        throw new Error("La orden debe estar APPROVED para recibirla");
-      }
+        if (!order) throw new Error("Orden no encontrada");
+        if (order.status === "RECEIVED") return { success: true, already: true, itemsReceived: 0 };
+        if (order.status !== "APPROVED") throw new Error("La orden debe estar APPROVED para recibirla");
 
-      const items = await ctx.restaurantDb
-        .select()
-        .from(purchaseOrderItems)
-        .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
+        const items = await tx
+          .select()
+          .from(purchaseOrderItems)
+          .where(eq(purchaseOrderItems.purchaseOrderId, order.id));
 
-      for (const item of items) {
-        await ctx.restaurantDb
-          .update(inventoryItems)
-          .set({
-            stock: sql`${inventoryItems.stock} + ${item.quantity}`,
-            costPerUnit: item.unitCost,
-          })
-          .where(eq(inventoryItems.id, item.inventoryItemId));
-      }
+        for (const item of items) {
+          await tx
+            .update(inventoryItems)
+            .set({
+              stock: sql`${inventoryItems.stock} + ${item.quantity}`,
+              costPerUnit: item.unitCost,
+            })
+            .where(and(eq(inventoryItems.id, item.inventoryItemId), eq(inventoryItems.branchId, ctx.branchId)));
 
-      await ctx.restaurantDb
-        .update(purchaseOrders)
-        .set({ status: "RECEIVED", receivedAt: new Date() })
-        .where(eq(purchaseOrders.id, input.id));
+          // Bitácora de inventario: quién entró y con qué referencia.
+          await tx.insert(inventoryMovements).values({
+            itemId: item.inventoryItemId,
+            branchId: ctx.branchId,
+            type: "PURCHASE",
+            quantity: item.quantity,
+            reference: `po:${order.id}`,
+            notes: "Recepción de orden de compra",
+          });
+        }
 
-      return { success: true, itemsReceived: items.length };
+        await tx
+          .update(purchaseOrders)
+          .set({ status: "RECEIVED", receivedAt: new Date() })
+          .where(eq(purchaseOrders.id, input.id));
+
+        return { success: true, itemsReceived: items.length };
+      });
     }),
 
   updatePurchaseOrderStatus: protectedProcedure

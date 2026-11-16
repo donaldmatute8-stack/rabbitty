@@ -2,7 +2,7 @@ import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { orders, orderItems, menuItems, menuCategories, payments, branches, customers, restaurants, paymentIntents } from "@rabbitty/database-restaurant/schema";
+import { orders, orderItems, menuItems, menuCategories, payments, branches, customers, restaurants, paymentIntents, staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
 
 // ─── ZONA HORARIA DEL NEGOCIO ──────────────────────────────────────────────
 // Los reportes financieros y por hora se agrupan por el día/hora LOCAL del
@@ -450,6 +450,107 @@ export const analyticsRouter = router({
     }),
 
   /** Propinas del período (cuenta vs propina separadas — visible para admin, sin gate de plan). */
+  /**
+   * Costos de personal del período: horas trabajadas (reloj checador), costo
+   * laboral (tarifa × horas), comisión sobre ventas y propinas por empleado.
+   * Solo lectura: no mueve dinero.
+   */
+  getStaffCosts: protectedProcedure
+    .input(z.object({ branchId: z.string(), from: z.string().optional(), to: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { startDate, endDate } = effectiveDateRange(input);
+
+      const people = await ctx.restaurantDb
+        .select({
+          id: staffTable.id,
+          name: staffTable.name,
+          role: staffTable.role,
+          hourlyRate: staffTable.hourlyRate,
+          commissionPct: staffTable.commissionPct,
+        })
+        .from(staffTable)
+        .where(eq(staffTable.branchId, branchId))
+        .orderBy(staffTable.name);
+
+      const shifts = await ctx.restaurantDb
+        .select({ staffId: staffShifts.staffId, checkIn: staffShifts.checkIn, checkOut: staffShifts.checkOut })
+        .from(staffShifts)
+        .where(
+          and(
+            eq(staffShifts.branchId, branchId),
+            gte(staffShifts.checkIn, startDate),
+            ...(endDate ? [lte(staffShifts.checkIn, endDate)] : []),
+          ),
+        );
+
+      const sales = await ctx.restaurantDb
+        .select({
+          staffId: orders.staffId,
+          tickets: sql<number>`count(*)::int`,
+          revenue: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
+          tips: sql<number>`COALESCE(SUM(${payments.tipAmount}), 0)`,
+        })
+        .from(payments)
+        .innerJoin(orders, eq(payments.orderId, orders.id))
+        .where(
+          and(
+            eq(orders.branchId, branchId),
+            settledPaymentStatuses(),
+            gte(payments.createdAt, startDate),
+            ...(endDate ? [lte(payments.createdAt, endDate)] : []),
+          ),
+        )
+        .groupBy(orders.staffId);
+
+      const salesByStaff = new Map(
+        sales.map((s) => [
+          s.staffId ?? "",
+          { tickets: Number(s.tickets), revenue: Number(s.revenue), tips: Number(s.tips) },
+        ]),
+      );
+
+      const now = Date.now();
+      const rows = people.map((p) => {
+        const hours = shifts
+          .filter((s) => s.staffId === p.id)
+          .reduce((sum, s) => {
+            const end = s.checkOut ? new Date(s.checkOut).getTime() : now;
+            return sum + Math.max(0, (end - new Date(s.checkIn).getTime()) / 3_600_000);
+          }, 0);
+        const sale = salesByStaff.get(p.id) ?? { tickets: 0, revenue: 0, tips: 0 };
+        const laborCost = hours * Number(p.hourlyRate || 0);
+        const commission = sale.revenue * (Number(p.commissionPct || 0) / 100);
+        return {
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          hours: r2(hours),
+          hourlyRate: Number(p.hourlyRate || 0),
+          laborCost: r2(laborCost),
+          tickets: sale.tickets,
+          revenue: r2(sale.revenue),
+          commissionPct: Number(p.commissionPct || 0),
+          commission: r2(commission),
+          tips: r2(sale.tips),
+          totalCost: r2(laborCost + commission),
+        };
+      });
+
+      return {
+        staff: rows,
+        totals: {
+          hours: r2(rows.reduce((s, r) => s + r.hours, 0)),
+          laborCost: r2(rows.reduce((s, r) => s + r.laborCost, 0)),
+          revenue: r2(rows.reduce((s, r) => s + r.revenue, 0)),
+          commission: r2(rows.reduce((s, r) => s + r.commission, 0)),
+          tips: r2(rows.reduce((s, r) => s + r.tips, 0)),
+          totalCost: r2(rows.reduce((s, r) => s + r.totalCost, 0)),
+        },
+      };
+    }),
+
   getTipsSummary: protectedProcedure
     .input(z.object({ branchId: z.string(), days: z.number().optional(), from: z.string().optional(), to: z.string().optional() }))
     .query(async ({ ctx, input }) => {

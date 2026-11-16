@@ -20,8 +20,8 @@ const roleConfig: Record<string, { label: string; icon: any; color: string; bg: 
   WAITER:  { label: "Mesero",  icon: UtensilsCrossed,  color: "text-gray-400",   bg: "bg-gray-500/10 border-gray-500/20",   badge: "default" },
 };
 
-type StaffForm = { name: string; email: string; role: string; pinCode: string };
-const defaultForm: StaffForm = { name: "", email: "", role: "WAITER", pinCode: "" };
+type StaffForm = { name: string; email: string; role: string; pinCode: string; hourlyRate: string; commissionPct: string };
+const defaultForm: StaffForm = { name: "", email: "", role: "WAITER", pinCode: "", hourlyRate: "", commissionPct: "" };
 
 // Random avatar bg from user name
 function getAvatarColor(name: string) {
@@ -43,7 +43,7 @@ export default function StaffPage() {
   const [filterRole, setFilterRole] = useState<string>("ALL");
 
   const openEdit = (m: NonNullable<typeof staff>[number]) => {
-    setForm({ name: m.name, email: m.email, role: m.role, pinCode: "" });
+    setForm({ name: m.name, email: m.email, role: m.role, pinCode: "", hourlyRate: String((m as { hourlyRate?: number }).hourlyRate ?? ""), commissionPct: String((m as { commissionPct?: number }).commissionPct ?? "") });
     setDialog({ mode: "edit", id: m.id });
   };
 
@@ -51,7 +51,14 @@ export default function StaffPage() {
     if (dialog?.mode === "create") {
       createStaff.mutate({ name: form.name, email: form.email, role: form.role as any, pinCode: form.pinCode || undefined });
     } else if (dialog?.id) {
-      updateStaff.mutate({ id: dialog.id, name: form.name, email: form.email, role: form.role as any });
+      updateStaff.mutate({
+        id: dialog.id,
+        name: form.name,
+        email: form.email,
+        role: form.role as any,
+        hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : 0,
+        commissionPct: form.commissionPct ? Number(form.commissionPct) : 0,
+      });
     }
   };
 
@@ -183,6 +190,22 @@ export default function StaffPage() {
           <Select label="Rol" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} options={roleOptions} />
           {dialog?.mode === "create" && (
             <Input label="PIN (4 dígitos)" maxLength={4} value={form.pinCode} onChange={(e) => setForm((f) => ({ ...f, pinCode: e.target.value }))} />
+          )}
+          {dialog?.mode === "edit" && (
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Costo por hora (MXN)"
+                inputMode="decimal"
+                value={form.hourlyRate}
+                onChange={(e) => setForm((f) => ({ ...f, hourlyRate: e.target.value.replace(/[^0-9.]/g, "") }))}
+              />
+              <Input
+                label="Comisión sobre ventas (%)"
+                inputMode="decimal"
+                value={form.commissionPct}
+                onChange={(e) => setForm((f) => ({ ...f, commissionPct: e.target.value.replace(/[^0-9.]/g, "") }))}
+              />
+            </div>
           )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>

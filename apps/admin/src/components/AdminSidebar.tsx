@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn, Button, Dialog, toast } from "@rabbitty/ui";
-import { LayoutDashboard, Banknote, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Clock, Salad, Truck, Receipt, CreditCard, ReceiptText, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut, Zap, UtensilsCrossed, TrendingUp, TabletSmartphone, TerminalSquare, Crown, Scale, Rocket, Gamepad2, BarChart3, Star, ShieldCheck, Activity, Brain, FlaskConical, Compass, BookOpen, MessageSquarePlus, Ticket, Route, FileSearch } from "lucide-react";
+import { LayoutDashboard, Banknote, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Clock, Salad, Truck, Receipt, CreditCard, ReceiptText, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut, Zap, UtensilsCrossed, TrendingUp, TabletSmartphone, TerminalSquare, Crown, Scale, Rocket, Gamepad2, BarChart3, Star, ShieldCheck, Activity, Brain, FlaskConical, Compass, BookOpen, MessageSquarePlus, Ticket, Route, FileSearch, ShoppingCart } from "lucide-react";
 import { useSidebar, useBranch } from "./DashboardClientWrapper";
 import { AdminFeedbackModal } from "./AdminFeedbackModal";
 import { trpc } from "../lib/trpc-client";
@@ -173,6 +173,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/menu", label: "Platillos & Menú", icon: ClipboardList },
       { href: "/recipes", label: "Recetas & Costos", icon: Salad },
       { href: "/inventory", label: "Inventario & Stock", icon: Package },
+      { href: "/purchases", label: "Órdenes de compra", icon: ShoppingCart, badge: "Nuevo" },
       { href: "/suppliers", label: "Proveedores", icon: Truck },
       { href: "/expenses", label: "Gastos Operativos", icon: Receipt },
       { href: "/pricing", label: "Precios Dinámicos", icon: DollarSign },
