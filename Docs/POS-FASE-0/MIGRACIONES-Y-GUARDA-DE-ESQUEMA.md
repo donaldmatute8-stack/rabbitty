@@ -62,6 +62,41 @@ Secuencia: migrar pendientes → verificar esquema, para `restaurant` y `core`.
 - Si las URLs no están en el entorno del servicio admin, **falla a propósito**:
   desplegar código sin poder migrar es justo lo que rompió producción.
 
+#### Reconciliación (segundo incidente, misma tarde)
+
+Primer deploy con el candado: **producción pasó, staging se bloqueó** con
+
+```
+✖ 0000_overjoyed_ezekiel.sql: relation "branches" already exists
+```
+
+Staging es un **clon de Neon**: tiene todas las tablas pero el libro mayor nace
+vacío. El runner quiso repetir la historia desde `0000` y se estrelló contra lo
+que ya existía. Prohibir el despliegue por un problema de contabilidad interna es
+peor que el problema.
+
+Ahora, si la base **ya tiene historia** (existe su tabla centinela: `branches` en
+restaurant, `users` en core) pero el libro mayor está vacío o incompleto:
+
+1. Cada archivo se intenta **atómico** (camino feliz, sin cambios de comportamiento).
+2. Si choca, se repite **sentencia por sentencia** tolerando solo los errores de
+   "ya existe" (`42P07`, `42701`, `42710`, `42P06`, `42723`, `42P16`).
+3. Lo que falla por depender de algo posterior (`42703`, `42P01`) se **difiere** y
+   se reintenta al final (así se resolvió el FK de `reservations` que llegaba
+   antes de que existiera su columna).
+4. Todo queda registrado en el libro mayor con `baselined = true`.
+
+**La guarda de esquema sigue siendo el juez**: si tras reconciliar falta algo,
+el despliegue se detiene con la lista exacta de columnas faltantes.
+
+Resultado en staging: 24 migraciones de restaurant y 21 de core reconciliadas,
+`0023`/`0024`/`0025` aplicadas de verdad, y las dos bases **sin desajustes**.
+
+> Caso que **sí** debe detener el despliegue: datos que violan una restricción
+> nueva (en staging, 36 reservas apuntaban a negocios inexistentes y el FK no
+> podía crearse). Eso no se tolera: se arregla el dato. Se respaldaron en
+> `_reservations_orphans_backup` antes de limpiarlas.
+
 ---
 
 ## 3. Resultado del primer barrido (2026-11-16)

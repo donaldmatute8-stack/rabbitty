@@ -369,6 +369,12 @@ completa de `staff` en cada request, así que el drift tumbó el POS entero.
 - Endurecido: `staff` ya no se lee con `select()` en contexto tRPC ni al abrir
   turno de caja.
 - Documento: `Docs/POS-FASE-0/MIGRACIONES-Y-GUARDA-DE-ESQUEMA.md`.
+- **Segundo incidente (misma tarde, staging)**: el pre-deploy bloqueó staging
+  porque es un clon de Neon con tablas pero libro mayor vacío (intentó repetir
+  desde `0000`). El runner ahora **reconcilia**: intento atómico por archivo y,
+  si choca, pasada tolerante que ignora los "ya existe" y difiere lo que depende
+  de una migración posterior. Staging quedó convergido (`restaurant` 24 y `core`
+  21 migraciones) sin desajustes. Producción nunca se vio afectada.
 - Deuda: `reservations` sirve a Bunz y a reservas de mesa a la vez; separarlas
   queda como tarea aparte.
 

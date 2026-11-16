@@ -18,11 +18,14 @@ export const DBS = {
     urlVar: "RESTAURANT_DATABASE_URL",
     dir: path.join(ROOT, "packages/database-restaurant/migrations"),
     schemaFile: path.join(ROOT, "packages/database-restaurant/src/schema/index.ts"),
+    // Tabla centinela: si existe, la base ya tiene historia (no es una base nueva).
+    sentinel: "branches",
   },
   core: {
     urlVar: "CORE_DATABASE_URL",
     dir: path.join(ROOT, "packages/database-core/migrations"),
     schemaFile: path.join(ROOT, "packages/database-core/src/schema/index.ts"),
+    sentinel: "users",
   },
 };
 
@@ -59,23 +62,22 @@ function readEnvLocal(varName) {
   return line.slice(varName.length + 1).trim().replace(/^["']|["']$/g, "");
 }
 
-function readRailwayVars() {
+function readRailwayVars(environment = "production") {
   try {
-    const raw = execSync("railway variables --service rabbitty-admin --environment production --json", {
-      cwd: ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    const raw = execSync(
+      `railway variables --service rabbitty-admin --environment ${environment} --json`,
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    );
     return JSON.parse(raw);
   } catch {
-    fail("No pude leer variables de Railway. Autentica el CLI o usa --target env.");
+    fail(`No pude leer variables de Railway (${environment}). Autentica el CLI o usa --target env.`);
   }
 }
 
 /**
  * Resuelve la URL y aplica la guarda anti-confusión:
  * - `local` exige host local.
- * - `prod`/`env` exigen host NO local.
+ * - `prod`/`staging`/`env` exigen host NO local.
  */
 export function resolveTargetUrl({ target, db }) {
   const cfg = DBS[db];
@@ -87,11 +89,12 @@ export function resolveTargetUrl({ target, db }) {
     if (!url) fail(`${cfg.urlVar} no está en el entorno`);
   } else if (target === "local") {
     url = readEnvLocal(cfg.urlVar);
-  } else if (target === "prod") {
-    url = readRailwayVars()[cfg.urlVar];
-    if (!url) fail(`Railway (producción) no tiene ${cfg.urlVar}`);
+  } else if (target === "prod" || target === "staging") {
+    const env = target === "prod" ? "production" : "staging";
+    url = readRailwayVars(env)[cfg.urlVar];
+    if (!url) fail(`Railway (${env}) no tiene ${cfg.urlVar}`);
   } else {
-    fail("Falta --target env|local|prod");
+    fail("Falta --target env|local|staging|prod");
   }
 
   const host = new URL(url).hostname;
@@ -100,7 +103,7 @@ export function resolveTargetUrl({ target, db }) {
   if (target === "local" && !local) {
     fail(`Pediste --target local pero la URL apunta a ${describe(url)}. Abortado.`);
   }
-  if ((target === "prod" || target === "env") && local) {
+  if ((target === "prod" || target === "staging" || target === "env") && local) {
     fail(`Pediste --target ${target} pero la URL es LOCAL (${describe(url)}). Abortado.`);
   }
 
