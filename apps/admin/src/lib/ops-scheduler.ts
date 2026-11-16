@@ -176,6 +176,28 @@ async function maybeRollback(invariants: Array<{ metric: string; status: string 
   }
 }
 
+
+/**
+ * Higiene: las solicitudes de cobro del POS caducan, pero si nadie las cierra
+ * quedan en APPROVED y la app del Rabbitter sigue mostrando "esperando cobro".
+ * El estado real (vencida) lo valida el servidor al cobrar; esto solo limpia.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function expireStaleChargeRequests(restaurantDb: { execute: (q: any) => Promise<unknown> }) {
+  try {
+    const { sql } = await import("drizzle-orm");
+    await restaurantDb.execute(
+      sql.raw(
+        `update "pos_charge_requests"
+            set "status" = 'EXPIRED', "updatedAt" = now()
+          where "status" in ('PENDING','APPROVED') and "expiresAt" < now()`,
+      ),
+    );
+  } catch (e) {
+    console.warn("[ops-scheduler] no pude expirar solicitudes de cobro:", e instanceof Error ? e.message : e);
+  }
+}
+
 let started = false;
 
 export function startOpsScheduler() {
@@ -215,6 +237,8 @@ async function tick(reason: string) {
 
     const restaurantDb = getRestaurantDb();
     const coreDb = getCoreDb();
+
+    await expireStaleChargeRequests(restaurantDb);
 
     const health = await runOpsHealthCheck({ restaurantDb, coreDb });
     await maybeRollback(health.invariants);
