@@ -216,6 +216,16 @@ export async function POST(request: Request) {
     //    y crédito — nunca más débito huérfano). El vault path NO debita: el claim
     //    (claim-ticket / bot) debita al momento de acreditar al usuario.
     const businessId = effectiveBusinessId || business_id || "unknown";
+
+    // Sin negocio no hay respaldo: emitir Bunz sin saber quién los respalda es
+    // exactamente lo que la economía prohíbe. Antes reventaba con un 500 opaco
+    // en el INSERT (FK/NOT NULL); ahora se dice claro.
+    if (businessId === "unknown") {
+      return NextResponse.json(
+        { error: "Falta business_id: no se puede emitir sin negocio que respalde." },
+        { status: 400 },
+      );
+    }
     const hasEnoughInventory = true; // se re-evalúa dentro de la tx
 
     const expirationDate = new Date();
@@ -291,7 +301,11 @@ export async function POST(request: Request) {
           {
             // branchId tiene FK a branches — aquí no hay branch confiable (businessId NO es branch)
             branchId: null,
-            payerSubjectId: businessId !== 'unknown' ? businessId : 'POS',
+            // El ledger exige sujetos canónicos con prefijo:
+            //   CHECK (payerSubjectId ~ '^(usr|biz|sys)_[A-Za-z0-9_-]+$')
+            // Antes se pasaba el UUID crudo del negocio (o 'POS'), así que el
+            // INSERT violaba la restricción y TODA emisión de Bunz devolvía 500.
+            payerSubjectId: businessId !== 'unknown' ? `biz_${businessId}` : 'sys_pos',
             payeeSubjectId: `usr_${existingUser.id}`,
             amount: bunzToMint,
             type: 'EARN',
