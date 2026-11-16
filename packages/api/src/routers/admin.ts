@@ -497,6 +497,55 @@ export const adminRouter = router({
     return ctx.restaurantDb.select().from(restaurants).where(eq(restaurants.id, branch.restaurantId));
   }),
 
+  /**
+   * Restaurantes del negocio con sus sucursales — para el conmutador del admin.
+   * Aislamiento: el dueño ve los suyos; staff con PIN solo su restaurante.
+   */
+  getBusinessRestaurants: adminOnlyProcedure.query(async ({ ctx }) => {
+    const branchId = ctx.staffRole && ctx.staffBranchId ? ctx.staffBranchId : ctx.branchId;
+
+    // Staff: solo el restaurante de su sucursal (misma regla que getRestaurants).
+    if (ctx.staffRole && ctx.staffBranchId) {
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1);
+      if (!branch?.restaurantId) return [];
+      const rows = await ctx.restaurantDb
+        .select({ id: restaurants.id, name: restaurants.name, slug: restaurants.slug })
+        .from(restaurants)
+        .where(eq(restaurants.id, branch.restaurantId));
+      const brs = await ctx.restaurantDb.select().from(branches).where(eq(branches.restaurantId, branch.restaurantId));
+      return rows.map((r) => ({
+        ...r,
+        branches: brs
+          .filter((b) => b.isActive)
+          .map((b) => ({ id: b.id, name: b.name, isActive: b.isActive })),
+      }));
+    }
+
+    const businessId = await resolveAffiliateId(ctx);
+    if (!businessId) return [];
+
+    const rows = await ctx.restaurantDb
+      .select({ id: restaurants.id, name: restaurants.name, slug: restaurants.slug })
+      .from(restaurants)
+      .where(eq(restaurants.businessId, businessId))
+      .orderBy(restaurants.name);
+
+    if (rows.length === 0) return [];
+    const ids = rows.map((r) => r.id);
+    const brs = await ctx.restaurantDb.select().from(branches).where(inArray(branches.restaurantId, ids));
+
+    return rows.map((r) => ({
+      ...r,
+      branches: brs
+        .filter((b) => b.restaurantId === r.id && b.isActive)
+        .map((b) => ({ id: b.id, name: b.name, isActive: b.isActive })),
+    }));
+  }),
+
   updateRestaurant: adminOnlyProcedure
     .input(
       z.object({
