@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { rateLimit, requestCounts } from "./rateLimit";
+import { rateLimit, rateLimitKey, requestCounts } from "./rateLimit";
 import { TRPCError } from "@trpc/server";
 
 describe("rateLimit middleware", () => {
@@ -20,32 +20,40 @@ describe("rateLimit middleware", () => {
   });
 
   it("resets rate limit after window", async () => {
-    const WINDOW_MS = 60_000;
     const now = Date.now();
-    
+
     await rateLimit("user3");
-    
-    // Simulate setting entry directly to reset time
-    requestCounts.set("user3", { 
-      count: 60, 
-      resetAt: now - 1000 // expired
+
+    // Simular una entrada vencida
+    requestCounts.set("user3", {
+      count: 400,
+      resetAt: now - 1000,
     });
-    
+
     await expect(rateLimit("user3")).resolves.not.toThrow();
     const entry = requestCounts.get("user3");
     expect(entry!.count).toBe(1);
   });
 
   it("throws error when limit exceeded", async () => {
-    await expect((async () => {
-      for (let i = 0; i < 65; i++) {
-        await rateLimit("user4");
-      }
-    })()).rejects.toThrow(TRPCError);
+    // Tope explícito pequeño para no depender del valor por defecto.
+    await expect(
+      (async () => {
+        for (let i = 0; i < 6; i++) {
+          await rateLimit("user4", 5);
+        }
+      })(),
+    ).rejects.toThrow(TRPCError);
+  });
+
+  it("uses one bucket per user and one per terminal", async () => {
+    expect(rateLimitKey({ userId: "u1" })).toBe("u1");
+    expect(rateLimitKey({ posAuth: { method: "terminal", sessionId: "s1" } })).toBe("terminal:s1");
+    // Sin sesión de usuario ni terminal: cubo compartido, no revienta
+    expect(rateLimitKey({})).toBe("anonymous");
   });
 
   it("handles anonymous users", async () => {
-    await expect(rateLimit(null)).resolves.not.toThrow();
-    await expect(rateLimit(undefined)).resolves.not.toThrow();
+    await expect(rateLimit(rateLimitKey({}))).resolves.not.toThrow();
   });
 });

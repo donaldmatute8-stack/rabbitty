@@ -3124,6 +3124,51 @@ export default function PosPage() {
               </div>
             )}
 
+            {/* ── Membresía detectada pero SIN beneficio aplicado ──────────────
+                Antes, si el cálculo fallaba (rate limit, sucursal no incluida en
+                el plan, cuota agotada), el POS caía al precio de lista sin decir
+                nada y el socio podía pagar completo. Ahora se avisa y no se deja
+                cobrar a ciegas. */}
+            {detectedMembership && benefitPreview.isError && (
+              <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 p-2.5">
+                <p className="m-0 text-[11px] font-black text-amber-200">
+                  Membresía detectada · el beneficio NO se aplicó
+                </p>
+                <p className="m-0 mt-0.5 text-[10.5px] leading-snug text-amber-200/80">
+                  {(benefitPreview.error as { message?: string } | null)?.message ??
+                    "No se pudo calcular el beneficio."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => benefitPreview.refetch()}
+                  className="mt-1.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-200 hover:bg-amber-400/20"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+
+            {detectedMembership &&
+              benefitPreview.data &&
+              membershipDiscount === 0 &&
+              (benefitPreview.data.lines ?? []).some((l: { reason?: string }) => l.reason) && (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
+                  <p className="m-0 text-[10px] font-black uppercase tracking-wider text-gray-500">
+                    Motivo por el que no se aplica
+                  </p>
+                  <ul className="m-0 mt-1 list-none p-0">
+                    {(benefitPreview.data.lines ?? [])
+                      .filter((l: { reason?: string }) => l.reason)
+                      .slice(0, 3)
+                      .map((l: { entitlementId: string; reason?: string }) => (
+                        <li key={l.entitlementId} className="text-[10.5px] text-amber-200/80">
+                          · {l.reason}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+
             {/* Massive Checkout & Digital Dispatch Buttons */}
             <div className="flex gap-2">
               <button 
@@ -3137,6 +3182,12 @@ export default function PosPage() {
               </button>
               <button 
                 onClick={() => {
+                  // Si hay membresía detectada y el cálculo falló, NO se cobra:
+                  // el precio mostrado sería el de lista y el socio pagaría de más.
+                  if (detectedMembership && benefitPreview.isError) {
+                    toast.error("No se pudo calcular el beneficio de la membresía. Reintenta antes de cobrar.");
+                    return;
+                  }
                   // Content-aware: si la membresía cubre todo, se completa sin
                   // elegir método de pago (no hay nada que cobrar).
                   if (coveredByMembership) { void handleCheckout("MEMBRESIA"); return; }

@@ -9,18 +9,33 @@ if (redisUrl) {
 
 export const requestCounts = new Map<string, { count: number; resetAt: number }>();
 
-const WINDOW_S = 60;
+/**
+ * ── Límites (configurables) ────────────────────────────────────────────────
+ *
+ * Historia: con un tope fijo de 60/min, el POS se pasaba de largo. La pantalla
+ * dispara ~20 consultas al abrir, más invalidaciones al capturar y el preview de
+ * membresía en cada cambio de carrito. Al quedar limitada una consulta, el POS
+ * caía al precio de lista **sin avisar**: un socio podía acabar pagando completo.
+ *
+ * Reglas ahora:
+ * - Lecturas (query): presupuesto amplio. Son baratas y de alta frecuencia.
+ * - Escrituras (mutation): presupuesto más bajo (dinero, inventario, turnos).
+ * - Todo configurable por entorno sin desplegar código.
+ */
+const WINDOW_S = Number(process.env.RATE_LIMIT_WINDOW_S ?? 60);
 const WINDOW_MS = WINDOW_S * 1000;
-const MAX_REQUESTS = 60;
+const MAX_QUERY = Number(process.env.RATE_LIMIT_MAX_QUERY ?? 400);
+const MAX_MUTATION = Number(process.env.RATE_LIMIT_MAX_MUTATION ?? 150);
+
+function limitFor(kind: "query" | "mutation" | "subscription"): number {
+  return kind === "mutation" ? MAX_MUTATION : MAX_QUERY;
+}
 
 /**
- * @param scope clave explícita (p. ej. `terminal:<sessionId>`). Permite limitar
- *              dispositivos POS sin identidad de usuario sin mezclarlos con el
- *              cubo compartido de "anonymous".
+ * @param key     clave del cubo (`terminal:<sessionId>`, userId o anonymous)
+ * @param max     tope de peticiones en la ventana
  */
-export async function rateLimit(userId: string | null | undefined, scope?: string | null) {
-  const key = scope ?? userId ?? "anonymous";
-
+export async function rateLimit(key: string, max = MAX_QUERY) {
   if (redis) {
     try {
       const redisKey = `ratelimit:${key}`;
@@ -28,7 +43,7 @@ export async function rateLimit(userId: string | null | undefined, scope?: strin
       if (count === 1) {
         await redis.expire(redisKey, WINDOW_S);
       }
-      if (count > MAX_REQUESTS) {
+      if (count > max) {
         throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Rate limit exceeded" });
       }
       return;
@@ -47,9 +62,18 @@ export async function rateLimit(userId: string | null | undefined, scope?: strin
     return;
   }
 
-  if (entry.count >= MAX_REQUESTS) {
+  if (entry.count >= max) {
     throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Rate limit exceeded" });
   }
 
   entry.count++;
 }
+
+/** El middleware decide el cubo (usuario o terminal) y el presupuesto por tipo. */
+export function rateLimitKey(ctx: { userId?: string | null; posAuth?: { method?: string; sessionId?: string | null } | null }) {
+  return ctx.posAuth?.method === "terminal" && ctx.posAuth.sessionId
+    ? `terminal:${ctx.posAuth.sessionId}`
+    : ctx.userId ?? "anonymous";
+}
+
+export { limitFor };

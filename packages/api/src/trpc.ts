@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import type { getRestaurantDb, getCoreDb } from "./db";
-import { rateLimit } from "./middleware/rateLimit";
+import { rateLimit, rateLimitKey, limitFor } from "./middleware/rateLimit";
 import { logAudit } from "./middleware/auditLog";
 import { users as usersCore } from "@rabbitty/database-core";
 import {
@@ -57,14 +57,14 @@ export const t = initTRPC.context<Context>().create();
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-const rateLimitMiddleware = t.middleware(async ({ ctx, next }) => {
+const rateLimitMiddleware = t.middleware(async ({ ctx, type, next }) => {
   // La terminal no tiene userId: se limita por sesión de terminal, no como
-  // "anonymous" (todas las terminales compartirían un solo cubo de 60/min).
-  const scope =
-    ctx.posAuth?.method === "terminal" && ctx.posAuth.sessionId
-      ? `terminal:${ctx.posAuth.sessionId}`
-      : null;
-  await rateLimit(ctx.userId, scope);
+  // "anonymous" (todas las terminales compartirían un solo cubo).
+  //
+  // Presupuesto por tipo: las lecturas son baratas y muy frecuentes (el POS
+  // dispara ~20 al abrir, más el preview de membresía en cada cambio de
+  // carrito); las escrituras mueven dinero y van más apretadas.
+  await rateLimit(rateLimitKey(ctx), limitFor(type));
   return next();
 });
 
