@@ -17,7 +17,41 @@
  * - Arranca diferido (60 s) para no competir con el arranque del servidor.
  */
 
+/**
+ * Cadencia adaptativa.
+ *
+ * En horario de operación el comercio cobra: revisar cada 15 min se justifica.
+ * De madrugada no hay cajas abiertas, y cada revisión DESPIERTA el cómputo de
+ * Neon (que se suspende a los 5 min de inactividad). Cada despertar cuesta
+ * segundos de cómputo; multiplicado por 96 revisiones al día es gasto sin
+ * retorno. Con 60 min por la noche se detecta igual una caída, a un cuarto del
+ * costo.
+ */
 const CHECK_EVERY_MS = 15 * 60_000;
+const CHECK_EVERY_NIGHT_MS = 60 * 60_000;
+
+function businessHourLocal(): number {
+  try {
+    return Number(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: process.env.BUSINESS_TZ || "America/Mexico_City",
+        hour: "2-digit",
+        hour12: false,
+      }).format(new Date()),
+    );
+  } catch {
+    return new Date().getUTCHours();
+  }
+}
+
+function isOperatingHours(): boolean {
+  const h = businessHourLocal();
+  return h >= 9 && h < 22;
+}
+
+function nextDelayMs(): number {
+  return isOperatingHours() ? CHECK_EVERY_MS : CHECK_EVERY_NIGHT_MS;
+}
 const BACKUP_EVERY_HOURS = 6;
 const BACKUP_THRESHOLD_HOURS = 5.5;
 const START_DELAY_MS = 60_000;
@@ -116,15 +150,23 @@ export function startOpsScheduler() {
     return;
   }
   started = true;
-  console.log("[ops-scheduler] activo (invariantes cada 15 min, respaldo cada ~6 h)");
+  console.log(
+    "[ops-scheduler] activo (cada 15 min en horario de operación, 60 min fuera; respaldo cada ~6 h)",
+  );
 
-  setTimeout(() => {
-    void tick("arranque");
+  setTimeout(async () => {
+    await tick("arranque");
+    // Cadena de timeouts (no interval fijo): la espera se recalcula en cada
+    // ciclo, así el servicio baja a 1 revisión/hora de madrugada sin reiniciar.
+    const loop = async () => {
+      const delay = nextDelayMs();
+      setTimeout(async () => {
+        await tick(`periodico (cada ${Math.round(delay / 60000)} min)`);
+        void loop();
+      }, delay);
+    };
+    void loop();
   }, START_DELAY_MS);
-
-  setInterval(() => {
-    void tick("periodico");
-  }, CHECK_EVERY_MS);
 }
 
 async function tick(reason: string) {
