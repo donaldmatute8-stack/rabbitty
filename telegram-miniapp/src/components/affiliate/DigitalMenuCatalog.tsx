@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Sparkles, Plus, Info, SlidersHorizontal, Flame, Utensils, Coffee, X } from 'lucide-react';
+import { Search, Sparkles, Plus, Info, SlidersHorizontal, Flame, Utensils, Coffee, X, Heart } from 'lucide-react';
 import Image from 'next/image';
 import { ProductDetailModal, CatalogItem, CatalogModifier } from './ProductDetailModal';
 
@@ -18,6 +18,8 @@ interface DigitalMenuCatalogProps {
   currency?: string;
   rewardPercentage?: number;
   onAddToCart?: (item: CatalogItem, quantity: number, modifiers: CatalogModifier[], notes: string) => void;
+  /** Guarda el producto en la lista de deseos del Rabbitter. */
+  onWishlist?: (item: CatalogItem) => void;
   digitalOrderingEnabled?: boolean;
 }
 
@@ -26,6 +28,7 @@ export function DigitalMenuCatalog({
   currency = 'MXN',
   rewardPercentage = 10,
   onAddToCart,
+  onWishlist,
   digitalOrderingEnabled = true,
 }: DigitalMenuCatalogProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
@@ -260,9 +263,22 @@ export function DigitalMenuCatalog({
                           <span>+{estimatedBunz} Bunz</span>
                         </span>
 
-                        <div className="flex items-center gap-1 text-xs font-black text-white bg-linear-to-r from-[#FF2E93] to-[#E91E63] group-hover:brightness-110 px-3 py-1 rounded-xl transition-all shadow-sm shadow-pink-500/20">
-                          <Plus size={13} className="shrink-0" />
-                          <span>{digitalOrderingEnabled ? 'Agregar' : 'Ver'}</span>
+                        <div className="flex items-center gap-1.5">
+                          {onWishlist && (
+                            <button
+                              type="button"
+                              aria-label="Guardar en mi lista de deseos"
+                              title="Guardar en mi lista de deseos"
+                              onClick={(e) => { e.stopPropagation(); onWishlist(item); }}
+                              className="flex h-7 w-7 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white/70 active:scale-90 transition-transform"
+                            >
+                              <Heart size={13} />
+                            </button>
+                          )}
+                          <div className="flex items-center gap-1 text-xs font-black text-white bg-linear-to-r from-[#FF2E93] to-[#E91E63] group-hover:brightness-110 px-3 py-1 rounded-xl transition-all shadow-sm shadow-pink-500/20">
+                            <Plus size={13} className="shrink-0" />
+                            <span>{digitalOrderingEnabled ? 'Agregar' : 'Ver'}</span>
+                          </div>
                         </div>
                       </div>
                     </div>

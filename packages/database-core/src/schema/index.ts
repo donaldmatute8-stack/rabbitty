@@ -1204,6 +1204,66 @@ export const userPreferences = pgTable("user_preferences", {
 ]);
 
 /**
+ * ── Lista de deseos (2026-11-16) ──
+ * Una lista por usuario. Los deseos pueden ser de catálogo (PRODUCT) o libres
+ * (CUSTOM, con monto). Compartir es por grupo (la "madriguera" son los grupos
+ * de chat). Los deseos caducan a 90 días y se pueden regalar ("me apunto").
+ */
+export const wishlists = pgTable("wishlists", {
+  id: id(),
+  userId: text("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title"),
+  /** PRIVATE | CIRCLE | LINK */
+  visibility: text("visibility").default("PRIVATE").notNull(),
+  birthdayAt: timestamp("birthdayAt"),
+  isActive: boolean("isActive").default(true).notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("wishlists_user_uq").on(t.userId),
+]);
+
+export const wishlistItems = pgTable("wishlist_items", {
+  id: id(),
+  wishlistId: uuid("wishlistId").notNull().references(() => wishlists.id, { onDelete: "cascade" }),
+  /** PRODUCT | CUSTOM */
+  kind: text("kind").notNull(),
+  businessId: text("businessId").references(() => ownedBusinesses.id, { onDelete: "set null" }),
+  menuItemId: text("menuItemId"),
+  title: text("title").notNull(),
+  imageUrl: text("imageUrl"),
+  priceSnapshot: real("priceSnapshot"),
+  note: text("note"),
+  priority: integer("priority").default(0).notNull(),
+  /** ACTIVE | GIFTED | PURCHASED | EXPIRED */
+  status: text("status").default("ACTIVE").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  ...timestamps,
+}, (t) => [
+  index("wishlist_items_list_idx").on(t.wishlistId, t.status),
+]);
+
+export const wishlistShares = pgTable("wishlist_shares", {
+  id: id(),
+  wishlistId: uuid("wishlistId").notNull().references(() => wishlists.id, { onDelete: "cascade" }),
+  groupId: text("groupId").notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("wishlist_shares_uq").on(t.wishlistId, t.groupId),
+]);
+
+export const wishlistPledges = pgTable("wishlist_pledges", {
+  id: id(),
+  itemId: uuid("itemId").notNull().references(() => wishlistItems.id, { onDelete: "cascade" }),
+  giverId: text("giverId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  message: text("message"),
+  /** PLEDGED | CANCELLED */
+  status: text("status").default("PLEDGED").notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("wishlist_pledges_uq").on(t.itemId, t.giverId),
+]);
+
+/**
  * ── Avisos de preferencia enviados (medición) ──
  * Permite medir apertura/conversión y aplicar anti-spam (72 h por favorito,
  * 3 por semana). La entrega real sigue por `notifications_outbox`.

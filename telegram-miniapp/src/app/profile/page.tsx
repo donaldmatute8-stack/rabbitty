@@ -43,6 +43,7 @@ const ACCOUNT_ITEMS = [
   { icon: Wallet, label: 'Mi Billetera', desc: 'Saldo y movimientos', href: '/profile/wallet' },
   { icon: BadgeCheck, label: 'Mis Membresías', desc: 'Pases y beneficios', href: '/memberships' },
   { icon: Ticket, label: 'Mis Cupones', desc: 'Cupones y recompensas', href: '/profile/inventory' },
+  { icon: Gift, label: 'Mi lista de deseos', desc: 'Lo que quieres de tus lugares', href: '/profile/wishlist' },
   { icon: History, label: 'Historial', desc: 'Movimientos y tickets', href: '/history' },
 ];
 

@@ -1,0 +1,25 @@
+name: Rabbitty Wishlist Nudges
+
+on:
+  schedule:
+    # diario 15:00 UTC (09:00 MX): cumpleaños, caducidad (90 d) y "actualiza tu lista"
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+jobs:
+  wishlist:
+    name: Wishlist birthdays + expiry
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Trigger wishlist nudges
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$APP_URL/api/cron/wishlist-nudges" \
+            -H "Authorization: Bearer $CRON_SECRET" -H "Accept: application/json")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "HTTP $HTTP_STATUS"; echo "$BODY"
+          [ "$HTTP_STATUS" -eq 200 ] || { echo "::error::wishlist cron failed"; exit 1; }

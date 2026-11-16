@@ -367,6 +367,31 @@ function AffiliateProfileContent() {
     return null;
   }, [favoriteProduct, categories]);
 
+  /** Guarda un producto del menú en la lista de deseos (contextual, sin salir). */
+  const handleWishlist = async (item: { id: string; name: string; price: number; imageUrl?: string | null }) => {
+    try {
+      PlatformBridge.hapticFeedback('medium');
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/wishlist/items', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'PRODUCT',
+          businessId: affiliate?.id,
+          menuItemId: item.id,
+          title: item.name,
+          imageUrl: item.imageUrl ?? null,
+          priceSnapshot: item.price,
+        }),
+      });
+      const data = await res.json();
+      if (!data?.success) throw new Error(data?.error || 'No se pudo guardar');
+      showToast('Guardado en tu lista de deseos 🎁', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo guardar', 'error');
+    }
+  };
+
   const handleAddToCart = (
     item: CatalogItem,
     quantity: number,
@@ -892,6 +917,7 @@ function AffiliateProfileContent() {
               currency="MXN"
               rewardPercentage={affiliate.rewardPercentage}
               onAddToCart={handleAddToCart}
+              onWishlist={handleWishlist}
               digitalOrderingEnabled={capabilities.digitalOrderingEnabled}
             />
           </div>
