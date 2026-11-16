@@ -2,47 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Search, 
-  FileText,
-  Percent,
-  LayoutDashboard, 
-  Store, 
-  Users, 
-  Settings, 
-  ChefHat, 
-  ClipboardList, 
-  Package, 
-  Printer, 
-  Clock, 
-  Salad, 
-  Truck, 
-  Receipt, 
-  CreditCard,
-  CalendarCheck, 
-  DollarSign, 
-  Monitor, 
-  Award, 
-  Gift, 
-  Megaphone, 
-  Cake, 
-  Repeat, 
-  QrCode, 
-  BookUser, 
-  Table2, 
-  Webhook, 
-  UserRound, 
-  Command,
-  X,
-  Banknote,
-  TrendingUp,
-  BookOpen,
-  FlaskConical,
-  Brain,
-  Ticket,
-  Sparkles,
-  Compass
-} from "lucide-react";
+import { Search, FileText, Percent, LayoutDashboard, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, Clock, Salad, Truck, Receipt, CreditCard, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, Command, X, Banknote, TrendingUp, BookOpen, FlaskConical, Brain, Ticket, Sparkles, Compass } from "lucide-react";
 import { cn } from "@rabbitty/ui";
 
 type CommandItem = {
@@ -81,6 +41,7 @@ const commands: CommandItem[] = [
   // 🎟️ Lealtad & Membresías (Operación)
   { id: "loyalty", label: "Cashback Bunz & Lealtad", category: "🎟️ Lealtad & Membresías", href: "/loyalty", icon: Award, keywords: ["puntos", "recompensas", "regalos"] },
   { id: "memberships", label: "Membresías & Planes", category: "🎟️ Lealtad & Membresías", href: "/memberships", icon: Ticket, keywords: ["membresía", "planes", "suscripciones", "pass", "derechos"] },
+  { id: "niches", label: "Expansión a nichos", category: "🎟️ Lealtad & Membresías", href: "/niches", icon: Compass, keywords: ["nicho", "giro", "veterinaria", "hotel", "lavandería", "expansión"] },
   { id: "catering", label: "Eventos & Catering", category: "🎟️ Lealtad & Membresías", href: "/catering", icon: CalendarCheck, keywords: ["banquetes", "privados"] },
 
   // 🚀 Marketing Studio

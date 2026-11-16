@@ -241,6 +241,7 @@ const menuPillars: MenuPillar[] = [
     items: [
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
       { href: "/memberships", label: "Membresías & Planes", icon: Ticket, badge: "Nuevo" },
+      { href: "/niches", label: "Expansión a nichos", icon: Compass, badge: "Nuevo" },
       { href: "/conciliaciones", label: "Conciliaciones", icon: Scale },
       { href: "/catering", label: "Eventos & Catering", icon: CalendarCheck },
       { href: "/academy", label: "Guías & Academy", icon: BookOpen, badge: "Docs" },

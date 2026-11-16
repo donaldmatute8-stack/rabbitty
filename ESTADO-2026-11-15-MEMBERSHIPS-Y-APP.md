@@ -308,3 +308,20 @@ El panel de Admin muestra conversión por brazo.
 **Premios de retos**: los define **cada afiliado** por negocio (coste de su bolsillo, se
 honra en mostrador). Si no define premio, el reto se muestra con su insignia y **sin chip de
 premio**: la app nunca promete algo que el negocio no ofreció.
+
+### 13. Expansión a otros nichos — panel operativo (2026-11-16)
+
+- **Admin → Expansión a nichos** (`/niches`): cola de `niche_requests` con resumen
+  (total, pendientes, contactadas, lanzadas), **demanda por giro**, filtros y acciones
+  (contactado / lanzado / descartar / volver a pendiente). Antes solo se veía por SQL.
+- **Aviso interno** al entrar una solicitud: email a `NICHE_TEAM_EMAIL` o `SUPPORT_EMAIL`
+  (best-effort; si no está configurado se omite).
+- **`other` apagado** en el catálogo (la UI ya lo filtraba; ahora la API tampoco lo ofrece).
+- Estado del catálogo: **11 nichos activos** + **10 inactivos con su `needs`** (veterinaria,
+  farmacia, lavandería, hotel, florería, ferretería, papelería, taller, estética canina,
+  coworking). `niche_requests` estaba vacío: la demanda aún no entra.
+- POS hardening (ADR-014) verificado **encendido en producción**:
+  `POS_TERMINAL_SESSIONS=1`, `POS_OPERATOR_SESSIONS=1`, `POS_ROLE_ENFORCEMENT=1`.
+
+**Siguiente bloque**: revisar el nicho **restaurante** (cocinas/KDS, impresoras, multisucursal,
+varias cajas/dispositivos, empleados, contabilidad y administración) para ver qué falta.

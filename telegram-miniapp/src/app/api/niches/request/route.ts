@@ -189,6 +189,37 @@ export async function POST(request: Request) {
       console.warn('[NICHE REQUEST] correo no enviado:', nicheLabel, email);
     }
 
+    // Aviso interno al equipo (best-effort). Configura NICHE_TEAM_EMAIL o
+    // SUPPORT_EMAIL; si no hay, se omite sin afectar la solicitud.
+    const teamEmail = (process.env.NICHE_TEAM_EMAIL || process.env.SUPPORT_EMAIL || '').trim();
+    if (teamEmail) {
+      try {
+        const rows = [
+          ['Giro', nicheLabel],
+          ['Negocio', businessName || '—'],
+          ['Contacto', contactName || '—'],
+          ['Correo', email],
+          ['WhatsApp', `+${phone}`],
+          ['Mensaje', message || '—'],
+          ['Fuente', source],
+        ]
+          .map(([k, v]) => `<tr><td style="padding:4px 8px;color:#6b7280">${k}</td><td style="padding:4px 8px;font-weight:600">${String(v).replace(/</g, '&lt;')}</td></tr>`)
+          .join('');
+        await sendEmail({
+          to: teamEmail,
+          subject: `Nueva solicitud de nicho: ${nicheLabel}`,
+          html: `<div style="font-family:system-ui,sans-serif;line-height:1.5">
+            <h2 style="margin:0 0 8px">Nueva solicitud de nicho</h2>
+            <p style="margin:0 0 12px;color:#444">Alguien pidió un giro que aún no cubrimos.</p>
+            <table style="border-collapse:collapse">${rows}</table>
+            <p style="margin:16px 0 0;font-size:12px;color:#888">Revísala en Admin → Expansión a nichos.</p>
+          </div>`,
+        });
+      } catch (teamErr) {
+        console.warn('[NICHE REQUEST] aviso interno falló:', teamErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       requestId: created.id,

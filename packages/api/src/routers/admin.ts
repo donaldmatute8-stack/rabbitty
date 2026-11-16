@@ -6,7 +6,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { ledgerEntries as ledgerEntries2, branches as dbSchemaBranches, restaurants as dbSchemaRestaurants } from "@rabbitty/database-restaurant/schema";
 import { bus, EventTypes } from "@rabbitty/events";
 import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCategories, menuItems, bunzEconomicLimits } from "@rabbitty/database-restaurant/schema";
-import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches, merchantCapacityAccounts } from "@rabbitty/database-core";
+import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches, nicheRequests, merchantCapacityAccounts } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
 import {
@@ -192,6 +192,75 @@ export const adminRouter = router({
   }),
 
   /** Catálogo de nichos activos para confirmar el giro en el re-onboarding. */
+  /**
+   * Admin: cola de solicitudes de nicho (expansión a otros giros).
+   * Solo lectura + cambio de estado; no toca negocios ni onboarding.
+   */
+  listNicheRequests: adminOnlyProcedure
+    .input(
+      z.object({
+        status: z.enum(["PENDING", "CONTACTED", "LAUNCHED", "DISCARDED"]).optional(),
+        limit: z.number().int().min(1).max(300).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await ctx.coreDb
+        .select()
+        .from(nicheRequests)
+        .where(input.status ? eq(nicheRequests.status, input.status) : undefined)
+        .orderBy(desc(nicheRequests.createdAt))
+        .limit(input.limit ?? 150);
+      return rows;
+    }),
+
+  /** Admin: resumen por giro y estado (para decidir qué nicho abrir). */
+  nicheRequestsSummary: adminOnlyProcedure.query(async ({ ctx }) => {
+    const byNiche = await ctx.coreDb
+      .select({
+        label: nicheRequests.nicheLabel,
+        total: sql<number>`count(*)::int`,
+        pending: sql<number>`count(*) FILTER (WHERE ${nicheRequests.status} = 'PENDING')::int`,
+      })
+      .from(nicheRequests)
+      .groupBy(nicheRequests.nicheLabel)
+      .orderBy(desc(sql`count(*)`))
+      .limit(12);
+
+    const [totals] = await ctx.coreDb
+      .select({
+        total: sql<number>`count(*)::int`,
+        pending: sql<number>`count(*) FILTER (WHERE ${nicheRequests.status} = 'PENDING')::int`,
+        contacted: sql<number>`count(*) FILTER (WHERE ${nicheRequests.status} = 'CONTACTED')::int`,
+        launched: sql<number>`count(*) FILTER (WHERE ${nicheRequests.status} = 'LAUNCHED')::int`,
+      })
+      .from(nicheRequests);
+
+    return {
+      byNiche: byNiche.map((r) => ({ label: r.label, total: Number(r.total), pending: Number(r.pending) })),
+      totals: {
+        total: Number(totals?.total ?? 0),
+        pending: Number(totals?.pending ?? 0),
+        contacted: Number(totals?.contacted ?? 0),
+        launched: Number(totals?.launched ?? 0),
+      },
+    };
+  }),
+
+  updateNicheRequestStatus: adminOnlyProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        status: z.enum(["PENDING", "CONTACTED", "LAUNCHED", "DISCARDED"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.coreDb
+        .update(nicheRequests)
+        .set({ status: input.status })
+        .where(eq(nicheRequests.id, input.id));
+      return { success: true };
+    }),
+
   onboardingNiches: protectedProcedure.query(async ({ ctx }) =>
     ctx.coreDb
       .select({
