@@ -2623,10 +2623,15 @@ export const posRouter = router({
         }
       }
 
-      // ── Confirmación del Rabbitter OBLIGATORIA (server-side) ──
-      // Un POS con bundle viejo (sin el paso de confirmación) no puede cobrar
-      // a un Rabbitter vinculado: debe actualizar y pedir la autorización.
-      if (input.customerId && input.paymentMethod !== "MEMBERSHIP") {
+      // ── Confirmación del Rabbitter (server-side) ──
+      // Aplica a cobros que se llevan dinero del cliente SIN su presencia física:
+      // Bunz (sale de su monedero) y tarjeta registrada. NO aplica a:
+      //  · MEMBERSHIP → el beneficio ya está validado por el motor de membresía
+      //  · CASH       → el cliente entrega el efectivo en ese momento; pedirle
+      //                 aprobación en la app sólo bloquea la venta (bug real: el
+      //                 POS se quedaba "esperando confirmación" y el ticket nunca
+      //                 cerraba, así que tampoco se acreditaban los Bunz).
+      if (input.customerId && input.paymentMethod !== "MEMBERSHIP" && input.paymentMethod !== "CASH") {
         if (!input.chargeApprovalId) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",

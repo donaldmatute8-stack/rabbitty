@@ -685,8 +685,20 @@ export default function PosPage() {
 
               // Auto-aplicar los beneficios base del pase; el cajero solo
               // desmarca a los acompañantes en el panel de cobro.
+              //
+              // INCLUDED_PRODUCT (p. ej. "bebida gratis de tu plan") faltaba
+              // aquí: al escanear el pase nunca se mandaba al servidor, así que
+              // el POS no la descontaba. Cada plan trae su propio producto en
+              // targetRefId y el motor sólo descuenta si ese platillo está en
+              // la cuenta.
               const autoIds = (pass.benefits ?? [])
-                .filter((b: any) => b.benefitType === "MEMBER_CONSUMPTION" || b.benefitType === "DISCOUNT_PCT")
+                .filter(
+                  (b: any) =>
+                    (b.benefitType === "MEMBER_CONSUMPTION" ||
+                      b.benefitType === "DISCOUNT_PCT" ||
+                      b.benefitType === "INCLUDED_PRODUCT") &&
+                    (b.remaining ?? 1) > 0,
+                )
                 .map((b: any) => b.id);
               if (autoIds.length > 0) setSelectedBenefitIds(autoIds);
               const cartIds = cart.map((i: any) => i.menuItemId);
@@ -1876,9 +1888,18 @@ export default function PosPage() {
       return;
     }
     // ── Confirmación del Rabbitter (escaneo) ──
-    // El cobro NO se ejecuta hasta que el cliente autoriza en su app.
-    // Tarjeta Rabbitty Pay se excluye: el cliente ya confirma pagando.
-    if (selectedRabbitter?.id && !method.includes("STRIPE")) {
+    // Solo para cobros que mueven dinero del cliente sin que esté presente:
+    // Bunz (monedero) y tarjeta registrada. Se excluye:
+    //  · Rabbitty Pay (el cliente ya confirma pagando)
+    //  · Efectivo y venta directa (entrega física del dinero)
+    //  · Membresía (el beneficio ya está validado)
+    const requiresCustomerApproval =
+      Boolean(selectedRabbitter?.id) &&
+      !method.includes("STRIPE") &&
+      !method.includes("MEMBRESIA") &&
+      method !== "EFECTIVO" &&
+      method !== "VENTA DIRECTA";
+    if (requiresCustomerApproval && selectedRabbitter) {
       const splitOverride = splitLegs;
       setIsCharging(true);
       try {
@@ -2984,7 +3005,7 @@ export default function PosPage() {
           </div>
 
           {/* Cart Footer (Totals & Actions) - Ultracompacto y Adaptado a la altura óptima */}
-          <div className="p-2.5 lg:p-3 bg-black/85 border-t border-white/10 shrink-0 flex flex-col justify-end shadow-2xl">
+          <div className="p-2.5 lg:p-3 bg-black/85 border-t border-white/10 shrink-0 max-h-[62vh] overflow-y-auto custom-scrollbar flex flex-col justify-end shadow-2xl">
             {/* Quick action to zoom order */}
             <div className="flex justify-between items-center mb-1">
               <span className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Resumen de Orden</span>
@@ -3169,8 +3190,11 @@ export default function PosPage() {
                 </div>
               )}
 
-            {/* Massive Checkout & Digital Dispatch Buttons */}
-            <div className="flex gap-2">
+            {/* Massive Checkout & Digital Dispatch Buttons.
+                Sticky: si hay mucho contenido arriba (propina, avisos de
+                membresía, división de cuenta) el botón de cobrar seguía
+                quedando fuera de la pantalla. */}
+            <div className="sticky bottom-0 z-10 -mx-2.5 lg:-mx-3 px-2.5 lg:px-3 pt-1.5 pb-0.5 bg-black/90 backdrop-blur flex gap-2">
               <button 
                 onClick={() => setSendBillModal(true)}
                 disabled={cart.length === 0}
