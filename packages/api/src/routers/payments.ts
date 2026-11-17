@@ -1137,6 +1137,28 @@ export const paymentsRouter = router({
    * cuando exista un adquirente en México, se habilita el riel y la UI cambia
    * sola. No cobra nada: solo describe.
    */
+  /** Lectores registrados de la sucursal (read-only, para el panel de rieles). */
+  listTerminalReaders: posProcedure
+    .input(z.object({ branchId: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const { terminalReaders } = await import("@rabbitty/database-restaurant/schema");
+      return ctx.restaurantDb
+        .select()
+        .from(terminalReaders)
+        .where(eq(terminalReaders.branchId, branchId))
+        .orderBy(terminalReaders.label);
+    }),
+
+  /** Tarifas configuradas por riel (read-only): para comparar costo entre proveedores. */
+  listProviderFees: posProcedure.query(async ({ ctx }) => {
+    const { providerFees } = await import("@rabbitty/database-restaurant/schema");
+    return ctx.restaurantDb
+      .select()
+      .from(providerFees)
+      .orderBy(providerFees.provider, providerFees.scheme);
+  }),
+
   getCapabilities: posProcedure.query(async () => {
     const { availablePaymentProviders, PAYMENT_PROVIDERS } = await import(
       "../services/paymentProviders"

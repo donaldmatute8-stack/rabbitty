@@ -176,6 +176,7 @@ const menuPillars: MenuPillar[] = [
       { href: "/inventory", label: "Inventario & Stock", icon: Package },
       { href: "/purchases", label: "Órdenes de compra", icon: ShoppingCart, badge: "Nuevo" },
       { href: "/suppliers", label: "Proveedores", icon: Truck },
+      { href: "/payments", label: "Rieles de cobro", icon: CreditCard },
       { href: "/expenses", label: "Gastos Operativos", icon: Receipt },
       { href: "/pricing", label: "Precios Dinámicos", icon: DollarSign },
       { href: "/menu-boards", label: "Menú Digital TV", icon: Monitor },

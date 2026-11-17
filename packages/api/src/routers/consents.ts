@@ -138,6 +138,43 @@ export const consentsRouter = router({
         /* la auditoría es best-effort: no debe romper la aceptación */
       }
 
+      // Comprobante por correo: prueba de quién aceptó qué, y aviso al negocio.
+      // Best-effort: si el correo falla, la aceptación ya quedó registrada.
+      if (email) {
+        const docsHtml = BUSINESS_DOCS.filter((d) => d.published)
+          .map((d) => `· ${d.label}`)
+          .join("<br/>");
+        const fecha = new Intl.DateTimeFormat("es-MX", {
+          dateStyle: "long",
+          timeStyle: "short",
+          timeZone: "America/Mexico_City",
+        }).format(new Date());
+        void import("../services/ownerNotify")
+          .then(({ sendOwnerEmail }) =>
+            sendOwnerEmail(
+              email,
+              "Comprobante de aceptación · Rabbitty",
+              `<div style="font-family:system-ui,sans-serif;background:#0A0314;padding:24px;color:#fff">
+                 <div style="max-width:560px;margin:0 auto;background:linear-gradient(180deg,#130725,#0A0314);border:1px solid rgba(244,63,94,.3);border-radius:24px;padding:24px">
+                   <p style="margin:0;font-size:11px;font-weight:900;letter-spacing:.25em;color:#F43F5E">RABBITTY</p>
+                   <h1 style="margin:8px 0 0;font-size:21px;color:#fff">Comprobante de aceptación</h1>
+                   <p style="margin:14px 0 10px;font-size:14px;color:#E2E8F0">Hola${ctx.user?.name ? ` ${ctx.user.name}` : ""},</p>
+                   <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#CBD5E1">
+                     Dejamos constancia de que el <strong>${fecha}</strong> aceptaste los documentos
+                     del servicio en su versión <strong>${LEGAL_VERSION}</strong>:
+                   </p>
+                   <p style="margin:0 0 12px;font-size:12.5px;line-height:1.9;color:#CBD5E1">${docsHtml}</p>
+                   <p style="margin:0;font-size:11.5px;line-height:1.6;color:#94A3B8">
+                     Puedes consultarlos en <a href="https://app.rabbitty.me/legal" style="color:#F472B6">app.rabbitty.me/legal</a>.
+                     Si no reconoces esta aceptación, escríbenos a hola@rabbitty.me.
+                   </p>
+                 </div>
+               </div>`,
+            ),
+          )
+          .catch(() => {});
+      }
+
       return { success: true, version: LEGAL_VERSION, docs: REQUIRED_BUSINESS_DOCS };
     }),
 
