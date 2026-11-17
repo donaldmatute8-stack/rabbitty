@@ -110,3 +110,14 @@ media/bunzy-originals/
 
 # Instrucciones locales de asistentes (no versionar)
 CLAUDE.md
+
+# ── Secretos y credenciales: NUNCA al repo ──────────────────────────────────
+# (17-nov-2026: un archivo de credenciales se coló con `git add -A` y disparó
+# alertas de GitGuardian; la credencial se rotó y el archivo se eliminó.)
+databasedata.md
+*databasedata*
+*.pgpass
+credentials.json
+.env
+.env.*
+!.env.example
