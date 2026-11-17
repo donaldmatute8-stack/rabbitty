@@ -808,7 +808,9 @@ export const paymentIntents = pgTable("payment_intents", {
   /** Propina MXN incluida en el cobro (persistida para administración/caja). */
   tipMxn: real("tipMxn").default(0).notNull(),
   currency: text("currency").default("MXN").notNull(),
-  provider: text("provider").default("STRIPE").notNull(), // 'STRIPE' | 'CASH' | 'BUNZ_ONLY'
+  provider: text("provider").default("STRIPE").notNull(), // 'STRIPE' | 'CASH' | 'BUNZ_ONLY' | 'RABBITTY_PAY'
+  /** Cuenta del comercio en ESE riel (acct_... en Stripe). Permite cambiar de proveedor sin perder trazabilidad. */
+  providerAccountId: text("providerAccountId"),
   externalIntentId: text("externalIntentId"), // ej: pi_xxx de Stripe
   status: text("status").default("PENDING_PAYMENT").notNull(),
   // Estados: PENDING_PAYMENT, REQUIRES_ACTION, PROCESSING, SUCCEEDED, CANCELLED, EXPIRED, FAILED
@@ -1201,3 +1203,46 @@ export const bunzAbuseSignals = pgTable(
     index("bunz_abuse_type_idx").on(t.type),
   ]
 );
+
+/**
+ * ── Rieles de cobro: lector físico y costo por proveedor ───────────────────
+ *
+ * `terminal_readers` describe el equipo real (Stripe S710 hoy; hardware de marca
+ * cuando exista adquirente en México) y quién administra llaves/firmware.
+ * `provider_fees` permite comparar el costo de cada riel sin tocar el cobro.
+ */
+export const terminalReaders = pgTable("terminal_readers", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id),
+  provider: text("provider").notNull(), // STRIPE | RABBITTY_PAY | MERCADO_PAGO
+  providerReaderId: text("providerReaderId"),
+  label: text("label").notNull(),
+  kind: text("kind").default("SMART").notNull(), // SMART | MPOS | TAP_TO_PHONE
+  connection: text("connection").default("NETWORK").notNull(), // NETWORK | BLUETOOTH | USB
+  status: text("status").default("PENDING").notNull(), // PENDING | ACTIVE | OFFLINE | DISABLED
+  keyInjectionProvider: text("keyInjectionProvider"),
+  tmsProvider: text("tmsProvider"),
+  serialNumber: text("serialNumber"),
+  metadata: jsonb("metadata"),
+  lastSeenAt: timestamp("lastSeenAt"),
+  ...timestamps,
+}, (t) => [
+  index("terminal_readers_branch_idx").on(t.branchId, t.status),
+]);
+
+export const providerFees = pgTable("provider_fees", {
+  id: id(),
+  provider: text("provider").notNull(),
+  scope: text("scope").default("GLOBAL").notNull(), // GLOBAL | BUSINESS | BRANCH
+  scopeId: text("scopeId"),
+  scheme: text("scheme").default("CARD").notNull(), // CARD | AMEX | DEBIT | CASH
+  fixedMxn: real("fixedMxn").default(0).notNull(),
+  percent: real("percent").default(0).notNull(),
+  ivaPercent: real("ivaPercent").default(0.16).notNull(),
+  notes: text("notes"),
+  activeFrom: timestamp("activeFrom").defaultNow(),
+  activeTo: timestamp("activeTo"),
+  createdAt: timestamp("createdAt").defaultNow(),
+}, (t) => [
+  index("provider_fees_lookup_idx").on(t.provider, t.scope, t.scopeId),
+]);

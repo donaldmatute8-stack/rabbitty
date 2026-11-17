@@ -1127,6 +1127,36 @@ export const paymentsRouter = router({
   // ==========================================
   // Mercado Pago (Checkout Pro) — config por tenant
   // ==========================================
+  /**
+   * ── Capacidades de cobro por riel ──────────────────────────────────────────
+   *
+   * La UI pregunta aquí qué puede hacer cada proveedor antes de ofrecerlo:
+   * lector físico, link/QR, Tap to Pay, reembolsos, división, KYC.
+   *
+   * Sirve para que el POS deje de asumir Stripe y para preparar Rabbitty Pay:
+   * cuando exista un adquirente en México, se habilita el riel y la UI cambia
+   * sola. No cobra nada: solo describe.
+   */
+  getCapabilities: posProcedure.query(async () => {
+    const { availablePaymentProviders, PAYMENT_PROVIDERS } = await import(
+      "../services/paymentProviders"
+    );
+    return {
+      providers: availablePaymentProviders().map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        capabilities: p.capabilities,
+      })),
+      /** Rieles conocidos pero apagados (para el panel y para explicar el "por qué"). */
+      disabled: PAYMENT_PROVIDERS.filter((p) => !p.available).map((p) => ({
+        id: p.id,
+        name: p.name,
+        reason: p.unavailableReason ?? "No habilitado",
+      })),
+    };
+  }),
+
   getMercadoPagoStatus: posProcedure
     .input(z.object({ branchId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
