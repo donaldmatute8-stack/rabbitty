@@ -90,6 +90,8 @@ DOCS/*
 !DOCS/POS-FASE-0/
 # Documentación de operación (incidentes, migraciones, revisiones): SÍ se versiona
 !DOCS/OPS/
+# Roadmap de cobros (terminal, hardware, políticas): sí se versiona
+!DOCS/PAYMENTS/
 MB-REFERENCE.md
 \!LEEME.md
 
