@@ -1,23 +1,26 @@
 /**
- * ── Configuración de conexión a PostgreSQL (fail-fast) ──
+ * ── Configuración de conexión a PostgreSQL ────────────────────────────────
  *
  * Por qué existe este módulo:
  * `pg` NO falla cuando no recibe `connectionString` — cae silenciosamente a
  * `127.0.0.1:5432`. En Vercel no hay Postgres local, así que cada query revienta
  * con `ECONNREFUSED 127.0.0.1:5432` y en los logs parece un fallo de base de
  * datos en lugar de un error de configuración (pasó el 2026-11-17, durante la
- * rotación de Neon: la app quedó sin `DATABASE_URL` en el runtime y todos los
- * endpoints del cliente fallaron, incluido el checkout).
+ * rotación de Neon: el runtime quedó sin `RESTAURANT_DATABASE_URL` y el pedido
+ * del cliente moría con "no se pudo completar").
  *
- * Reglas:
- * - En runtime desplegado (Vercel o NODE_ENV=production) la falta de URL es un
- *   error de configuración explícito: preferimos un log claro a 40 líneas de
- *   stack trace apuntando a localhost.
- * - En local se mantiene el fallback de `pg` (un Postgres en localhost es un
- *   escenario de desarrollo legítimo).
- * - Durante `next build` no lanzamos: el build no necesita la base y no
- *   queremos romperlo por una variable que sólo se usa en runtime.
+ * Qué hacemos cuando falta la URL en runtime desplegado:
+ * - NO lanzamos al importar el módulo: eso tumbaba las rutas completas, incluso
+ *   las que sólo usan la otra base, y convertía un fallo de configuración en un
+ *   500 opaco.
+ * - Dejamos un host centinela que no existe (`db-config-missing.invalid`). Las
+ *   queries fallan con un DNS claro y las rutas que no tocan esa base siguen
+ *   funcionando. `/api/health` reconoce el centinela y lo reporta como
+ *   `config_missing` en vez de "base caída".
+ * - En local se mantiene el fallback de `pg` a localhost (desarrollo).
  */
+
+export const DB_CONFIG_SENTINEL_HOST = 'db-config-missing.invalid';
 
 // Strip `sslmode` from the connection string: pg-connection-string v2.9+ warns
 // that 'require'/'prefer' are aliases for 'verify-full' and will change in v3.
@@ -59,8 +62,10 @@ export function dbHost(url?: string): string {
 
 export type ResolvedDbUrl = {
   url?: string;
-  /** Nombre de la variable de entorno que ganó (o `(ninguna)`). */
+  /** Nombre de la variable de entorno que ganó (o el motivo de que no haya). */
   source: string;
+  /** true si no había ninguna variable y estamos en runtime desplegado. */
+  missing: boolean;
 };
 
 /**
@@ -75,33 +80,29 @@ export function resolveDbUrl(
   const winner = candidates.find(([, value]) => value && value.trim().length > 0);
 
   if (!winner) {
-    if (isDeployedRuntime()) {
-      const names = candidates.map(([name]) => name).join(', ');
-      throw new Error(
-        `[DB_CONFIG] Falta la conexión a la base de datos de "${label}". ` +
-          `Define una de estas variables de entorno: ${names}. ` +
-          `Sin ella, \`pg\` cae a 127.0.0.1:5432 y todas las queries fallan con ECONNREFUSED.`,
-      );
+    if (!isDeployedRuntime()) {
+      return { url: undefined, source: '(ninguna: fallback local de pg)', missing: false };
     }
-    return { url: undefined, source: '(ninguna: fallback local de pg)' };
+    const names = candidates.map(([name]) => name).join(', ');
+    console.error(
+      `[DB_CONFIG] Falta la conexión a la base de datos de "${label}". ` +
+        `Define una de estas variables de entorno: ${names}. ` +
+        `Mientras tanto las queries de esta base fallarán contra ${DB_CONFIG_SENTINEL_HOST}.`,
+    );
+    return {
+      url: `postgresql://db-config-missing@${DB_CONFIG_SENTINEL_HOST}:5432/db_config_missing`,
+      source: `(FALTA: ${names})`,
+      missing: true,
+    };
   }
 
   const [source, value] = winner;
-  return { url: stripSslMode(value), source };
-}
-
-/**
- * ¿Hay al menos una variable definida? No lanza: lo usa `/api/health`, que debe
- * poder REPORTAR la falta de configuración en lugar de morir al importar `@/db`.
- */
-export function hasAnyDbUrl(...values: Array<string | undefined>): boolean {
-  return values.some((value) => typeof value === 'string' && value.trim().length > 0);
+  return { url: stripSslMode(value), source, missing: false };
 }
 
 /** Deja en el log qué variable se usó y contra qué host (una vez por proceso). */
 export function logDbResolution(label: string, resolved: ResolvedDbUrl): void {
   if (process.env.NODE_ENV === 'test') return;
-  console.log(
-    `[DB_CONFIG] ${label}: ${resolved.source} → ${dbHost(resolved.url)}`,
-  );
+  if (resolved.missing) return; // ya se gritó en resolveDbUrl
+  console.log(`[DB_CONFIG] ${label}: ${resolved.source} → ${dbHost(resolved.url)}`);
 }

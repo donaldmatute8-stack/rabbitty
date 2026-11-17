@@ -125,3 +125,6 @@ credentials.json
 .env
 .env.*
 !.env.example
+
+# Respaldos locales de Postgres (no son secretos, pero no van al repo)
+.local-backups/

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql, type SQLWrapper } from "drizzle-orm";
 import { describeError } from "@/lib/errors";
+import { DB_CONFIG_SENTINEL_HOST } from "@/db/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +26,11 @@ export const dynamic = "force-dynamic";
  * configuración, `@/db` lanza al importarse (fail-fast) y este endpoint debe
  * seguir en pie para poder reportarlo como `config_missing`.
  */
-type DbHealth = { ok: boolean; ms: number; error?: "db_unreachable" | "config_missing" };
+type DbHealth = {
+  ok: boolean;
+  ms: number;
+  error?: "db_unreachable" | "config_missing" | "import_failed";
+};
 
 type Probeable = { execute: (query: SQLWrapper | string) => Promise<unknown> };
 
@@ -45,7 +50,10 @@ async function probe(query: () => Promise<unknown>): Promise<DbHealth> {
     return {
       ok: false,
       ms: Date.now() - t0,
-      error: detail.includes("[DB_CONFIG]") ? "config_missing" : "db_unreachable",
+      error:
+        detail.includes(DB_CONFIG_SENTINEL_HOST) || detail.includes("[DB_CONFIG]")
+          ? "config_missing"
+          : "db_unreachable",
     };
   }
 }
@@ -55,8 +63,15 @@ async function probeModule(load: () => Promise<Probeable>, label: string): Promi
   try {
     db = await load();
   } catch (e) {
-    console.error(`[health] configuración de ${label} inválida:`, describeError(e));
-    return { ok: false, ms: 0, error: "config_missing" };
+    const detail = describeError(e);
+    console.error(`[health] no pude cargar el módulo de ${label}:`, detail);
+    return {
+      ok: false,
+      ms: 0,
+      error: detail.includes(DB_CONFIG_SENTINEL_HOST) || detail.includes("[DB_CONFIG]")
+        ? "config_missing"
+        : "import_failed",
+    };
   }
   return probe(() => db.execute(sql`select 1`));
 }
