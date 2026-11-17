@@ -72,3 +72,28 @@ rabbitty.me · hola@rabbitty.me
 **Regla para la próxima:** no se compra hardware antes de que un adquirente
 confirme que **ese modelo** puede transaccionar. El hardware se elige por la
 certificación, no al revés.
+
+---
+
+## Cierre del hilo (respuesta del proveedor)
+
+> *"No tengo ningún modelo con L3 y referencia de adquirente en México/LatAm, así
+> que no voy a enviar un datasheet que no pueda respaldar. Si tu PSP nombra la ruta
+> de certificación que requiere, compártela y revisamos cuál de nuestros lectores
+> encaja. Con L3 futuro no puedo prometer aviso proactivo, pero este hilo sirve para
+> preguntar."*
+
+**Lectura:** es la respuesta correcta de un proveedor serio (no vende humo). No hay
+nada más que extraer hoy.
+
+Su oferta —*"si tu PSP nombra la ruta de certificación, vemos qué lector encaja"*—
+**sí es útil, pero después**: define el orden correcto.
+
+```
+1. Adquirente mexicano responde qué requiere y qué modelos ya certifica
+2. Con ese pliego en mano, se le pide al fabricante el modelo que lo cumpla
+3. Recién entonces se compra
+```
+
+**Estado:** hilo cerrado sin compra. El proveedor queda como contacto para cuando
+exista pliego del adquirente.
