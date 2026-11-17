@@ -27,6 +27,19 @@ Las URLs viven en `telegram-miniapp/.env.local` y `apps/admin/.env.local`
 (ambos ignorados por git). Los respaldos de las bases anteriores están en
 `.local-backups/`.
 
+## Variables de entorno: una sola base, ningún tenant
+
+`RESTAURANT_DATABASE_URL` **no es por inquilino**. La app es multi-tenant por
+filas: todos los negocios viven en la misma base y se separan por `businessId` /
+`branchId`. Añadir un negocio nuevo no requiere tocar variables ni desplegar.
+
+Como hoy core y restaurante comparten base (`neondb`), el pool de restaurante
+cae a `DATABASE_URL` y, si tampoco existe, a `CORE_DATABASE_URL` (en ese orden).
+Es decir: **basta `CORE_DATABASE_URL` por entorno**; `RESTAURANT_DATABASE_URL`
+sólo haría falta el día que se separen en dos bases distintas. El log
+`[DB_CONFIG] restaurant: … → host` dice de dónde salió, así que un fallback no
+pasa desapercibido.
+
 ## Cómo se regenera
 
 ```bash
