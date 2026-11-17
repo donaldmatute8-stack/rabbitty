@@ -3,6 +3,10 @@ import { db } from '@/db';
 import { users, webSessions, referrals , presenceSessions } from '@/db/schema';
 import { and, eq, gt, sql } from 'drizzle-orm';
 
+// El saldo de Bunz se lee de aquí: nunca debe servirse desde caché, o el
+// comensal sigue viendo su saldo anterior aunque ya se le haya acreditado.
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get('authorization');
@@ -65,7 +69,10 @@ export async function GET(req: NextRequest) {
         pendingBunz,
         distinctBusinesses,
       },
-    }, { status: 200 });
+    }, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store, max-age=0, must-revalidate' },
+    });
   } catch (error) {
     console.error('[AUTH SESSION ERROR]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
