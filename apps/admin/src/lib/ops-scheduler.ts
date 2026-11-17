@@ -276,6 +276,30 @@ async function tick(reason: string) {
     const restaurantDb = getRestaurantDb();
     const coreDb = getCoreDb();
 
+    // ── Respaldo primero: solo toca S3, no despierta Neon ──
+    const ageHours = await backupAgeHours();
+    if (ageHours === null || ageHours >= BACKUP_THRESHOLD_HOURS) {
+      const { runBackup } = await import("./db-backup");
+      for (const db of ["restaurant", "core"] as const) {
+        const r = await runBackup(db);
+        console.log(
+          `[ops-scheduler] respaldo ${db}: ${r.ok ? `${r.bytes} bytes en ${r.ms} ms` : `falló: ${r.error}`}`,
+        );
+      }
+    }
+
+    // ── Presupuesto de Neon ──
+    // Fuera de horario y fuera de los slots de respaldo (00/06/12/18) NO se
+    // consulta la base: cada consulta despierta el cómputo de Neon y el plan
+    // tiene tope mensual. De noche no hay cajas abiertas, así que vigilar cada
+    // 15 min sólo quema cuota.
+    const inBusiness = isOperatingHours();
+    const backupSlot = [0, 6, 12, 18].includes(businessHourLocal());
+    if (!inBusiness && !backupSlot) {
+      console.log("[ops-scheduler] fuera de horario: sin consultas a la base");
+      return;
+    }
+
     await expireStaleChargeRequests(restaurantDb);
     await drainNotifications(coreDb);
 
@@ -289,19 +313,6 @@ async function tick(reason: string) {
         (health.alerted.length ? ` · avisado: ${health.alerted.join(",")}` : ""),
     );
 
-    // ── Respaldo ──
-    const ageHours = await backupAgeHours();
-    if (ageHours === null || ageHours >= BACKUP_THRESHOLD_HOURS) {
-      const { runBackup } = await import("./db-backup");
-      for (const db of ["restaurant", "core"] as const) {
-        const r = await runBackup(db);
-        console.log(
-          `[ops-scheduler] respaldo ${db}: ${r.ok ? `${r.bytes} bytes en ${r.ms} ms` : `falló: ${r.error}`}`,
-        );
-      }
-    } else {
-      console.log(`[ops-scheduler] respaldo al día (${Math.round(ageHours * 10) / 10} h)`);
-    }
   } catch (e) {
     console.error("[ops-scheduler] ciclo falló:", e instanceof Error ? e.message : e);
   }
