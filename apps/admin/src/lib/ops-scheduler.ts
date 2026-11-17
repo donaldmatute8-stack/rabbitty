@@ -198,6 +198,44 @@ async function expireStaleChargeRequests(restaurantDb: { execute: (q: any) => Pr
   }
 }
 
+
+/**
+ * ── Drenar la cola de notificaciones ────────────────────────────────────────
+ * El worker vive en el miniapp y lo dispara un cron de GitHub que, como los
+ * demás workflows nuevos, no se ejecuta (última corrida a las 16:37 con la cola
+ * llena). Resultado: los avisos ("recibiste Bunz", cuentas, aprobaciones) se
+ * quedaban en QUEUED y el comensal no veía nada.
+ *
+ * Aquí se empuja el worker solo cuando hay algo atascado más de 2 minutos, así
+ * que no genera tráfico si la cola está vacía.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function drainNotifications(coreDb: { execute: (q: any) => Promise<unknown> }) {
+  try {
+    const { sql } = await import("drizzle-orm");
+    const res = (await coreDb.execute(
+      sql.raw(
+        `select count(*)::int as n from "notifications_outbox"
+          where "status" = 'QUEUED' and "runAfter" < now() - interval '2 minutes'`,
+      ),
+    )) as { rows?: Array<{ n: number }> } | Array<{ n: number }>;
+    const rows = Array.isArray(res) ? res : res.rows ?? [];
+    const backlog = Number(rows[0]?.n ?? 0);
+    if (backlog === 0) return;
+
+    const base = process.env.RABBITTY_MINIAPP_URL;
+    const secret = process.env.CRON_SECRET || process.env.RABBITTY_API_SECRET;
+    if (!base || !secret) return;
+
+    const r = await fetch(`${base.replace(/\/$/, "")}/api/cron/notifications-worker?limit=40`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    console.log(`[ops-scheduler] cola de notificaciones: ${backlog} atascadas · worker ${r.status}`);
+  } catch (e) {
+    console.warn("[ops-scheduler] no pude drenar notificaciones:", e instanceof Error ? e.message : e);
+  }
+}
+
 let started = false;
 
 export function startOpsScheduler() {
@@ -239,6 +277,7 @@ async function tick(reason: string) {
     const coreDb = getCoreDb();
 
     await expireStaleChargeRequests(restaurantDb);
+    await drainNotifications(coreDb);
 
     const health = await runOpsHealthCheck({ restaurantDb, coreDb });
     await maybeRollback(health.invariants);
