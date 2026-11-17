@@ -453,7 +453,7 @@ export const adminRouter = router({
                         <p style="margin:0;font-size:11.5px;line-height:1.6;color:#94A3B8">
                           Al entrar a tu panel te pediremos aceptar los Términos, el Anexo de Pagos,
                           el Aviso de Privacidad y el Reglamento de Bunz. Puedes leerlos antes en
-                          <a href="${adminUrl}/legal" style="color:#F472B6">${adminUrl}/legal</a>.
+                          <a href="https://app.rabbitty.me/legal" style="color:#F472B6">app.rabbitty.me/legal</a>.
                           Al aceptar registramos la fecha y la versión aceptada.
                         </p>
                       </div>
