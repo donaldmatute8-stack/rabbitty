@@ -446,6 +446,17 @@ export const adminRouter = router({
                       <p style="margin:12px 0 0;font-size:12px;color:#94A3B8;text-align:center">
                         Entra con tu correo o teléfono. Si necesitas ayuda, responde este correo.
                       </p>
+                      <div style="margin:20px 0 0;padding:14px 16px;border:1px solid rgba(244,63,94,0.25);border-radius:14px;background:rgba(244,63,94,0.06)">
+                        <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#F9A8D4">
+                          Antes de operar: acepta los documentos del servicio
+                        </p>
+                        <p style="margin:0;font-size:11.5px;line-height:1.6;color:#94A3B8">
+                          Al entrar a tu panel te pediremos aceptar los Términos, el Anexo de Pagos,
+                          el Aviso de Privacidad y el Reglamento de Bunz. Puedes leerlos antes en
+                          <a href="${adminUrl}/legal" style="color:#F472B6">${adminUrl}/legal</a>.
+                          Al aceptar registramos la fecha y la versión aceptada.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
