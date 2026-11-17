@@ -27,7 +27,7 @@ import {
 import { Button, Card, Badge, cn } from "@rabbitty/ui";
 
 export default function OperationsManualPage() {
-  const [activeTab, setActiveTab] = useState<"all" | "cash" | "pos" | "kiosk" | "comandero" | "kds" | "faq">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "cash" | "pos" | "kiosk" | "comandero" | "kds" | "bunz" | "faq">("all");
 
   const handlePrint = () => {
     if (typeof window !== "undefined") {
@@ -146,6 +146,7 @@ export default function OperationsManualPage() {
             { id: "kiosk", label: "Kiosko Autoservicio", icon: Monitor },
             { id: "comandero", label: "Comandero Digital", icon: Smartphone },
             { id: "kds", label: "Cocina & KDS", icon: Flame },
+            { id: "bunz", label: "Bunz y Conciliaciones", icon: HandCoins },
             { id: "faq", label: "Dudas y Descuadres", icon: HelpCircle },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -501,6 +502,92 @@ export default function OperationsManualPage() {
       )}
 
       {/* SECCIÓN 4: RESOLUCIÓN DE DUDAS Y PREGUNTAS FRECUENTES (FAQ) */}
+      {/* SECCIÓN BUNZ Y CONCILIACIONES */}
+      {(activeTab === "all" || activeTab === "bunz") && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center justify-center font-black">
+              <HandCoins className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white print:text-black">Bunz y Conciliaciones</h2>
+              <p className="text-xs text-gray-400 print:text-gray-600">
+                Cuando un comensal dice que no le llegaron sus Bunz: cómo se corrige sin duplicar y sin discutir
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                n: "1",
+                t: "Pide el folio y verifica",
+                d: "El comensal trae su ticket con folio **RBBTY-XXXX**. Búscalo en **Historial** y revisa dos cosas: si el ticket se cobró con cliente vinculado y cuánto Bunz se acreditaron.",
+              },
+              {
+                n: "2",
+                t: "Revisa la diferencia",
+                d: "En **Conciliaciones** el sistema ya calculó: lo que la orden **debía** acreditar menos lo que **realmente** se acreditó. Esa diferencia es el reclamo.",
+              },
+              {
+                n: "3",
+                t: "Decide con el comensal",
+                d: "Habla con la persona y **aprueba** (si procede) o **disputa** con una nota (si no: se cobró sin vincular, ya se acreditó, o no aplica).",
+              },
+              {
+                n: "4",
+                t: "Rabbitty entrega",
+                d: "La entrega la autoriza Rabbitty y se hace con la **misma llave de la orden original**: nunca se acredita dos veces. El comensal recibe el aviso.",
+              },
+            ].map((step) => (
+              <Card key={step.n} className="p-5 border border-white/5 bg-white/5 backdrop-blur-md space-y-3 print:border print:border-gray-300 print:bg-white">
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                  Paso {step.n}
+                </span>
+                <h4 className="font-black text-white print:text-black text-sm">{step.t}</h4>
+                <p className="text-xs text-gray-400 print:text-gray-700 leading-relaxed">{step.d}</p>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="p-5 border border-emerald-500/20 bg-emerald-500/5 print:border print:border-gray-300 print:bg-white">
+              <h4 className="font-black text-emerald-300 print:text-black text-sm flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" /> Lo que ya hace el sistema por ti
+              </h4>
+              <ul className="mt-3 space-y-2 text-xs text-gray-300 print:text-gray-700">
+                <li>· Calcula la diferencia exacta (debía vs acreditado) por orden.</li>
+                <li>· Detecta si ya se acreditó (no permite duplicar).</li>
+                <li>· Exige dos pasos: tú decides, Rabbitty autoriza.</li>
+                <li>· Deja bitácora: quién, cuándo y cuánto.</li>
+                <li>· Avisa al comensal: <b>“Tus Bunz ya han sido actualizados”</b> con el monto corregido.</li>
+              </ul>
+            </Card>
+
+            <Card className="p-5 border border-amber-500/20 bg-amber-500/5 print:border print:border-gray-300 print:bg-white">
+              <h4 className="font-black text-amber-300 print:text-black text-sm flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> Antes de aprobar, confirma que…
+              </h4>
+              <ul className="mt-3 space-y-2 text-xs text-gray-300 print:text-gray-700">
+                <li>· El ticket <b>sí se cobró</b> (no fue cancelado ni devuelto).</li>
+                <li>· El cliente <b>estaba vinculado</b> al cobrar. Si no se vinculó, no se generó Bunz: es un tema de captura, no de sistema.</li>
+                <li>· No hay un acreditado posterior (revisa la billetera del comensal).</li>
+                <li>· El monto reclamado corresponde a la compra real, no a propinas ni delivery.</li>
+              </ul>
+            </Card>
+          </div>
+
+          <Card className="p-5 border border-white/10 bg-white/5 print:border print:border-gray-300 print:bg-white">
+            <h4 className="font-black text-white print:text-black text-sm">Lo que NO se hace</h4>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-400 print:text-gray-700">
+              <p>· <b>No</b> prometas Bunz “por fuera” ni por mensaje: si no queda registrado, no existe para el comensal ni para la contabilidad.</p>
+              <p>· <b>No</b> abras dos conciliaciones por la misma orden: la segunda se rechaza por duplicada.</p>
+              <p>· <b>No</b> apruebes sin hablar con el comensal: la conciliación es una corrección, no un descuento.</p>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {(activeTab === "all" || activeTab === "faq") && (
         <div className="space-y-6">
           <div className="flex items-center gap-3">
