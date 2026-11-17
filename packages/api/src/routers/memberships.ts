@@ -122,13 +122,18 @@ async function assertCanRedeem(ctx: any, businessId: string) {
 }
 
 /** businessId del tenant actual (owner o staff) — para el escáner del POS. */
+/**
+ * Negocio de membresías al que pertenece la SUCURSAL en la que se está operando.
+ *
+ * Antes se devolvía primero "el primer negocio que el usuario posee", lo que
+ * rompía a cualquier dueño con más de un negocio: parado en 626 Café pero dueño
+ * también de Ka13, el POS buscaba la membresía en Ka13 y **nunca la encontraba**
+ * (ni al escanear el QR ni al vincular por "estoy aquí").
+ *
+ * Ahora manda la sucursal; el negocio del dueño queda como último recurso
+ * (útil cuando no hay sucursal en el contexto, p. ej. admin sin POS).
+ */
 async function resolveBusinessForBranch(ctx: any): Promise<string | null> {
-  const mine = await ctx.coreDb
-    .select({ id: ownedBusinesses.id })
-    .from(ownedBusinesses)
-    .where(eq(ownedBusinesses.ownerId, ctx.userId))
-    .limit(1);
-  if (mine[0]?.id) return mine[0].id;
   if (ctx.branchId) {
     const [br] = await ctx.restaurantDb
       .select({ restaurantId: branches.restaurantId })
@@ -144,7 +149,14 @@ async function resolveBusinessForBranch(ctx: any): Promise<string | null> {
       if (rest?.businessId) return rest.businessId;
     }
   }
-  return null;
+
+  // Último recurso: el negocio del dueño (sin sucursal en el contexto).
+  const mine = await ctx.coreDb
+    .select({ id: ownedBusinesses.id })
+    .from(ownedBusinesses)
+    .where(eq(ownedBusinesses.ownerId, ctx.userId))
+    .limit(1);
+  return mine[0]?.id ?? null;
 }
 
 /** Exportado: el webhook de Stripe usa el mismo builder al activar suscripciones. */
