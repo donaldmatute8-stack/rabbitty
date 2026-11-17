@@ -1022,6 +1022,12 @@ export default function PosPage() {
     const ids = cart.map((i: any) => i.menuItemId);
     memberSeenRef.current = new Set(ids);
     if (ids.length > 0) setMemberMenuItemIds(ids);
+    // Se anuncia igual que cuando escanean su pase: el cajero debe SABER que
+    // este Rabbitter tiene membresía (y cuál), no descubrirlo por casualidad.
+    toast.success(
+      `🎟️ ${selectedRabbitter.name} tiene membresía: ${first.planName ?? "activa"} · beneficios aplicados`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberBenefitsForBanner.data, detectedMembership, selectedRabbitter, ticketContext, cart]);
 
   // H-PERSIST: CUALQUIER vía de vinculación (select, QR, búsqueda, planea venir)
