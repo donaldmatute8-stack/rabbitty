@@ -92,6 +92,8 @@ DOCS/*
 !DOCS/OPS/
 # Roadmap de cobros (terminal, hardware, políticas): sí se versiona
 !DOCS/PAYMENTS/
+# Corpus legal (contratos, políticas, plantillas): sí se versiona
+!DOCS/LEGAL/
 MB-REFERENCE.md
 \!LEEME.md
 

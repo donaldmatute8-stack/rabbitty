@@ -66,7 +66,7 @@ const STEPS: Array<{
   },
 ];
 
-const CONSENT_VERSION = '2026-11-08';
+const CONSENT_VERSION = '2026-11-18';
 
 const COUNTRIES = [
   { code: 'MX', dialCode: '+52', flag: '🇲🇽', name: 'México' },
@@ -303,15 +303,33 @@ export default function OnboardingPage() {
               <span className="text-[11px] leading-relaxed text-white/60">
                 He leído y acepto los{' '}
                 <a
-                  href="https://rabbitty.me/privacy"
+                  href="/legal/terminos"
                   target="_blank"
                   rel="noreferrer"
                   className="font-bold text-pink-300 underline"
                 >
-                  Términos y el Aviso de Privacidad
+                  Términos
                 </a>
-                . Entiendo que mis datos se usan para operar mi cuenta, mis Bunz y la seguridad del
-                servicio.
+                {', el '}
+                <a
+                  href="/legal/privacidad"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-pink-300 underline"
+                >
+                  Aviso de Privacidad
+                </a>
+                {' y el '}
+                <a
+                  href="/legal/bunz"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-pink-300 underline"
+                >
+                  Reglamento de Bunz
+                </a>
+                . Entiendo que los Bunz son puntos de lealtad: no son dinero, no se compran con
+                dinero y no se convierten a efectivo.
               </span>
             </label>
             <motion.button

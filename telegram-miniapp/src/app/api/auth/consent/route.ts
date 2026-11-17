@@ -4,6 +4,7 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { getClientIp } from "@/lib/otp";
+import { sendConsentReceipt } from "@/lib/legal/consent-email";
 
 /**
  * Registra la aceptación de Términos y Aviso de Privacidad del Rabbitter.
@@ -36,6 +37,22 @@ export async function POST(req: NextRequest) {
       consentUserAgent: req.headers.get("user-agent") || null,
     })
     .where(eq(users.id, auth.id));
+
+  // Comprobante por correo (best-effort): prueba de quién aceptó qué y cuándo.
+  // No bloquea la respuesta ni la aceptación, que ya quedó registrada.
+  const [profile] = await db
+    .select({ email: users.email, firstName: users.firstName })
+    .from(users)
+    .where(eq(users.id, auth.id))
+    .limit(1)
+    .catch(() => []);
+  void sendConsentReceipt({
+    to: profile?.email,
+    name: profile?.firstName,
+    acceptedAt: now,
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  }).catch(() => {});
 
   return NextResponse.json({
     success: true,
