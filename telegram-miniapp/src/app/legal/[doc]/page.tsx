@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LEGAL_DOCS, getLegalDoc } from "../../../lib/legal-docs";
+import { PUBLISHED_LEGAL_DOCS, getLegalDoc } from "../../../lib/legal-docs";
 
 /** Documento legal individual. El contenido vive en `lib/legal-docs.ts`. */
 export function generateStaticParams() {
-  return LEGAL_DOCS.map((d) => ({ doc: d.slug }));
+  return PUBLISHED_LEGAL_DOCS.map((d) => ({ doc: d.slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ doc: string }> }) {

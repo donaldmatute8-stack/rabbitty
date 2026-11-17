@@ -24,6 +24,11 @@ export type LegalDoc = {
   updated: string;
   summary: string;
   sections: LegalSection[];
+  /**
+   * `false` = documento listo pero NO publicado: existe para cuando el producto
+   * lo justifique (p. ej. comodato de equipos antes de tener hardware).
+   */
+  published?: boolean;
 };
 
 export const LEGAL_VERSION = "2026-11-18";
@@ -177,6 +182,9 @@ export const LEGAL_DOCS: LegalDoc[] = [
   {
     slug: "equipos",
     title: "Contrato de Comodato de Equipos",
+    // NO publicado: aún no entregamos lectores ni impresoras. Se activa el día
+    // que haya hardware (cambiar a true y subir LEGAL_VERSION).
+    published: false,
     audience: "Afiliados con lector o impresora de Rabbitty",
     version: LEGAL_VERSION,
     updated: "18 de noviembre de 2026",
@@ -357,8 +365,14 @@ export const LEGAL_DOCS: LegalDoc[] = [
   },
 ];
 
+/** Documentos visibles para el usuario (los borradores quedan fuera). */
+export const PUBLISHED_LEGAL_DOCS = LEGAL_DOCS.filter((d) => d.published !== false);
+
 export function getLegalDoc(slug: string): LegalDoc | undefined {
-  return LEGAL_DOCS.find((d) => d.slug === slug);
+  const doc = LEGAL_DOCS.find((d) => d.slug === slug);
+  // Un documento no publicado no se sirve ni por URL directa.
+  if (!doc || doc.published === false) return undefined;
+  return doc;
 }
 
 /** Resumen para casillas de aceptación (onboarding). */

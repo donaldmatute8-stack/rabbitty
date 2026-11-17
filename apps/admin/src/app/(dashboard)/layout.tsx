@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@rabbitty/auth";
 import { DashboardClientWrapper } from "../../components/DashboardClientWrapper";
 import { OnboardingGate } from "../../components/OnboardingGate";
+import { BusinessConsentGate } from "../../components/BusinessConsentGate";
 import { getEnv } from "@/env";
 import { isGodAdminIdentity, verifyGod2faCookieValue, GOD_2FA_COOKIE } from "@rabbitty/api/services/god2fa";
 
@@ -28,6 +29,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <DashboardClientWrapper>
       <OnboardingGate>{children}</OnboardingGate>
+      {/* Aceptación del afiliado: bloquea hasta aceptar la versión vigente. */}
+      <BusinessConsentGate />
     </DashboardClientWrapper>
   );
 }

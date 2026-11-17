@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LEGAL_DOCS, LEGAL_VERSION } from "../../lib/legal-docs";
+import { PUBLISHED_LEGAL_DOCS, LEGAL_VERSION } from "../../lib/legal-docs";
 
 /**
  * Índice de documentos legales. Contenido publicado desde `lib/legal-docs.ts`
@@ -18,7 +18,7 @@ export default function LegalIndexPage() {
       </p>
 
       <ul className="mt-8 space-y-3">
-        {LEGAL_DOCS.map((doc) => (
+        {PUBLISHED_LEGAL_DOCS.map((doc) => (
           <li key={doc.slug}>
             <Link
               href={`/legal/${doc.slug}`}

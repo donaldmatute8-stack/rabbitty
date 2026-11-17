@@ -21,6 +21,7 @@ import { dwellAnalyticsRouter } from "./dwellAnalytics";
 import { behaviorRulesRouter } from "./behaviorRules";
 import { waitlistRouter } from "./waitlist";
 import { suppliersRouter } from "./suppliers";
+import { consentsRouter } from "./consents";
 import { expensesRouter } from "./expenses";
 import { invoicesRouter } from "./invoices";
 import { cfdiRouter } from "./cfdi";
@@ -72,6 +73,7 @@ export const appRouter = router({
   behaviorRules: behaviorRulesRouter,
   waitlist: waitlistRouter,
   suppliers: suppliersRouter,
+  consents: consentsRouter,
   expenses: expensesRouter,
   invoices: invoicesRouter,
   cfdi: cfdiRouter,
