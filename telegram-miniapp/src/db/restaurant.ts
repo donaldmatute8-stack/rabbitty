@@ -1,26 +1,26 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '@rabbitty/database-restaurant/schema';
+import { resolveDbUrl, logDbResolution } from './config';
 
-function stripSslMode(raw?: string): string | undefined {
-  if (!raw) return raw;
-  try {
-    const url = new URL(raw);
-    if (!url.searchParams.has('sslmode')) return raw;
-    url.searchParams.delete('sslmode');
-    return url.toString();
-  } catch {
-    return raw;
-  }
-}
+// Ver `./config`: fail-fast si falta la URL en runtime desplegado (sin esto,
+// `pg` apunta en silencio a 127.0.0.1:5432 y el checkout/POS revientan con
+// ECONNREFUSED en lugar de un error de configuración legible).
+const resolved = resolveDbUrl(
+  [
+    ['RESTAURANT_DATABASE_URL', process.env.RESTAURANT_DATABASE_URL],
+    ['DATABASE_URL', process.env.DATABASE_URL],
+  ],
+  'restaurant',
+);
+logDbResolution('restaurant', resolved);
+const dbUrl = resolved.url;
 
-const dbUrl = stripSslMode(process.env.RESTAURANT_DATABASE_URL || process.env.DATABASE_URL);
-
-const pool = new Pool({
+export const restaurantPool = new Pool({
   connectionString: dbUrl,
   ssl: dbUrl && (dbUrl.includes('neon.tech') || process.env.NODE_ENV === 'production')
     ? { rejectUnauthorized: false }
     : false,
 });
 
-export const restaurantDb = drizzle(pool, { schema });
+export const restaurantDb = drizzle(restaurantPool, { schema });

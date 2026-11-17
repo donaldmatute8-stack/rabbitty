@@ -97,7 +97,12 @@ async function ensureRestaurantColumns(client: ReturnType<typeof postgres>) {
 export function getRestaurantDb() {
   if (!restaurantDbInstance) {
     const url = process.env.RESTAURANT_DATABASE_URL || process.env.CORE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!url) throw new Error("RESTAURANT_DATABASE_URL not set");
+    if (!url) {
+      throw new Error(
+        "[DB_CONFIG] Falta la conexión a la base de datos del restaurante. " +
+          "Define RESTAURANT_DATABASE_URL (o CORE_DATABASE_URL / DATABASE_URL / POSTGRES_URL).",
+      );
+    }
     restaurantClient = postgres(url);
     restaurantDbInstance = drizzle(restaurantClient, { schema: restaurantSchema });
     if (!migrationPromise) {
@@ -110,7 +115,12 @@ export function getRestaurantDb() {
 export function getCoreDb() {
   if (!coreDbInstance) {
     const url = process.env.CORE_DATABASE_URL || process.env.RESTAURANT_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!url) throw new Error("CORE_DATABASE_URL not set");
+    if (!url) {
+      throw new Error(
+        "[DB_CONFIG] Falta la conexión a la base de datos core. " +
+          "Define CORE_DATABASE_URL (o RESTAURANT_DATABASE_URL / DATABASE_URL / POSTGRES_URL).",
+      );
+    }
     coreClient = postgres(url);
     coreDbInstance = drizzle(coreClient, { schema: coreSchema });
   }

@@ -224,9 +224,6 @@ export async function POST(req: Request) {
           { status: 422 }
         );
       }
-      if (!orderBranchId) {
-        return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
-      }
 
       // Pedidos sin mesa (app para llevar / domicilio) solo dentro del horario.
       if (!tableId) {
