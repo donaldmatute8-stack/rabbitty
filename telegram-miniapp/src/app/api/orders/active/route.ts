@@ -6,6 +6,7 @@ import { restaurantDb } from '@/db/restaurant';
 import { orders, orderItems, menuItems, branches, restaurants } from '@rabbitty/database-restaurant/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { deriveOrderStage, ORDER_STAGE_META, orderStageStepIndex, ORDER_FIRST_STEPS, type OrderStage } from '@rabbitty/events';
+import { describeError } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
@@ -129,7 +130,9 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ success: true, orders: payload });
   } catch (error) {
-    console.error('[ORDERS ACTIVE ERROR]', error);
+    // Sólo la causa real, no la query completa con sus params: este endpoint lo
+    // sondea la app cada pocos segundos y una base caída llenaba los logs.
+    console.error('[ORDERS ACTIVE ERROR]', describeError(error));
     return NextResponse.json({ success: false, error: 'No se pudo leer el seguimiento' }, { status: 500 });
   }
 }

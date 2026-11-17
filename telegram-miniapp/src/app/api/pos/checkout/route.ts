@@ -7,6 +7,7 @@ import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { isBusinessOpen } from '@/lib/chat';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
+import { describeError } from '@/lib/errors';
 
 // IVA canónico idéntico al POS (packages/api/src/routers/pos.ts calcTax):
 // los precios del menú incluyen IVA 16% — el desglose se deriva, nunca se suma.
@@ -661,7 +662,7 @@ export async function POST(req: Request) {
     // H-ORDEN-UX: los errores de SQL/Drizzle (p. ej. el famoso
     // `Failed query: insert into "orders"…` con la query completa) JAMÁS
     // salen al usuario — el detalle queda solo en el log del server.
-    const raw = err instanceof Error ? err.message : String(err ?? 'Error desconocido');
+    const raw = describeError(err);
     let friendly = 'No pudimos registrar tu pedido. Revisa tu conexión e intenta de nuevo.';
     if (raw.includes('SALDO_INSUFICIENTE_BUNZ')) {
       friendly = 'No tienes Bunz suficientes para cubrir esta cuenta.';

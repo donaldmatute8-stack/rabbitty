@@ -90,6 +90,14 @@ export function resolveDbUrl(
   return { url: stripSslMode(value), source };
 }
 
+/**
+ * ¿Hay al menos una variable definida? No lanza: lo usa `/api/health`, que debe
+ * poder REPORTAR la falta de configuración en lugar de morir al importar `@/db`.
+ */
+export function hasAnyDbUrl(...values: Array<string | undefined>): boolean {
+  return values.some((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
 /** Deja en el log qué variable se usó y contra qué host (una vez por proceso). */
 export function logDbResolution(label: string, resolved: ResolvedDbUrl): void {
   if (process.env.NODE_ENV === 'test') return;
