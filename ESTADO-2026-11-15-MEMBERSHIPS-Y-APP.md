@@ -350,6 +350,29 @@ varias cajas/dispositivos, empleados, contabilidad y administración) para ver q
   staff ve solo el suyo) y `RestaurantSwitcher` en el sidebar; cambiar restaurante cambia a su
   primera sucursal activa y persiste `activeBranchId`/`activeRestaurantId`.
 
+### Migración de base 17-nov (RESUELTO) — leer primero
+
+La cuenta de Neon agotó su cuota y dejó **producción y staging sin base** (el
+POS solo mostraba el síntoma). Se migró todo a un proyecto nuevo:
+
+- Restauración desde el **respaldo propio de las 17:24** (la base vieja quedó
+  inaccesible): 164 tablas, 186 órdenes, $28,078.40.
+- Variables cambiadas en **admin (4), kds (2), bot (2), landing (1)**.
+- Rol de app recreado con DDL bloqueado; staging en base separada y apagado.
+- Trampa del **pooler de Neon**: ignora `search_path`; se resolvió con
+  `ALTER DATABASE neondb SET search_path TO public, pg_catalog`.
+- Datos recreados: **4 ventas ($409)** con ítem técnico "Venta reconstruida
+  (migración)" + **8 Bunz** a `deltoro` (saldo 19) y su aviso.
+- Bugs corregidos de paso: efectivo sin aprobación, `INCLUDED_PRODUCT` de
+  membresía, botón de cobrar visible, emisión de Bunz (sujeto del ledger),
+  entrega de notificaciones, caché del saldo y cupo del plan Nido (99).
+
+**Detalle completo:** `Docs/OPS/INCIDENTE-Y-MIGRACION-2026-11-16.md`
+**Revisión de la semana (consumo de Neon):** `Docs/OPS/REVISION-SEMANA.md`
+
+> **Regla de trabajo desde el 17-nov:** solo commit, sin push ni deploy
+> automático. *Push = deploy* en Railway; el dueño decide cuándo publicar.
+
 ### Incidente 2026-11-16 — POS sin abrir terminal (RESUELTO)
 
 Causa: `staff.hourlyRate`/`commissionPct` se agregaron al esquema y la migración

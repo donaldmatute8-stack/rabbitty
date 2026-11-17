@@ -88,6 +88,8 @@ DOCS/
 !DOCS/
 DOCS/*
 !DOCS/POS-FASE-0/
+# Documentación de operación (incidentes, migraciones, revisiones): SÍ se versiona
+!DOCS/OPS/
 MB-REFERENCE.md
 \!LEEME.md
 
