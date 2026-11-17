@@ -249,7 +249,7 @@ export default function OnboardingPage() {
 
   return (
     <div
-      className="min-h-[100dvh] flex flex-col overflow-y-auto px-5 pt-6 pb-8"
+      className="min-h-[100dvh] flex flex-col overflow-y-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+2.75rem)] pb-8"
       style={{ fontFamily: 'var(--font-family-base)', backgroundColor: 'var(--bg-primary, #0B0B0E)' }}
     >
       {/* Header */}
