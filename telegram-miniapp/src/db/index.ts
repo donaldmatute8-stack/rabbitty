@@ -24,3 +24,6 @@ export const pool = new Pool({
 });
 
 export const db = drizzle(pool, { schema });
+
+/** De dónde salió la conexión (para `/api/health?config=1`, sin tocar la base). */
+export const coreDbConfig = { source: resolved.source, missing: resolved.missing };

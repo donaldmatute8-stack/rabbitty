@@ -91,6 +91,47 @@ export async function backupAgeHours(): Promise<number | null> {
   }
 }
 
+/**
+ * ── App del cliente: ¿su configuración está completa? ──
+ *
+ * Nació del incidente del 17-nov-2026: el runtime de Vercel se quedó sin URL de
+ * base para el lado restaurante y el pedido del cliente falló durante horas sin
+ * que nada avisara. Admin no podía detectarlo porque *su* conexión estaba bien.
+ *
+ * Se consulta `/api/health?config=1`, que sólo comprueba que las variables
+ * resuelvan: **cero queries**, así que el chequeo no despierta ni consume la
+ * base. Dos intentos separados para no gritar por el 503 típico de un deploy.
+ */
+export async function clientAppConfigInvariant(): Promise<Invariant> {
+  const url = process.env.APP_HEALTH_URL || "https://app.rabbitty.me/api/health?config=1";
+  const metric = "app_cliente_config";
+  let lastDetail = "sin respuesta";
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+    const t0 = Date.now();
+    try {
+      const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(6000) });
+      const body = (await res.json().catch(() => null)) as
+        | { status?: string; checks?: Record<string, { error?: string }> }
+        | null;
+      const ms = Date.now() - t0;
+      const broken = Object.entries(body?.checks ?? {})
+        .filter(([, c]) => c?.error)
+        .map(([name, c]) => `${name}:${c.error}`);
+
+      if (res.ok && body?.status === "ok") {
+        return { metric, value: ms, status: ms > 2500 ? "warn" : "ok", detail: `${ms} ms` };
+      }
+      lastDetail = broken.length > 0 ? broken.join(", ") : `HTTP ${res.status}`;
+    } catch (e) {
+      lastDetail = e instanceof Error ? e.message.slice(0, 160) : "error de red";
+    }
+  }
+
+  return { metric, value: null, status: "critical", detail: lastDetail };
+}
+
 export async function collectInvariants({
   restaurantDb,
   coreDb,
@@ -99,6 +140,13 @@ export async function collectInvariants({
   coreDb: Db;
 }): Promise<Invariant[]> {
   const out: Invariant[] = [];
+
+  // ── 0. Configuración de la app del cliente (Vercel) ──
+  // Se consulta el endpoint en modo `config`: valida que las variables de
+  // entorno resuelvan sin ejecutar ni una query, así que vigilar la app no
+  // añade tráfico a la base. Corre dentro del mismo invariante de cada 15 min
+  // (ops-scheduler), sin cron nuevo.
+  out.push(await clientAppConfigInvariant());
 
   // ── 1. Base de datos alcanzable ──
   for (const [name, db] of [

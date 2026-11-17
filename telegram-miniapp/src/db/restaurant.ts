@@ -30,3 +30,6 @@ export const restaurantPool = new Pool({
 });
 
 export const restaurantDb = drizzle(restaurantPool, { schema });
+
+/** De dónde salió la conexión (para `/api/health?config=1`, sin tocar la base). */
+export const restaurantDbConfig = { source: resolved.source, missing: resolved.missing };

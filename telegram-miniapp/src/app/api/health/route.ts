@@ -76,17 +76,48 @@ async function probeModule(load: () => Promise<Probeable>, label: string): Promi
   return probe(() => db.execute(sql`select 1`));
 }
 
-export async function GET(req: NextRequest) {
-  const strict = new URL(req.url).searchParams.get("strict") === "1";
+/**
+ * Modo barato: comprueba que la configuración resolvió de verdad (no un Pool
+ * apuntando al host centinela). Importar el módulo crea el Pool pero no abre
+ * conexión, así que no hay tráfico a la base.
+ */
+async function configuredOnly(
+  load: () => Promise<{ source: string; missing: boolean }>,
+  label: string,
+): Promise<DbHealth> {
+  try {
+    const cfg = await load();
+    if (cfg.missing) return { ok: false, ms: 0, error: "config_missing" };
+    return { ok: true, ms: 0 };
+  } catch (e) {
+    const detail = describeError(e);
+    console.error(`[health] no pude cargar el módulo de ${label}:`, detail);
+    return { ok: false, ms: 0, error: "import_failed" };
+  }
+}
 
-  const [core, restaurant] = await Promise.all([
-    probeModule(async () => (await import("@/db")).db, "core"),
-    probeModule(async () => (await import("@/db/restaurant")).restaurantDb, "restaurant"),
-  ]);
+export async function GET(req: NextRequest) {
+  const params = new URL(req.url).searchParams;
+  const strict = params.get("strict") === "1";
+  // `?config=1` sólo mira que la configuración resuelva: importa los módulos
+  // (crear un Pool no abre conexión) y NO hace ni una query. Es el modo barato
+  // para vigilar cada 15 min sin despertar la base.
+  const configOnly = params.get("config") === "1";
+
+  const [core, restaurant] = configOnly
+    ? await Promise.all([
+        configuredOnly(async () => (await import("@/db")).coreDbConfig, "core"),
+        configuredOnly(async () => (await import("@/db/restaurant")).restaurantDbConfig, "restaurant"),
+      ])
+    : await Promise.all([
+        probeModule(async () => (await import("@/db")).db, "core"),
+        probeModule(async () => (await import("@/db/restaurant")).restaurantDb, "restaurant"),
+      ]);
 
   const dbOk = core.ok && restaurant.ok;
   const body = {
     status: dbOk ? "ok" : "degraded",
+    mode: configOnly ? "config" : "probe",
     commit:
       process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ??
       process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ??
