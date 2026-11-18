@@ -773,7 +773,10 @@ function AffiliateProfileContent() {
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', delay: 0.1 }}
                 type="button"
-                disabled={checkingInPresence || hasPresenceCheckedIn}
+                // Con el local cerrado no se puede marcar "Estoy aquí": el servidor
+                // lo rechaza igual y el POS vería gente que no puede atender.
+                disabled={checkingInPresence || hasPresenceCheckedIn || !openNow}
+                title={!openNow ? 'El local está cerrado' : undefined}
                 onClick={async () => {
                   if (checkingInPresence || hasPresenceCheckedIn) return;
                   setCheckingInPresence(true);
@@ -808,7 +811,15 @@ function AffiliateProfileContent() {
                 }`}
               >
                 <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[var(--rabbitty-pink)] animate-ping'}`} />
-                <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Activando...' : 'Estoy Aquí'}</span>
+                <span>
+                  {hasPresenceCheckedIn
+                    ? '✓ Estoy Aquí'
+                    : checkingInPresence
+                      ? 'Activando...'
+                      : openNow
+                        ? 'Estoy Aquí'
+                        : 'Cerrado ahora'}
+                </span>
               </motion.button>
             )}
 

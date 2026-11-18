@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Sparkles, Plus, Info, SlidersHorizontal, Flame, Utensils, Coffee, X, Heart } from 'lucide-react';
+import { Search, Sparkles, Plus, Info, SlidersHorizontal, Flame, Utensils, Coffee, X, Heart, LayoutGrid, Rows3 } from 'lucide-react';
 import Image from 'next/image';
 import { ProductDetailModal, CatalogItem, CatalogModifier } from './ProductDetailModal';
 
@@ -34,6 +34,9 @@ export function DigitalMenuCatalog({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeItem, setActiveItem] = useState<CatalogItem | null>(null);
+  // Layout del catálogo: 2 columnas (escaparate, se ve el platillo) o lista
+  // compacta (más nombres por pantalla). Por defecto 2 columnas.
+  const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [showCategoryFilters, setShowCategoryFilters] = useState<boolean>(true);
 
   // Identificar dinámicamente los items TOP (con sortOrder más bajo o marcados como primeros de categoría)
@@ -109,14 +112,30 @@ export function DigitalMenuCatalog({
               placeholder="Buscar platillo, bebida o servicio..."
               className="w-full bg-[#161622] border border-white/10 rounded-2xl py-2.5 pl-10 pr-9 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#E91E63] transition-colors shadow-inner"
             />
-            {searchQuery && (
+            <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1">
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Limpiar búsqueda"
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold text-white/60 transition-colors hover:bg-white/20"
+                >
+                  <X size={12} />
+                </button>
+              )}
+              {/* Layout integrado en el buscador: 2 columnas ↔ lista.
+                  Va dentro del campo para no sumar otro botón a la barra. */}
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/60 bg-white/10 h-5 w-5 rounded-full flex items-center justify-center hover:bg-white/20 transition-colors"
+                type="button"
+                onClick={() => {
+                  setLayout((prev) => (prev === 'grid' ? 'list' : 'grid'));
+                }}
+                aria-label={layout === 'grid' ? 'Ver en lista' : 'Ver en dos columnas'}
+                title={layout === 'grid' ? 'Ver en lista' : 'Ver en dos columnas'}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-white/10 hover:text-white active:scale-95"
               >
-                <X size={12} />
+                {layout === 'grid' ? <Rows3 size={14} /> : <LayoutGrid size={14} />}
               </button>
-            )}
+            </div>
           </div>
 
           {/* Botón funcional de filtrado: alternar visibilidad de categorías */}
@@ -193,13 +212,76 @@ export function DigitalMenuCatalog({
               )}
             </div>
 
-            {/* Product Cards Grid */}
-            <div className="grid grid-cols-1 gap-3">
+            {/* Tarjetas: 2 columnas (escaparate) o lista */}
+            <div className={layout === 'grid' ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-1 gap-3'}>
               {cat.items.map(item => {
                 const estimatedBunz = Math.round(item.price * (rewardPercentage / 100));
                 const itemImg = item.imageUrl || null;
                 const isDrink = cat.name.toLowerCase().includes('bebida') || cat.name.toLowerCase().includes('café') || item.name.toLowerCase().includes('café');
                 const isTop = topItemIds.has(item.id);
+
+                // ── Tarjeta de escaparate (2 columnas) ──
+                // Vertical: foto arriba para que el platillo se vea, precio y
+                // botón abajo. Sin foto: logo de Rabbitty en gris (igual que el POS).
+                if (layout === 'grid') {
+                  return (
+                    <motion.div
+                      key={item.id}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setActiveItem(item)}
+                      className="group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#141420] active:border-[#E91E63]/40"
+                    >
+                      <div className="relative aspect-square w-full overflow-hidden bg-black/40">
+                        {itemImg ? (
+                          <Image
+                            src={itemImg}
+                            alt={item.name}
+                            fill
+                            unoptimized
+                            className="object-cover transition-transform duration-300 group-active:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-white/[0.03] p-6">
+                            <Image
+                              src="/Ra.png"
+                              alt=""
+                              width={96}
+                              height={96}
+                              aria-hidden
+                              className="h-full w-full select-none object-contain opacity-25 grayscale"
+                            />
+                          </div>
+                        )}
+                        {isTop && (
+                          <span className="absolute left-1.5 top-1.5 inline-flex items-center gap-0.5 rounded-md bg-[#E91E63]/90 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-white backdrop-blur-md">
+                            <Flame size={10} className="text-amber-300" />
+                            Top
+                          </span>
+                        )}
+                        {item.isAvailable === false && (
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-[10px] font-black uppercase tracking-wide text-white/80">
+                            Agotado
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-1 flex-col gap-1 p-2.5">
+                        <p className="line-clamp-2 text-[12px] font-black leading-tight text-white">
+                          {item.name}
+                        </p>
+                        <div className="mt-auto flex items-center justify-between pt-1">
+                          <span className="text-[12.5px] font-black text-white">${item.price}</span>
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white">
+                            <Plus size={13} />
+                          </span>
+                        </div>
+                        <span className="inline-flex w-fit items-center gap-0.5 text-[9px] font-black text-pink-400">
+                          <Sparkles size={9} /> +{estimatedBunz} Bunz
+                        </span>
+                      </div>
+                    </motion.div>
+                  );
+                }
 
                 return (
                   <motion.div

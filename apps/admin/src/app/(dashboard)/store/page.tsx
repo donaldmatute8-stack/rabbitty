@@ -5,6 +5,7 @@ import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Package, Truck, ArrowUp, ArrowDown, Eye, EyeOff, AlertTriangle, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { useBranch } from "../../../components/DashboardClientWrapper";
 
 /**
  * ── Tienda & Envíos ────────────────────────────────────────────────────────
@@ -34,6 +35,9 @@ type DeliveryConfig = {
 
 export default function StorePage() {
   const utils = trpc.useUtils();
+  const { branchId: activeBranchId } = useBranch();
+  const branchesQuery = trpc.admin.getBranches.useQuery(undefined, { retry: false });
+  const branchId = activeBranchId || branchesQuery.data?.[0]?.id || "";
   const restaurantsQuery = trpc.admin.getRestaurants.useQuery();
   const productsQuery = trpc.admin.getStoreProducts.useQuery(undefined, { refetchOnWindowFocus: false });
   const menuItemsQuery = trpc.pos.getMenuItems.useQuery({});
@@ -43,6 +47,19 @@ export default function StorePage() {
   // ── Controlar existencias de un producto sin receta ──
   // Reusa `inventory.createItem` + `inventory.addRecipeIngredient`: el insumo y la
   // receta 1:1 son las piezas que ya descuentan stock al cobrar.
+  // ── Editar producto (precio, foto, envío, peso, tope) ──
+  const [editDialog, setEditDialog] = useState<{
+    id: string;
+    name: string;
+    price: number;
+    imageUrl: string;
+    requiresShipping: boolean;
+    weightGrams?: number;
+    maxPerOrder?: number;
+  } | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
   const [stockDialog, setStockDialog] = useState<{ id: string; name: string } | null>(null);
   const [stockForm, setStockForm] = useState({ stock: 0, minStock: 2, unit: "pieza" });
 
@@ -98,6 +115,49 @@ export default function StorePage() {
     const all = menuItemsQuery.data ?? [];
     return all.filter((item) => (item.kind ?? "DISH") !== "PRODUCT").slice(0, 6);
   }, [menuItemsQuery.data]);
+
+  /** Sube la foto al bucket (no dataURL en Postgres) y devuelve la URL pública. */
+  const uploadPhoto = async (file: File) => {
+    setPhotoError(null);
+    if (!branchId) {
+      setPhotoError("No sé a qué sucursal pertenece la foto");
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("branchId", branchId);
+      const res = await fetch("/api/uploads/product", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.url) throw new Error(data?.error || "No se pudo subir la foto");
+      setEditDialog((d) => (d ? { ...d, imageUrl: data.url } : d));
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : "No se pudo subir la foto");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const saveProduct = () => {
+    if (!editDialog) return;
+    updateItem.mutate(
+      {
+        id: editDialog.id,
+        price: Number(editDialog.price) || 0,
+        imageUrl: editDialog.imageUrl.trim() || undefined,
+        requiresShipping: editDialog.requiresShipping,
+        weightGrams: editDialog.weightGrams ?? null,
+        maxPerOrder: editDialog.maxPerOrder ?? null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Producto actualizado");
+          setEditDialog(null);
+        },
+      },
+    );
+  };
 
   const linkStock = async () => {
     if (!stockDialog) return;
@@ -343,6 +403,22 @@ export default function StorePage() {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() =>
+                        setEditDialog({
+                          id: product.id,
+                          name: product.name,
+                          price: product.price,
+                          imageUrl: product.imageUrl ?? "",
+                          requiresShipping: product.requiresShipping,
+                          weightGrams: product.weightGrams ?? undefined,
+                          maxPerOrder: product.maxPerOrder ?? undefined,
+                        })
+                      }
+                      className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-bold text-gray-300 hover:bg-white/10 hover:text-white"
+                    >
+                      Editar
+                    </button>
                     {product.stock === null && (
                       <button
                         onClick={() => {
@@ -400,6 +476,107 @@ export default function StorePage() {
           </div>
         )}
       </Card>
+
+      {/* ── Editar producto ── */}
+      <Dialog
+        open={Boolean(editDialog)}
+        onClose={() => setEditDialog(null)}
+        title={editDialog?.name ?? "Producto"}
+        kicker="Tienda"
+      >
+        {editDialog && (
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                {editDialog.imageUrl ? (
+                  <img src={editDialog.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <img src="/Ra.png" alt="" className="h-10 w-10 object-contain opacity-25 grayscale" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <label className="inline-block cursor-pointer text-[11px] font-bold text-pink-400 hover:text-pink-300">
+                  <span>{uploadingPhoto ? "Subiendo…" : "Subir foto (JPG, PNG o WebP · máx 5 MB)"}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingPhoto}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void uploadPhoto(file);
+                    }}
+                  />
+                </label>
+                <Input
+                  label="o pega una URL"
+                  placeholder="https://…"
+                  value={editDialog.imageUrl}
+                  onChange={(e) => setEditDialog((d) => (d ? { ...d, imageUrl: e.target.value } : d))}
+                />
+                {photoError && <p className="text-[10px] font-bold text-red-400">{photoError}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Precio (MXN)"
+                type="number"
+                min={0}
+                step="1"
+                value={editDialog.price}
+                onChange={(e) => setEditDialog((d) => (d ? { ...d, price: Number(e.target.value) } : d))}
+              />
+              <Input
+                label="Peso (g, opcional)"
+                type="number"
+                min={0}
+                value={editDialog.weightGrams ?? ""}
+                onChange={(e) =>
+                  setEditDialog((d) =>
+                    d ? { ...d, weightGrams: e.target.value === "" ? undefined : Number(e.target.value) } : d,
+                  )
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Máx. por pedido"
+                type="number"
+                min={1}
+                value={editDialog.maxPerOrder ?? ""}
+                onChange={(e) =>
+                  setEditDialog((d) =>
+                    d ? { ...d, maxPerOrder: e.target.value === "" ? undefined : Number(e.target.value) } : d,
+                  )
+                }
+              />
+              <label className="flex cursor-pointer items-center gap-2 self-end pb-2 text-xs font-bold text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={editDialog.requiresShipping}
+                  onChange={(e) =>
+                    setEditDialog((d) => (d ? { ...d, requiresShipping: e.target.checked } : d))
+                  }
+                  className="h-4 w-4 accent-pink-500"
+                />
+                Se envía a domicilio
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setEditDialog(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={saveProduct} disabled={updateItem.isPending || uploadingPhoto}>
+                {updateItem.isPending ? "Guardando…" : "Guardar"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       <Dialog
         open={Boolean(stockDialog)}

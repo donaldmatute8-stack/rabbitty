@@ -32,22 +32,42 @@ export async function POST(req: Request) {
 
     // Sucursal: acepta id de sucursal o de negocio (el perfil afiliado manda el
     // del negocio, igual que el checkout).
+    //
+    // OJO: un restaurante puede tener varias sucursales, incluida la archivada y
+    // la de Sandbox. Antes se tomaba `limit(1)` a secas y podía caer en la
+    // archivada (sin coordenadas), así que la cotización por zona nunca aplicaba.
+    // Se elige igual que el checkout: activa, de producción, no sandbox.
+    const branchCols = {
+      id: branches.id,
+      restaurantId: branches.restaurantId,
+      address: branches.address,
+      lat: branches.lat,
+      lng: branches.lng,
+      isActive: branches.isActive,
+      name: branches.name,
+    } as const;
+
     const [byId] = await restaurantDb
-      .select({ id: branches.id, restaurantId: branches.restaurantId, address: branches.address })
+      .select(branchCols)
       .from(branches)
       .where(eq(branches.id, ref))
       .limit(1);
 
-    const branch =
-      byId ??
-      (
-        await restaurantDb
-          .select({ id: branches.id, restaurantId: branches.restaurantId, address: branches.address })
-          .from(branches)
-          .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
-          .where(eq(restaurants.businessId, ref))
-          .limit(1)
-      )[0];
+    let branch = byId ?? null;
+    if (!branch) {
+      const candidates = await restaurantDb
+        .select(branchCols)
+        .from(branches)
+        .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+        .where(eq(restaurants.businessId, ref));
+
+      const active = candidates.filter((b) => b.isActive !== false);
+      const production =
+        active.find((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || '')) ??
+        active[0] ??
+        candidates[0];
+      branch = production ?? null;
+    }
 
     if (!branch) {
       return NextResponse.json({ success: false, error: 'Sucursal no encontrada' }, { status: 404 });
@@ -90,7 +110,15 @@ export async function POST(req: Request) {
       config: restaurant?.deliveryConfig ?? null,
       subtotal,
       dropoff,
-      pickup: { street1: branch.address ?? null, city: null, country: 'MX' },
+      // Las coordenadas de la sucursal son lo que permite cotizar por zona
+      // (por distancia). Sin ellas se usa la tarifa fija.
+      pickup: {
+        street1: branch.address ?? null,
+        city: null,
+        country: 'MX',
+        lat: branch.lat ?? null,
+        lng: branch.lng ?? null,
+      },
     });
 
     return NextResponse.json(

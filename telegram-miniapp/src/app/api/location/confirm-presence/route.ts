@@ -5,6 +5,7 @@ import { restaurantDb } from '@/db/restaurant';
 import { ownedBusinesses, users, ledgerEntries } from '@/db/schema';
 import { restaurants, branches, events } from '@rabbitty/database-restaurant/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { isBusinessOpen } from '@/lib/chat';
 
 export const runtime = 'nodejs';
 
@@ -23,9 +24,33 @@ export async function POST(req: NextRequest) {
     const businessId = String(body?.businessId || '');
     if (!businessId) return NextResponse.json({ success: false, error: 'businessId requerido' }, { status: 400 });
 
-    const [biz] = await db.select({ id: ownedBusinesses.id, name: ownedBusinesses.name, ownerId: ownedBusinesses.ownerId })
+    const [biz] = await db.select({
+      id: ownedBusinesses.id,
+      name: ownedBusinesses.name,
+      ownerId: ownedBusinesses.ownerId,
+      activeDays: ownedBusinesses.activeDays,
+      startTime: ownedBusinesses.startTime,
+      endTime: ownedBusinesses.endTime,
+      timezone: ownedBusinesses.timezone,
+    })
       .from(ownedBusinesses).where(sql`id = ${businessId} OR slug = ${businessId}`).limit(1);
     if (!biz) return NextResponse.json({ success: false, error: 'Negocio no encontrado' }, { status: 404 });
+
+    // ── Sólo se puede decir "estoy aquí" con el local abierto ──
+    // Un check-in fuera de horario ensucia la presencia del POS (el comercio ve
+    // gente que no puede atender) y dispara la recompensa de llegada. El horario
+    // sale de `ownedBusinesses` (el mismo que usa el POS y la ficha pública), así
+    // que si el comercio cambia su horario, esto cambia solo.
+    if (!isBusinessOpen(biz)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `El local está cerrado ahora (${biz.startTime}–${biz.endTime}). Podrás marcar "Estoy aquí" cuando abra.`,
+          code: 'CLOSED',
+        },
+        { status: 409 },
+      );
+    }
 
     const now = new Date();
     // 1. Abrir o refrescar sesión abierta en presenceSessions

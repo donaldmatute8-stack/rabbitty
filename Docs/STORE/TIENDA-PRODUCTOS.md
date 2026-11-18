@@ -67,6 +67,36 @@ que ya consumen los proveedores de última milla (`MANUAL`, `UBER_DIRECT` cuando
 haya credenciales y `RABBITTY_RIDE` a futuro). No se añadió un segundo flujo de
 entrega.
 
+## Estado (18-nov, cierre del bloque)
+
+**Hecho después de la v1:**
+
+- **Fotos en el bucket**: `POST /api/uploads/product` (admin) sube a
+  `menu/<branchId>/<uuid>.jpg` y guarda la URL; se sirven por
+  `/api/media/product/<key>` (pública, cache inmutable). El chat reusa el mismo
+  helper (`@rabbitty/api/services/mediaStorage`). Si el bucket no está
+  configurado, el formulario cae al dataURL como antes: no se rompe.
+- **Zonas de envío por distancia**: `deliveryConfig.zones = [{maxKm, fee}]`. Se
+  elige la primera zona que cubre la distancia sucursal→dirección (haversine); sin
+  coordenadas se usa `baseFee`. La sucursal necesita `lat/lng` (626 Café ya los
+  tiene).
+- **Editar producto desde `/store`**: precio, foto (subida o URL), envío, peso y
+  tope por pedido, sin ir a Menú.
+- **Toggle de envío y badge de bajo stock** por producto en la lista.
+- **Sucursal de producción**: la ficha del cliente, la cotización y el checkout
+  eligen activa + no-sandbox; antes `findFirst`/`limit(1)` podía devolver la
+  archivada (sin coordenadas ni tienda).
+
+**Decisión sobre pedidos mixtos**: **no se parte la orden**. Un pedido con
+platillos + productos es una sola orden y un solo cobro; el KDS filtra los
+productos (no hay nada que cocinar) y el POS los ve como líneas normales. Partir
+habría obligado a dos pagos y dos tickets para un cliente.
+
+**Ajuste de horario**: check-in ("Estoy Aquí"), "planeo ir" y las alertas de
+proximidad exigen que el negocio esté abierto (`isBusinessOpen`, el mismo horario
+de la ficha y el POS). Con el local cerrado el panel dice "Cerrado ahora" y el
+servidor responde 409.
+
 ## Pendiente / siguiente iteración
 
 > El detalle priorizado y con criterios de aceptación vive en

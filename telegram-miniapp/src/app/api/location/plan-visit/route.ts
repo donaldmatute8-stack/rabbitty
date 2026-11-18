@@ -3,6 +3,7 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { ownedBusinesses, users, notifications } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { isBusinessOpen } from '@/lib/chat';
 
 export const runtime = 'nodejs';
 
@@ -20,9 +21,26 @@ export async function POST(req: NextRequest) {
     const businessId = String(body?.businessId || '');
     if (!businessId) return NextResponse.json({ error: 'businessId requerido' }, { status: 400 });
 
-    const [biz] = await db.select({ id: ownedBusinesses.id, name: ownedBusinesses.name, ownerId: ownedBusinesses.ownerId })
+    const [biz] = await db.select({
+      id: ownedBusinesses.id,
+      name: ownedBusinesses.name,
+      ownerId: ownedBusinesses.ownerId,
+      activeDays: ownedBusinesses.activeDays,
+      startTime: ownedBusinesses.startTime,
+      endTime: ownedBusinesses.endTime,
+      timezone: ownedBusinesses.timezone,
+    })
       .from(ownedBusinesses).where(eq(ownedBusinesses.id, businessId)).limit(1);
     if (!biz) return NextResponse.json({ error: 'Negocio no encontrado' }, { status: 404 });
+
+    // "Planeo ir" sólo tiene sentido si el local está abierto (misma regla que el
+    // check-in): fuera de horario el aviso llegaría a un negocio que no atiende.
+    if (!isBusinessOpen(biz)) {
+      return NextResponse.json(
+        { success: false, error: 'El local está cerrado ahora. Podrás avisar cuando abra.', code: 'CLOSED' },
+        { status: 409 },
+      );
+    }
 
     // Anti-spam: 1 planeo por usuario/negocio cada 12h
     const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);

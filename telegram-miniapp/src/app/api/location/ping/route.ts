@@ -27,6 +27,7 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 import { checkRateLimit } from "@/lib/rateLimit";
 import { parsePushRules } from "@/lib/push/categories";
+import { isBusinessOpen } from '@/lib/chat';
 
 const COOLDOWN_SECONDS = 12 * 60 * 60; // 12 horas
 /** Flash offers: máximo una vez por usuario/negocio cada 24 horas. */
@@ -99,6 +100,11 @@ export async function POST(req: NextRequest) {
     const nearBusinesses: Array<{ business: (typeof businesses)[0]; dist: number }> = [];
     for (const b of businesses) {
       if (typeof b.lat !== "number" || typeof b.lng !== "number") continue;
+      // ── Cerrado = sin avisos de proximidad ──
+      // El motor avisa al Rabbitter y al comercio; con el local cerrado solo se
+      // molesta a ambos (y el POS ve gente que no puede atender). Mismo horario
+      // que usa el check-in y la ficha pública.
+      if (!isBusinessOpen(b)) continue;
       const dist = getDistanceMeters(lat, lng, b.lat, b.lng);
       if (dist <= 2500) {
         nearBusinesses.push({ business: b, dist });
@@ -404,6 +410,9 @@ export async function POST(req: NextRequest) {
     let confirmPresence: { businessId: string; businessName: string } | null = null;
     if (caller?.id && typeof lat === "number" && typeof lng === "number") {
       const closest = businesses
+        // El aviso "¿estás en X?" también exige local abierto: si está cerrado no
+        // hay nada que confirmar (y el check-in lo rechazaría igual).
+        .filter((b) => isBusinessOpen(b))
         .map((b) => (typeof b.lat === "number" && typeof b.lng === "number" ? { b, d: getDistanceMeters(lat, lng, b.lat, b.lng) } : null))
         .filter((x): x is { b: typeof businesses[0]; d: number } => !!x && x.d <= 40)
         .sort((a, b) => a.d - b.d)[0];

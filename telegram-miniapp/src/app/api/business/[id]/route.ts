@@ -89,13 +89,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     let branchTables: TableRecord[] = [];
 
     if (restaurant) {
-      const foundBranch = await db.query.branches.findFirst({
-        where: and(
-          eq(branches.restaurantId, restaurant.id),
-          eq(branches.isActive, true)
-        )
-      });
-      primaryBranch = (foundBranch as BranchRecord) || null;
+      // ── Sucursal de PRODUCCIÓN ──
+      // El restaurante puede tener varias sucursales activas (incluida
+      // "Modo Entrenamiento (Sandbox)") y alguna archivada. `findFirst` a secas
+      // devolvía la que apareciera primero: el catálogo mostraba la carta de
+      // Sandbox (sin productos de tienda) o la de una sucursal archivada.
+      // Misma regla que el checkout y la cotización de envío.
+      const allBranches = (await db.query.branches.findMany({
+        where: eq(branches.restaurantId, restaurant.id),
+      })) as BranchRecord[];
+      const activeBranches = allBranches.filter((b) => b.isActive !== false);
+      const productionBranch =
+        activeBranches.find((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || '')) ??
+        activeBranches[0] ??
+        allBranches[0] ??
+        null;
+      primaryBranch = productionBranch;
 
       if (primaryBranch) {
         // Fetch categories for this branch

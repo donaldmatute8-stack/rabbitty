@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
+import { useBranch } from "../../../components/DashboardClientWrapper";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Plus, Pencil, Trash2, Search, Tag } from "lucide-react";
 
@@ -34,6 +35,32 @@ const defaultCatForm: CatForm = { name: "", description: "" };
 
 const MAX_IMAGE_BYTES = 300 * 1024; // 300 KB límite para dataURLs en PostgreSQL
 const MAX_IMAGE_EDGE = 800; // lado máximo (px) tras redimensionar
+
+/**
+ * Sube la foto al bucket y devuelve su URL pública. Si el bucket no está
+ * configurado en este entorno (501), cae al dataURL de antes para no bloquear la
+ * creación del producto.
+ */
+async function uploadProductPhoto(file: File, branchId: string): Promise<string> {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    if (branchId) form.append("branchId", branchId);
+    const res = await fetch("/api/uploads/product", { method: "POST", body: form });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.url) return String(data.url);
+    }
+    if (res.status !== 501) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data?.error || "No se pudo subir la imagen");
+    }
+  } catch (error) {
+    if (error instanceof Error && !/failed|fetch/i.test(error.message)) throw error;
+  }
+  // Sin bucket: se queda el dataURL (con su tope) para no romper el flujo.
+  return processImageFile(file);
+}
 
 async function processImageFile(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) {
@@ -98,6 +125,9 @@ export default function MenuPage() {
   const updateCategory = trpc.admin.updateCategory.useMutation({ onSuccess: () => { utils.pos.getCategories.invalidate(); toast.success("Categoría actualizada"); setCatDialog(null); }, onError: (e) => toast.error(e.message) });
   const deleteCategory = trpc.admin.deleteCategory.useMutation({ onSuccess: () => { utils.pos.getCategories.invalidate(); toast.success("Categoría eliminada"); setCatDialog(null); }, onError: (e) => toast.error(e.message) });
 
+  const { branchId: activeBranchId } = useBranch();
+  const branchesQuery = trpc.admin.getBranches.useQuery(undefined, { retry: false });
+  const branchId = activeBranchId || branchesQuery.data?.[0]?.id || "";
   const [itemDialog, setItemDialog] = useState<{ mode: "create" | "edit"; id?: string } | null>(null);
   const [itemForm, setItemForm] = useState<ItemForm>(defaultItemForm);
   const [catDialog, setCatDialog] = useState<{ mode: "create" | "edit"; id?: string } | null>(null);
@@ -442,8 +472,8 @@ export default function MenuPage() {
                       e.target.value = "";
                       if (file) {
                         try {
-                          const dataUrl = await processImageFile(file);
-                          setItemForm((f) => ({ ...f, imageUrl: dataUrl }));
+                          const url = await uploadProductPhoto(file, branchId);
+                          setItemForm((f) => ({ ...f, imageUrl: url }));
                         } catch (err) {
                           toast.error(err instanceof Error ? err.message : "No se pudo procesar la imagen");
                         }
