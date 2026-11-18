@@ -20,7 +20,12 @@
 
 ---
 
-## 1. Mañana — Bloque 1 · Tienda v2 (cotizabilidad, admin, existencias)
+## 1. Bloque 1 · Tienda v2 — ✅ **HECHO (18-nov)**
+
+> Completado en `5923608` (envío cobrable) y `b148ea4` (existencias, admin,
+> contabilidad, KDS, invariante). Queda de este bloque sólo lo marcado como
+> pendiente al final (fotos en bucket y pedidos mixtos).
+
 
 Hoy la tienda vende; mañana tiene que **administrarse y cobrarse completa**.
 `Docs/STORE/TIENDA-PRODUCTOS.md` tiene el diseño; esto es lo que falta.
@@ -71,7 +76,14 @@ Hoy la tienda vende; mañana tiene que **administrarse y cobrarse completa**.
 
 ---
 
-## 2. Mañana — Bloque 2 · Página de comercio premium
+## 2. Bloque 2 · Comercio premium — ✅ **HECHO (18-nov)**
+
+> `be2be74`/`112146c` (tokens: 69 hex → 0) y `1659535` (jerarquía: identidad en el
+> hero, acciones secundarias fuera del primer scroll, un solo acento) + hub de
+> Dinero en el admin. Pendiente de este bloque: nada bloqueante; si se quiere
+> afinar, quedan capturas antes/después y revisión visual en iPhone real.
+
+### Detalle original del bloque (se conserva como referencia)
 
 **Diagnóstico medido** de `telegram-miniapp/src/app/affiliate/[id]/page.tsx`:
 **1,718 líneas**, **21 colores hex distintos** (24 usos del rosa de marca, más
