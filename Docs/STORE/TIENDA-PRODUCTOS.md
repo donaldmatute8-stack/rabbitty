@@ -69,6 +69,10 @@ entrega.
 
 ## Pendiente / siguiente iteración
 
+> El detalle priorizado y con criterios de aceptación vive en
+> `Docs/ROADMAP/SIGUIENTE.md` (bloque 1: envío cobrable, admin de tienda,
+> existencias visibles, contabilidad por tipo y fotos en bucket).
+
 - **Costo de envío**: hoy la dirección viaja, pero la tarifa no se cobra en línea
   (se cotiza en el POS al asignar repartidor). Si se quiere cobrar por adelantado,
   el lugar es `orders.deliveryFee` + cotización del proveedor antes de pagar.

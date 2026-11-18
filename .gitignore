@@ -100,6 +100,9 @@ DOCS/*
 # Diseño de producto (tienda, módulos): sí se versiona
 !DOCS/STORE/
 !Docs/STORE/
+# Plan de trabajo versionado (lo que sigue, por sesión): sí se versiona
+!DOCS/ROADMAP/
+!Docs/ROADMAP/
 MB-REFERENCE.md
 \!LEEME.md
 
