@@ -60,6 +60,32 @@ export async function getAuthenticatedUser(req: Request | NextRequest): Promise<
       token = customHeader.trim();
     }
 
+    // ── Bypass de desarrollo (simulador) ──
+    // Sólo existe fuera de producción; en producción la cabecera se ignora y el
+    // flujo sigue siendo Telegram o sesión web, como siempre.
+    if (process.env.NODE_ENV !== 'production') {
+      const devUserId = req.headers.get('x-dev-user');
+      if (devUserId) {
+        const devUser = await db.query.users.findFirst({ where: eq(users.id, devUserId) });
+        if (devUser) {
+          console.warn('[serverAuth] DEV AUTH → usuario', devUser.username ?? devUser.id);
+          return {
+            id: devUser.id,
+            telegramId: devUser.telegramId,
+            username: devUser.username,
+            phoneNumber: devUser.phoneNumber,
+            email: devUser.email,
+            role: devUser.role,
+            tonWalletAddress: devUser.tonWalletAddress,
+            totalBunzEarned: devUser.totalBunzEarned,
+            hops: devUser.hops,
+            pushRules: parseUserRulesJson(devUser.pushRules),
+            pushMutedCategories: parseUserCategories(devUser.pushMutedCategories),
+          };
+        }
+      }
+    }
+
     if (token) {
       const session = await db.query.webSessions.findFirst({
         where: and(

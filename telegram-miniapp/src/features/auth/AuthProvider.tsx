@@ -6,6 +6,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { readSettings, subscribeSettings } from '@/lib/userSettings';
 
 import { captureAffiliateIntent } from '@/lib/affiliateIntent';
+import { getDevUserId } from '@/lib/devAuth';
 
 export interface UserProfile {
   id?: string;
@@ -103,6 +104,26 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           }
         } catch (tgError) {
           console.warn('[AuthProvider] Telegram auth error:', tgError);
+        }
+      }
+
+      // 1.5 DEV BYPASS (solo desarrollo local; el servidor lo ignora en prod)
+      const devUserId = getDevUserId();
+      if (devUserId) {
+        try {
+          const res = await fetch('/api/auth/session', {
+            headers: await PlatformBridge.getAuthHeaders(),
+            cache: 'no-store',
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.profile) {
+              setUser(data.profile);
+              return;
+            }
+          }
+        } catch (devErr) {
+          console.warn('[AuthProvider] Dev bypass falló:', devErr);
         }
       }
 

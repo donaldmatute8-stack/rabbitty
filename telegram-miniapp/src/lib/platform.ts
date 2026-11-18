@@ -3,6 +3,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Preferences } from '@capacitor/preferences';
+import { getDevUserId } from '@/lib/devAuth';
 
 export type PlatformType = 'telegram' | 'ios' | 'android' | 'web';
 
@@ -166,6 +167,11 @@ export const PlatformBridge = {
       const tg = (window as WindowWithTelegram).Telegram?.WebApp;
       if (tg?.initData) headers['X-Init-Data'] = tg.initData;
     }
+
+    // Bypass de desarrollo (simulador sin Telegram). El servidor lo ignora en
+    // producción, así que la cabecera viajar no abre nada.
+    const devUserId = getDevUserId();
+    if (devUserId) headers['x-dev-user'] = devUserId;
 
     return headers;
   },

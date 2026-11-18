@@ -8,6 +8,7 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
 import { hasAffiliateIntent } from '@/lib/affiliateIntent';
 import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
+import { DevLoginBypass } from '@/features/auth/DevLoginBypass';
 
 /**
  * ── Onboarding mobile (Rabbiter) ────────────────────────────────────────
@@ -346,6 +347,9 @@ export default function OnboardingPage() {
             >
               Comenzar Ahora
             </motion.button>
+            {/* Bypass de desarrollo: sólo se renderiza fuera de producción */}
+            <DevLoginBypass />
+
             <p className="m-0 text-center text-[14px] text-zinc-400">
               ¿Ya tienes cuenta activa?{' '}
               <button

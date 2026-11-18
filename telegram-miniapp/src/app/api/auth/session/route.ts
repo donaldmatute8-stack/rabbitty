@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { users, webSessions, referrals , presenceSessions } from '@/db/schema';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { users, referrals, presenceSessions } from '@/db/schema';
+import { and, eq, sql } from 'drizzle-orm';
+import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 // El saldo de Bunz se lee de aquí: nunca debe servirse desde caché, o el
 // comensal sigue viendo su saldo anterior aunque ya se le haya acreditado.
@@ -9,35 +10,16 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization');
-    const customHeader = req.headers.get('x-session-token');
-
-    let token: string | null = null;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.replace('Bearer ', '').trim();
-    } else if (customHeader) {
-      token = customHeader.trim();
-    }
-
-    if (!token) {
+    // Una sola implementación de autenticación (token de sesión, Telegram o el
+    // bypass de desarrollo, que el servidor ignora en producción).
+    const caller = await getAuthenticatedUser(req);
+    if (!caller) {
       return NextResponse.json({ error: 'No session token provided' }, { status: 401 });
-    }
-
-    // Lookup session in webSessions
-    const session = await db.query.webSessions.findFirst({
-      where: and(
-        eq(webSessions.jwtToken, token),
-        gt(webSessions.expiresAt, new Date())
-      ),
-    });
-
-    if (!session || !session.userId) {
-      return NextResponse.json({ error: 'Sesión inválida o expirada' }, { status: 401 });
     }
 
     // Fetch canonical user profile
     const profile = await db.query.users.findFirst({
-      where: eq(users.id, session.userId),
+      where: eq(users.id, caller.id),
       with: { level: true },
     });
 
