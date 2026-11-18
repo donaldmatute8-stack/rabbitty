@@ -94,6 +94,9 @@ DOCS/*
 !DOCS/PAYMENTS/
 # Corpus legal (contratos, políticas, plantillas): sí se versiona
 !DOCS/LEGAL/
+# Decisiones de revisión de App Store (rechazos, notas al revisor): sí se versiona
+!DOCS/APP-STORE/
+!Docs/APP-STORE/
 MB-REFERENCE.md
 \!LEEME.md
 
