@@ -1,0 +1,355 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { trpc } from "../../../lib/trpc-client";
+import { Card, Badge, Button, Input, Select, toast } from "@rabbitty/ui";
+import { Package, Truck, ArrowUp, ArrowDown, Eye, EyeOff, AlertTriangle, ExternalLink } from "lucide-react";
+import Link from "next/link";
+
+/**
+ * ── Tienda & Envíos ────────────────────────────────────────────────────────
+ *
+ * Dos cosas en un solo lugar porque son la misma conversación: qué vende el
+ * negocio para llevar y cuánto cobra por llevarlo.
+ *
+ * - **Envíos**: `restaurants.deliveryConfig`. Con tarifa, el checkout de la app
+ *   la suma a `orders.deliveryFee` y el POS no la vuelve a cobrar. Sin config no
+ *   se cobra y la app dice "por confirmar" (nunca gratis en silencio).
+ * - **Productos**: `menu_items` con `kind = 'PRODUCT'`. Existencias derivadas de
+ *   la receta contra inventario (misma fuente que descuenta el POS/app), ventas
+ *   de 30 días, publicar/ocultar y orden del escaparate.
+ *
+ * Crear o editar el producto en sí se hace en **Menú** (mismo formulario que un
+ * platillo): aquí sólo se administra lo de tienda, sin duplicar formularios.
+ */
+
+type DeliveryConfig = {
+  enabled?: boolean;
+  mode?: "FLAT" | "PROVIDER";
+  baseFee?: number;
+  freeOver?: number;
+  etaMinutes?: number;
+  notes?: string;
+};
+
+export default function StorePage() {
+  const utils = trpc.useUtils();
+  const restaurantsQuery = trpc.admin.getRestaurants.useQuery();
+  const productsQuery = trpc.admin.getStoreProducts.useQuery(undefined, { refetchOnWindowFocus: false });
+  const menuItemsQuery = trpc.pos.getMenuItems.useQuery({});
+
+  const restaurant = restaurantsQuery.data?.[0];
+
+  const [delivery, setDelivery] = useState<DeliveryConfig>({
+    enabled: true,
+    mode: "FLAT",
+    baseFee: 0,
+    freeOver: undefined,
+    etaMinutes: 40,
+    notes: "",
+  });
+
+  useEffect(() => {
+    const cfg = (restaurant as { deliveryConfig?: DeliveryConfig | null } | undefined)?.deliveryConfig;
+    if (cfg && typeof cfg === "object") {
+      setDelivery({
+        enabled: cfg.enabled ?? true,
+        mode: cfg.mode === "PROVIDER" ? "PROVIDER" : "FLAT",
+        baseFee: cfg.baseFee ?? 0,
+        freeOver: cfg.freeOver ?? undefined,
+        etaMinutes: cfg.etaMinutes ?? 40,
+        notes: cfg.notes ?? "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurant?.id]);
+
+  const updateRestaurant = trpc.admin.updateRestaurant.useMutation({
+    onSuccess: () => {
+      utils.admin.getRestaurants.invalidate();
+      toast.success("Configuración de envíos guardada");
+    },
+    onError: (error) => toast.error(error.message || "No se pudo guardar"),
+  });
+
+  const updateItem = trpc.admin.updateMenuItem.useMutation({
+    onSuccess: () => {
+      utils.admin.getStoreProducts.invalidate();
+      utils.pos.getMenuItems.invalidate();
+    },
+    onError: (error) => toast.error(error.message || "No se pudo actualizar el producto"),
+  });
+
+  const products = productsQuery.data?.products ?? [];
+  const totals = productsQuery.data?.totals;
+
+  // ¿Hay productos en el menú que no están marcados como tienda? Sirve para
+  // recordar que "Bolsa de café" ya existe como platillo y sólo falta marcarlo.
+  const candidates = useMemo(() => {
+    const all = menuItemsQuery.data ?? [];
+    return all.filter((item) => (item.kind ?? "DISH") !== "PRODUCT").slice(0, 6);
+  }, [menuItemsQuery.data]);
+
+  const saveDelivery = () => {
+    if (!restaurant?.id) {
+      toast.error("No encontré tu restaurante");
+      return;
+    }
+    updateRestaurant.mutate({
+      id: restaurant.id,
+      deliveryConfig:
+        delivery.mode === "FLAT" && !(Number(delivery.baseFee) > 0)
+          ? // Sin tarifa no hay envío configurado: se guarda igual para dejar
+            // explícito que no se cobra (la app mostrará "por confirmar").
+            { ...delivery, baseFee: 0 }
+          : delivery,
+    });
+  };
+
+  const move = (id: string, currentSort: number, direction: -1 | 1) => {
+    updateItem.mutate({ id, sortOrder: Math.max(0, currentSort + direction * 10) });
+  };
+
+  return (
+    <div className="space-y-6 pb-10">
+      <div className="relative overflow-hidden rounded-3xl border border-white/5 bg-linear-to-br from-gray-900/60 to-black/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="absolute top-0 right-0 h-48 w-48 rounded-full bg-pink-500/10 blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col gap-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-pink-400">Para llevar</p>
+          <h1 className="text-4xl font-black tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white via-gray-200 to-gray-500">
+            Tienda & Envíos
+          </h1>
+          <p className="max-w-2xl text-sm font-medium text-gray-400">
+            Lo que tu cliente se lleva a casa (café en grano, pan, botellas) y cuánto cobras por
+            llevarlo. Los productos se crean en <strong className="text-gray-300">Menú</strong> como
+            cualquier artículo, eligiendo el tipo “Producto de tienda”.
+          </p>
+        </div>
+      </div>
+
+      {/* ── Envíos ── */}
+      <Card className="border border-white/5 bg-white/[0.03] p-6">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-pink-500/20 bg-pink-500/10 text-pink-400">
+              <Truck className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white">Costo de envío</h2>
+              <p className="text-xs text-gray-400">
+                Se suma al total del pedido y aparece en el ticket. El POS deja de cobrarlo aparte.
+              </p>
+            </div>
+          </div>
+          <Badge variant={delivery.baseFee && delivery.baseFee > 0 ? "success" : "secondary"}>
+            {delivery.baseFee && delivery.baseFee > 0 ? `$${delivery.baseFee}` : "Sin cobro"}
+          </Badge>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Select
+            label="Modo"
+            value={delivery.mode}
+            onChange={(e) =>
+              setDelivery((d) => ({ ...d, mode: e.target.value === "PROVIDER" ? "PROVIDER" : "FLAT" }))
+            }
+            options={[
+              { value: "FLAT", label: "Tarifa fija del negocio" },
+              { value: "PROVIDER", label: "Cotizar con Uber Direct (si está configurado)" },
+            ]}
+          />
+          <Input
+            label="Tarifa fija (MXN)"
+            type="number"
+            min={0}
+            step="1"
+            value={delivery.baseFee ?? 0}
+            onChange={(e) => setDelivery((d) => ({ ...d, baseFee: Number(e.target.value) }))}
+          />
+          <Input
+            label="Envío gratis desde (MXN, opcional)"
+            type="number"
+            min={0}
+            step="10"
+            value={delivery.freeOver ?? ""}
+            onChange={(e) =>
+              setDelivery((d) => ({
+                ...d,
+                freeOver: e.target.value === "" ? undefined : Number(e.target.value),
+              }))
+            }
+          />
+          <Input
+            label="Tiempo estimado (min)"
+            type="number"
+            min={0}
+            value={delivery.etaMinutes ?? 40}
+            onChange={(e) => setDelivery((d) => ({ ...d, etaMinutes: Number(e.target.value) }))}
+          />
+          <div className="lg:col-span-2">
+            <Input
+              label="Nota para el cliente (opcional)"
+              placeholder="Ej. Enviamos dentro de Bucerías"
+              value={delivery.notes ?? ""}
+              onChange={(e) => setDelivery((d) => ({ ...d, notes: e.target.value.slice(0, 200) }))}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-semibold text-gray-300">
+            <input
+              type="checkbox"
+              checked={delivery.enabled !== false}
+              onChange={(e) => setDelivery((d) => ({ ...d, enabled: e.target.checked }))}
+              className="h-4 w-4 accent-pink-500"
+            />
+            Aceptar pedidos a domicilio
+          </label>
+          <Button onClick={saveDelivery} disabled={updateRestaurant.isPending}>
+            {updateRestaurant.isPending ? "Guardando…" : "Guardar envíos"}
+          </Button>
+        </div>
+
+        {delivery.mode === "PROVIDER" && (
+          <p className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-[11px] leading-relaxed text-sky-200/80">
+            Uber Direct cobra por distancia. Si no hay credenciales configuradas o la cotización
+            falla, se usa la tarifa fija de arriba — nunca se deja el envío en cero sin avisar.
+          </p>
+        )}
+      </Card>
+
+      {/* ── Resumen de la tienda ── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Publicados", value: totals?.published ?? 0, tone: "text-white" },
+          { label: "Ocultos", value: totals?.unpublished ?? 0, tone: "text-gray-300" },
+          { label: "Agotados", value: totals?.outOfStock ?? 0, tone: "text-amber-400" },
+          { label: "Vendidos (30 d)", value: totals?.sold30d ?? 0, tone: "text-emerald-400" },
+        ].map((stat) => (
+          <Card key={stat.label} className="border border-white/5 bg-white/[0.03] p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">{stat.label}</p>
+            <p className={`mt-1 text-3xl font-black ${stat.tone}`}>{stat.value}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* ── Productos ── */}
+      <Card className="border border-white/5 bg-white/[0.03] p-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/70">
+              <Package className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white">Productos de la tienda</h2>
+              <p className="text-xs text-gray-400">
+                Existencias calculadas con la receta del producto contra inventario.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/menu"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-gray-300 hover:bg-white/10 hover:text-white"
+          >
+            Crear en Menú <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+
+        {productsQuery.isLoading ? (
+          <p className="py-8 text-center text-sm text-gray-500">Cargando productos…</p>
+        ) : products.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center">
+            <Package className="mx-auto mb-3 h-6 w-6 text-gray-600" />
+            <p className="text-sm font-bold text-gray-300">Todavía no hay productos de tienda</p>
+            <p className="mx-auto mt-1 max-w-md text-xs text-gray-500">
+              En Menú, al crear un artículo elige <strong>Producto de tienda</strong>. Ahí mismo
+              decides si se envía, su peso y el máximo por pedido.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {products.map((product) => {
+              const outOfStock = product.stock !== null && product.stock <= 0;
+              return (
+                <div key={product.id} className="flex flex-wrap items-center gap-3 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-bold text-white">{product.name}</p>
+                      {product.requiresShipping && (
+                        <Badge variant="secondary">
+                          <Truck className="mr-1 h-3 w-3" /> envío
+                        </Badge>
+                      )}
+                      {outOfStock && (
+                        <Badge variant="warning">
+                          <AlertTriangle className="mr-1 h-3 w-3" /> agotado
+                        </Badge>
+                      )}
+                      {!product.isAvailable && <Badge variant="secondary">oculto</Badge>}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-gray-500">
+                      ${product.price} · {product.stock === null ? "sin control de existencias" : `${product.stock} en stock`}
+                      {" · "}
+                      {product.sold30d} vendidos (30 d)
+                      {product.maxPerOrder ? ` · máx ${product.maxPerOrder}` : ""}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => move(product.id, product.sortOrder, -1)}
+                      className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-gray-400 hover:text-white"
+                      aria-label="Subir"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => move(product.id, product.sortOrder, 1)}
+                      className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-gray-400 hover:text-white"
+                      aria-label="Bajar"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => updateItem.mutate({ id: product.id, isAvailable: !product.isAvailable })}
+                      className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${
+                        product.isAvailable
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          : "border-white/10 bg-white/5 text-gray-400"
+                      }`}
+                    >
+                      {product.isAvailable ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                      {product.isAvailable ? "Publicado" : "Oculto"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Candidatos: artículos del menú que ya son productos ── */}
+      {candidates.length > 0 && (
+        <Card className="border border-white/5 bg-white/[0.02] p-6">
+          <p className="text-xs font-bold text-gray-300">¿Ya lo vendes como platillo?</p>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Estos artículos del menú podrían ser productos de tienda. Se cambia el tipo desde Menú;
+            aquí no se duplica nada.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {candidates.map((item) => (
+              <span
+                key={item.id}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-gray-300"
+              >
+                {item.name}
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

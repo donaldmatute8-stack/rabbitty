@@ -172,6 +172,7 @@ const menuPillars: MenuPillar[] = [
     icon: UtensilsCrossed,
     items: [
       { href: "/menu", label: "Platillos & Menú", icon: ClipboardList },
+      { href: "/store", label: "Tienda & Envíos", icon: ShoppingCart, badge: "Nuevo" },
       { href: "/recipes", label: "Recetas & Costos", icon: Salad },
       { href: "/inventory", label: "Inventario & Stock", icon: Package },
       { href: "/purchases", label: "Órdenes de compra", icon: ShoppingCart, badge: "Nuevo" },

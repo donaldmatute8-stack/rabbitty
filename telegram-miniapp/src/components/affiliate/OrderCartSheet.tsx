@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, Trash2, ChevronRight, X, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, Trash2, ChevronRight, X, Sparkles, CheckCircle2, Truck } from 'lucide-react';
 import { CatalogModifier } from './ProductDetailModal';
 import { useOverlayLock } from '@rabbitty/ui';
 
@@ -38,6 +38,11 @@ interface OrderCartSheetProps {
    * presente. Sin check-in queda el picker para llevar/en mesa.
    */
   checkedIn?: boolean;
+  /**
+   * Sucursal (o negocio) para cotizar el envío. Sin esto se muestra "por
+   * confirmar en el local": nunca se inventa una tarifa.
+   */
+  branchOrBusinessId?: string | null;
 }
 
 export function OrderCartSheet({
@@ -53,6 +58,7 @@ export function OrderCartSheet({
   rewardPercentage = 10,
   businessName,
   checkedIn = false,
+  branchOrBusinessId = null,
 }: OrderCartSheetProps) {
   // Aísla los gestos de la página de atrás mientras el panel está abierto.
   useOverlayLock(isOpen);
@@ -97,6 +103,57 @@ export function OrderCartSheet({
   }, 0);
 
   const estimatedBunz = Math.round(subtotal * (rewardPercentage / 100));
+
+  // ── Envío: se cotiza en el servidor al elegir domicilio ──
+  // Sólo es una vista previa: el cobro real lo recalcula `/api/pos/checkout`.
+  const [shipping, setShipping] = React.useState<{
+    fee: number;
+    label: string;
+    etaMinutes: number | null;
+    loading: boolean;
+  }>({ fee: 0, label: '', etaMinutes: null, loading: false });
+
+  React.useEffect(() => {
+    if (orderType !== 'DELIVERY' || !branchOrBusinessId) {
+      setShipping({ fee: 0, label: '', etaMinutes: null, loading: false });
+      return;
+    }
+    let alive = true;
+    setShipping((prev) => ({ ...prev, loading: true }));
+    const timer = setTimeout(() => {
+      fetch('/api/delivery/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branchOrBusinessId,
+          items: cart.map((item) => ({ id: item.menuItemId, quantity: item.quantity })),
+          addressData: addressValid ? address : null,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!alive || !data?.success) return;
+          setShipping({
+            fee: Number(data.quote?.fee ?? 0),
+            label: String(data.quote?.label ?? ''),
+            etaMinutes: data.quote?.etaMinutes ?? null,
+            loading: false,
+          });
+        })
+        .catch(() => {
+          if (alive) setShipping({ fee: 0, label: 'Envío por confirmar en el local', etaMinutes: null, loading: false });
+        });
+    }, 450);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+    // `address` es un objeto que se recrea al escribir; se cotiza con su texto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderType, branchOrBusinessId, cart.length, subtotal, addressValid, addressText]);
+
+  const shippingFee = orderType === 'DELIVERY' ? shipping.fee : 0;
+  const total = subtotal + shippingFee;
 
   // El padre gestiona la ventana de arrepentimiento: aquí solo se encola el
   // pedido y se cierra la hoja. No se muestra una segunda confirmación.
@@ -365,9 +422,28 @@ export function OrderCartSheet({
                     </span>
                   </div>
 
+                  {orderType === 'DELIVERY' && (
+                    <div className="flex items-center justify-between text-xs text-white/60">
+                      <span className="flex items-center gap-1">
+                        <Truck size={12} />
+                        {shipping.loading ? 'Calculando envío…' : shipping.label || 'Envío'}
+                        {shipping.etaMinutes ? ` · ~${shipping.etaMinutes} min` : ''}
+                      </span>
+                      <span className="font-bold text-white/85">
+                        {shipping.loading
+                          ? '—'
+                          : shipping.fee > 0
+                            ? `$${shipping.fee.toFixed(2)}`
+                            : shipping.label.toLowerCase().includes('gratis')
+                              ? 'Gratis'
+                              : 'Por confirmar'}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between text-base font-black text-white">
                     <span>Total:</span>
-                    <span>${subtotal.toFixed(2)} {currency}</span>
+                    <span>${total.toFixed(2)} {currency}</span>
                   </div>
 
                   <button

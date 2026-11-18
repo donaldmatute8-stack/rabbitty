@@ -3,6 +3,7 @@ import { restaurantDb } from '@/db/restaurant';
 import { orders, orderItems, tables, tableSessions, payments, branches, restaurants, menuItems } from '@rabbitty/database-restaurant/schema';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { checkStockForItems, deductOrderInventory } from '@rabbitty/api/services/inventoryDeduction';
+import { quoteDelivery } from '@rabbitty/api/services/deliveryQuote';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -248,6 +249,10 @@ export async function POST(req: Request) {
 
     let targetOrderId = existingOrderId;
     let totalToPay = splitPaymentAmount;
+    // Envío del pedido (0 fuera de domicilio). Vive aquí para poder devolverlo
+    // al cliente y para el ticket.
+    let deliveryFee = 0;
+    let deliveryQuoteSource: string | null = null;
     const totalTip = Number(tip) || 0;
 
     if (!existingOrderId) {
@@ -285,6 +290,25 @@ export async function POST(req: Request) {
       // que luego bloquean/confunden el cobro en el POS).
       if (!(grandTotal > 0)) {
         return NextResponse.json({ error: "El pedido no tiene monto. Agrega productos con precio." }, { status: 400 });
+      }
+
+      // ── Envío: se cotiza en el servidor, nunca se confía en el cliente ──
+      // Sólo para pedidos a domicilio. La misma función alimenta la cotización
+      // que ve el cliente en el carrito, así que el monto no cambia al confirmar.
+      if (resolvedOrderType === 'DELIVERY') {
+        const [restRow] = await restaurantDb
+          .select({ deliveryConfig: restaurants.deliveryConfig })
+          .from(branches)
+          .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+          .where(eq(branches.id, orderBranchId))
+          .limit(1);
+        const quote = await quoteDelivery({
+          config: restRow?.deliveryConfig ?? null,
+          subtotal: grandTotal,
+          dropoff: (normalizedAddressData as Record<string, unknown> | null) ?? null,
+        });
+        deliveryFee = quote.fee;
+        deliveryQuoteSource = quote.source;
       }
 
       // ── Tienda: stock real antes de cobrar ──
@@ -404,7 +428,8 @@ export async function POST(req: Request) {
         subtotal: r2(grandTotal / (1 + TAX_RATE)),
         tax: r2(grandTotal - grandTotal / (1 + TAX_RATE)),
         tip: totalTip,
-        total: r2(grandTotal + totalTip),
+        deliveryFee,
+        total: r2(grandTotal + totalTip + deliveryFee),
         // P0-5: BUNZ se marca PAID solo después del débito verificado
         status: 'PENDING_PAYMENT',
         orderType: resolvedOrderType,
@@ -468,7 +493,13 @@ export async function POST(req: Request) {
       }
 
         targetOrderId = newOrder.id;
-        totalToPay = grandTotal + totalTip;
+        // El envío forma parte de lo que se cobra (Bunz/efectivo) y del ticket.
+        totalToPay = r2(grandTotal + totalTip + deliveryFee);
+        if (deliveryFee === 0 && deliveryQuoteSource === 'UNCONFIGURED') {
+          // Sin config de envío no se cobra, pero queda rastro para que el
+          // comercio lo configure en vez de absorber el costo en silencio.
+          console.warn('[POS_CHECKOUT] envío sin configurar para la sucursal', orderBranchId);
+        }
       }
     } else {
       // Split payment logic
@@ -735,7 +766,12 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, orderId: targetOrderId });
+    return NextResponse.json({
+      success: true,
+      orderId: targetOrderId,
+      deliveryFee,
+      deliveryFeeSource: deliveryQuoteSource,
+    });
   } catch (err: unknown) {
     // H-ORDEN-UX: los errores de SQL/Drizzle (p. ej. el famoso
     // `Failed query: insert into "orders"…` con la query completa) JAMÁS

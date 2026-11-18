@@ -1323,6 +1323,7 @@ function AffiliateProfileContent() {
         businessName={affiliate.name}
         // H-ORDEN-LOCAL: check-in activo ⇒ pedido directo al local, sin picker.
         checkedIn={hasPresenceCheckedIn}
+        branchOrBusinessId={affiliate.id}
       />
 
       {/* Pedido en rampa: identidad de tarjeta de pedido + barra de 5 s */}

@@ -63,6 +63,12 @@ export const restaurants = pgTable("restaurants", {
   gratuityPcts: text("gratuityPcts").default("[]").notNull(),
   printerType: text("printerType"),
   printerConfig: jsonb("printerConfig"),
+  /**
+   * Config de envío a domicilio: `{ enabled, mode: 'FLAT'|'PROVIDER', baseFee,
+   * freeOver, etaMinutes, notes }`. Sin config no se cobra y la app lo avisa.
+   * El POS ya suma `orders.deliveryFee` al asignar repartidor si nadie lo cobró.
+   */
+  deliveryConfig: jsonb("deliveryConfig"),
   legalName: text("legalName"),
   rfc: text("rfc"),
   taxRegime: text("taxRegime"),

@@ -503,6 +503,136 @@ export const adminRouter = router({
     }),
 
   // Owners ven todos; ADMIN/MANAGER (staff con PIN) solo el restaurante de su sucursal.
+  /**
+   * ── Tienda: productos con existencias y ventas ──────────────────────────
+   *
+   * Un producto es un `menu_items` con `kind = 'PRODUCT'`. El stock NO se guarda
+   * en la fila: se deriva de la receta (1:1 normalmente) contra `inventory_items`,
+   * la misma fuente que descuenta el POS y la app al cobrar. Si la receta tiene
+   * sub-recetas, se expande con un CTE recursivo (con tope de profundidad para
+   * no colgarse con un ciclo mal cargado).
+   *
+   * Devuelve también ventas de los últimos 30 días para que el dueño vea qué se
+   * mueve, no sólo qué existe.
+   */
+  getStoreProducts: adminOnlyProcedure.query(async ({ ctx }) => {
+    const branchId = await resolveBranchId(ctx, undefined);
+    type StoreProductRow = {
+      id: string;
+      name: string;
+      price: number;
+      cost: number;
+      kind: string | null;
+      imageUrl: string | null;
+      requiresShipping: boolean;
+      weightGrams: number | null;
+      maxPerOrder: number | null;
+      isAvailable: boolean;
+      sortOrder: number;
+      /** null = no controla existencias (producto sin receta) */
+      stock: number | null;
+      sold30d: number;
+      revenue30d: number;
+    };
+    const empty = {
+      products: [] as StoreProductRow[],
+      totals: { published: 0, unpublished: 0, outOfStock: 0, sold30d: 0, revenue30d: 0 },
+    };
+    if (!branchId) return empty;
+
+    const rows = await ctx.restaurantDb
+      .select()
+      .from(dbSchema.menuItems)
+      .where(and(eq(dbSchema.menuItems.branchId, branchId), eq(dbSchema.menuItems.kind, "PRODUCT")))
+      .orderBy(asc(dbSchema.menuItems.sortOrder), asc(dbSchema.menuItems.name));
+
+    if (rows.length === 0) return empty;
+
+    const ids = rows.map((r) => r.id);
+    const idList = sql.join(ids.map((id) => sql`${id}`), sql`, `);
+
+    type Row = { id: string; stock: number | null; sold: number | null; revenue: number | null };
+    const rawStock = (await ctx.restaurantDb.execute(sql`
+      WITH RECURSIVE req AS (
+        SELECT mi."menuItemId" AS root_id,
+               mi."inventoryItemId" AS inv_id,
+               mi."subRecipeId" AS sub_id,
+               mi."quantityRequired"::numeric AS qty,
+               0 AS depth
+        FROM "menu_item_ingredients" mi
+        WHERE mi."menuItemId" IN (${idList})
+        UNION ALL
+        SELECT r.root_id, mi."inventoryItemId", mi."subRecipeId",
+               (r.qty * mi."quantityRequired")::numeric, r.depth + 1
+        FROM req r
+        JOIN "menu_item_ingredients" mi ON mi."menuItemId" = r.sub_id
+        WHERE r.sub_id IS NOT NULL AND r.depth < 6
+      )
+      SELECT r.root_id AS id, MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int AS stock
+      FROM req r
+      JOIN "inventory_items" ii ON ii.id = r.inv_id
+      WHERE r.inv_id IS NOT NULL AND r.qty > 0
+      GROUP BY r.root_id
+    `)) as unknown;
+    const stockRows = (Array.isArray(rawStock)
+      ? rawStock
+      : (rawStock as { rows?: unknown[] })?.rows ?? []) as Array<{ id: string; stock: number | null }>;
+
+    const rawSales = (await ctx.restaurantDb.execute(sql`
+      SELECT oi."menuItemId" AS id,
+             SUM(oi.quantity)::int AS sold,
+             SUM(oi."totalPrice")::numeric AS revenue
+      FROM "order_items" oi
+      JOIN "orders" o ON o.id = oi."orderId"
+      WHERE oi."menuItemId" IN (${idList})
+        AND o."createdAt" >= now() - interval '30 days'
+        AND o."status" NOT IN ('CANCELLED', 'VOIDED')
+      GROUP BY oi."menuItemId"
+    `)) as unknown;
+    const salesRows = (Array.isArray(rawSales)
+      ? rawSales
+      : (rawSales as { rows?: unknown[] })?.rows ?? []) as Array<{ id: string; sold: number | null; revenue: number | null }>;
+
+    const stockById = new Map(stockRows.map((r) => [r.id, r.stock]));
+    const salesById = new Map(salesRows.map((r) => [r.id, r]));
+
+    const products: StoreProductRow[] = rows.map((row) => {
+      const stock = stockById.get(row.id);
+      const sales = salesById.get(row.id);
+      return {
+        id: row.id,
+        name: row.name,
+        price: Number(row.price),
+        cost: Number(row.cost ?? 0),
+        kind: row.kind,
+        imageUrl: row.imageUrl,
+        requiresShipping: row.requiresShipping,
+        weightGrams: row.weightGrams,
+        maxPerOrder: row.maxPerOrder,
+        isAvailable: row.isAvailable,
+        sortOrder: row.sortOrder,
+        /** null = el producto no controla existencias (sin receta) */
+        stock: typeof stock === "number" ? stock : null,
+        sold30d: Number(sales?.sold ?? 0),
+        revenue30d: Number(sales?.revenue ?? 0),
+      };
+    });
+
+    const totals = products.reduce(
+      (acc, p) => {
+        if (p.isAvailable) acc.published += 1;
+        else acc.unpublished += 1;
+        if (p.stock !== null && p.stock <= 0) acc.outOfStock += 1;
+        acc.sold30d += p.sold30d;
+        acc.revenue30d += p.revenue30d;
+        return acc;
+      },
+      { published: 0, unpublished: 0, outOfStock: 0, sold30d: 0, revenue30d: 0 },
+    );
+
+    return { products, totals };
+  }),
+
   getRestaurants: adminOnlyProcedure.query(async ({ ctx }) => {
     // ── AISLAMIENTO DE TENANT (fix de fuga) ──
     // Antes, para un dueño esto devolvía TODOS los restaurantes de la plataforma:
@@ -612,6 +742,20 @@ export const adminRouter = router({
         gratuityMode: z.enum(["OFF", "POS", "DIGITAL", "BOTH"]).optional(),
         // Solo convierte pcts DENTRO del catálogo [5,10,15] — el afiliado no crea reglas
         gratuityPcts: z.array(z.number().int()).optional(),
+        // ── Envío a domicilio (tienda) ──
+        // Sin config no se cobra y la app avisa ("por confirmar"). Con tarifa, el
+        // checkout la suma a `orders.deliveryFee` y el POS no la vuelve a cobrar.
+        deliveryConfig: z
+          .object({
+            enabled: z.boolean().optional(),
+            mode: z.enum(["FLAT", "PROVIDER"]).optional(),
+            baseFee: z.number().min(0).max(2000).optional(),
+            freeOver: z.number().min(0).max(100000).optional(),
+            etaMinutes: z.number().int().min(0).max(240).optional(),
+            notes: z.string().max(200).optional(),
+          })
+          .nullable()
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
