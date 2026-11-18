@@ -17,6 +17,7 @@ import {
   Layers,
   Heart,
   ChevronRight,
+  ShoppingBag,
 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Image from 'next/image';
@@ -33,7 +34,8 @@ import { Receipt } from 'lucide-react';
 import { OrderTrackSheet } from '@/components/affiliate/OrderTrackingCard';
 import type { TrackedOrder } from '@/lib/useOrderTracking';
 import { OrderCartSheet, CartItem } from '@/components/affiliate/OrderCartSheet';
-import { CatalogItem, CatalogModifier } from '@/components/affiliate/ProductDetailModal';
+import { CatalogItem, CatalogModifier, ProductDetailModal } from '@/components/affiliate/ProductDetailModal';
+import { StoreCatalog } from '@/components/affiliate/StoreCatalog';
 
 interface AffiliateData {
   id: string;
@@ -143,7 +145,8 @@ function AffiliateProfileContent() {
   });
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'menu' | 'info'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'tienda' | 'info'>('menu');
+  const [storeProduct, setStoreProduct] = useState<CatalogItem | null>(null);
   const [membershipPlans, setMembershipPlans] = useState<{ planId: string; planName: string; planDescription?: string | null; versionId: string; priceFiat: number; currency: string; billingInterval: string; alreadySubscribed: boolean }[]>([]);
   const [subscribing, setSubscribing] = useState<string | null>(null);
   // H-PRESYNC · Voy: igual criterio que "Estoy aquí" — se hidrata del server
@@ -542,6 +545,28 @@ function AffiliateProfileContent() {
     }, 5000);
   };
 
+  /**
+   * ── Tienda vs menú ──
+   * Los productos de tienda son filas de `menu_items` con kind = 'PRODUCT'.
+   * Se separan aquí para no mostrarlos dos veces y para que el menú quede
+   * igual que siempre.
+   */
+  const { products, menuOnlyCategories } = useMemo(() => {
+    const storeProducts: CatalogItem[] = [];
+    const menuCats: CatalogCategory[] = [];
+    for (const category of categories) {
+      const dishes: CatalogItem[] = [];
+      for (const item of category.items as CatalogItem[]) {
+        if (item.kind === 'PRODUCT') storeProducts.push(item);
+        else dishes.push(item);
+      }
+      if (dishes.length > 0) menuCats.push({ ...category, items: dishes });
+    }
+    return { products: storeProducts, menuOnlyCategories: menuCats };
+  }, [categories]);
+
+  const hasStore = products.length > 0;
+
   const totalCartCount = useMemo(() => {
     return cart.reduce((acc, item) => acc + item.quantity, 0);
   }, [cart]);
@@ -877,7 +902,7 @@ function AffiliateProfileContent() {
 
         {/* Interactive Segmented Experience Tabs */}
         <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[#0D0D15]/95 backdrop-blur-xl">
-          <div className="grid grid-cols-2 p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg">
+          <div className={`grid ${hasStore ? 'grid-cols-3' : 'grid-cols-2'} p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg`}>
             <button
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
@@ -892,6 +917,22 @@ function AffiliateProfileContent() {
               <Utensils size={15} />
               <span>Menú y Servicios</span>
             </button>
+            {hasStore && (
+              <button
+                onClick={() => {
+                  PlatformBridge.hapticFeedback('light');
+                  setActiveTab('tienda');
+                }}
+                className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  activeTab === 'tienda'
+                    ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                <ShoppingBag size={15} />
+                <span>Tienda</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
@@ -913,7 +954,7 @@ function AffiliateProfileContent() {
         {activeTab === 'menu' && (
           <div className="space-y-6">
             <DigitalMenuCatalog
-              categories={categories}
+              categories={menuOnlyCategories}
               currency="MXN"
               rewardPercentage={affiliate.rewardPercentage}
               onAddToCart={handleAddToCart}
@@ -921,6 +962,18 @@ function AffiliateProfileContent() {
               digitalOrderingEnabled={capabilities.digitalOrderingEnabled}
             />
           </div>
+        )}
+
+        {/* Tab 1b: Tienda de productos para llevar */}
+        {activeTab === 'tienda' && (
+          <StoreCatalog
+            products={products}
+            currency="MXN"
+            onSelectProduct={(item) => {
+              PlatformBridge.hapticFeedback('light');
+              setStoreProduct(item);
+            }}
+          />
         )}
 
         {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
@@ -1243,6 +1296,18 @@ function AffiliateProfileContent() {
           })();
         }}
         businessName={affiliate.name}
+      />
+
+      {/* Detalle de producto de la tienda (mismo modal que el menú) */}
+      <ProductDetailModal
+        item={storeProduct}
+        onClose={() => setStoreProduct(null)}
+        onAddToCart={(item, quantity, modifiers, notes) => {
+          handleAddToCart(item, quantity, modifiers, notes);
+          setStoreProduct(null);
+        }}
+        currency="MXN"
+        rewardPercentage={affiliate?.rewardPercentage ?? 0}
       />
 
       <OrderCartSheet

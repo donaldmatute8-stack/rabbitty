@@ -20,6 +20,14 @@ export interface CatalogItem {
   imageUrl?: string | null;
   isAvailable?: boolean;
   modifiers?: CatalogModifier[];
+  /**
+   * 'DISH' = menú · 'PRODUCT' = tienda. Un producto usa el mismo carrito y la
+   * misma orden; sólo cambia la presentación y si necesita envío.
+   */
+  kind?: string | null;
+  requiresShipping?: boolean | null;
+  maxPerOrder?: number | null;
+  sku?: string | null;
 }
 
 interface ProductDetailModalProps {

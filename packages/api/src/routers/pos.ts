@@ -12,6 +12,7 @@ import { withOrderMutation, withOrderCreate, withOrderRollback } from "../servic
 import { resolveStationsForItems } from "../services/stationRouting";
 import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch } from "../services/businessContext";
+import { deductOrderInventory, checkStockForItems } from "../services/inventoryDeduction";
 export { resolveBusinessIdFromBranch };
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
@@ -1402,34 +1403,11 @@ export const posRouter = router({
           }
 
           // INVENTORY DEDUCTION LOGIC (recursive for sub-recipes)
-          const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, input.orderId));
-          const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
-            if (path.has(menuItemId)) return;
-            path.add(menuItemId);
-            const ingredients = await tx
-              .select()
-              .from(dbSchema.menuItemIngredients)
-              .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
-            for (const ing of ingredients) {
-              if (ing.inventoryItemId) {
-                const deductionAmount = ing.quantityRequired * qty;
-                await tx.insert(dbSchema.inventoryMovements).values({
-                  itemId: ing.inventoryItemId,
-                  branchId: ctx.branchId,
-                  type: "SALE_DEDUCTION",
-                  quantity: deductionAmount,
-                  reference: input.orderId,
-                  notes: `Order ${input.orderId} completed`,
-                });
-                await tx.execute(sql`UPDATE inventory_items SET stock = stock - ${deductionAmount} WHERE id = ${ing.inventoryItemId}`);
-              } else if (ing.subRecipeId) {
-                await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
-              }
-            }
-            path.delete(menuItemId);
-          };
-          for (const item of items) {
-            await deductRecipe(item.menuItemId, item.quantity, new Set());
+          // La lógica vive en `services/inventoryDeduction` porque la app del
+          // Rabbitter también cobra: una sola implementación para las dos.
+          const deduction = await deductOrderInventory(tx, input.orderId, ctx.branchId);
+          if (deduction.warnings.length > 0) {
+            console.warn("[pos] inventario en negativo tras la venta:", deduction.warnings.join(" · "));
           }
         } else {
           await tx.update(orders).set({ status: "PARTIAL_PAID" }).where(eq(orders.id, input.orderId));

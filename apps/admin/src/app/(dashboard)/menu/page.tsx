@@ -5,10 +5,31 @@ import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Plus, Pencil, Trash2, Search, Tag } from "lucide-react";
 
-type ItemForm = { name: string; description: string; price: number; categoryId: string; isAvailable: boolean; imageUrl?: string };
+type ItemForm = {
+  name: string;
+  description: string;
+  price: number;
+  categoryId: string;
+  isAvailable: boolean;
+  imageUrl?: string;
+  /** Tienda: DISH = menú · PRODUCT = producto para llevar */
+  kind: "DISH" | "PRODUCT";
+  requiresShipping: boolean;
+  weightGrams?: number;
+  maxPerOrder?: number;
+};
 type CatForm = { name: string; description: string };
 
-const defaultItemForm: ItemForm = { name: "", description: "", price: 0, categoryId: "", isAvailable: true, imageUrl: "" };
+const defaultItemForm: ItemForm = {
+  name: "",
+  description: "",
+  price: 0,
+  categoryId: "",
+  isAvailable: true,
+  imageUrl: "",
+  kind: "DISH",
+  requiresShipping: false,
+};
 const defaultCatForm: CatForm = { name: "", description: "" };
 
 const MAX_IMAGE_BYTES = 300 * 1024; // 300 KB límite para dataURLs en PostgreSQL
@@ -91,6 +112,10 @@ export default function MenuPage() {
       categoryId: item.categoryId,
       isAvailable: item.isAvailable,
       imageUrl: item.imageUrl ?? "",
+      kind: item.kind === "PRODUCT" ? "PRODUCT" : "DISH",
+      requiresShipping: Boolean(item.requiresShipping),
+      weightGrams: item.weightGrams ?? undefined,
+      maxPerOrder: item.maxPerOrder ?? undefined,
     });
     setItemDialog({ mode: "edit", id: item.id });
   };
@@ -266,7 +291,12 @@ export default function MenuPage() {
               )}
 
               <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                <span className="text-xl font-black text-white">${item.price}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-white">${item.price}</span>
+                  {item.kind === "PRODUCT" && (
+                    <Badge variant="secondary">{item.requiresShipping ? "Tienda · envío" : "Tienda"}</Badge>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => openItemEdit(item)}
@@ -319,6 +349,69 @@ export default function MenuPage() {
               placeholder="Seleccionar categoría"
             />
           </div>
+
+          {/* ── Tienda ──
+              Un producto usa el mismo carrito/orden/ticket que un platillo;
+              sólo se muestra en la pestaña Tienda del cliente y, si se marca,
+              pide dirección de entrega. El stock NO se captura aquí: se controla
+              en Inventario con la receta del producto. */}
+          <Select
+            label="Tipo"
+            value={itemForm.kind}
+            onChange={(e) =>
+              setItemForm((f) => ({ ...f, kind: e.target.value === "PRODUCT" ? "PRODUCT" : "DISH" }))
+            }
+            options={[
+              { value: "DISH", label: "Platillo / bebida de menú" },
+              { value: "PRODUCT", label: "Producto de tienda (para llevar)" },
+            ]}
+          />
+
+          {itemForm.kind === "PRODUCT" && (
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={itemForm.requiresShipping}
+                  onChange={(e) => setItemForm((f) => ({ ...f, requiresShipping: e.target.checked }))}
+                  className="h-4 w-4 accent-pink-500"
+                />
+                <span className="text-xs font-bold text-gray-300">
+                  Se envía a domicilio (pide dirección al cliente)
+                </span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Peso (gramos)"
+                  type="number"
+                  placeholder="Opcional"
+                  value={itemForm.weightGrams ?? ""}
+                  onChange={(e) =>
+                    setItemForm((f) => ({
+                      ...f,
+                      weightGrams: e.target.value === "" ? undefined : Number(e.target.value),
+                    }))
+                  }
+                />
+                <Input
+                  label="Máx. por pedido"
+                  type="number"
+                  placeholder="Opcional"
+                  value={itemForm.maxPerOrder ?? ""}
+                  onChange={(e) =>
+                    setItemForm((f) => ({
+                      ...f,
+                      maxPerOrder: e.target.value === "" ? undefined : Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <p className="text-[11px] leading-snug text-gray-500">
+                El stock se descuenta al cobrar desde <strong>Inventario</strong>: liga este
+                producto a un insumo con cantidad 1 en su receta.
+              </p>
+            </div>
+          )}
 
           {/* Imagen del Producto */}
           <div className="space-y-2">

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { restaurantDb } from '@/db/restaurant';
-import { orders, orderItems, tables, tableSessions, payments, branches, restaurants } from '@rabbitty/database-restaurant/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { orders, orderItems, tables, tableSessions, payments, branches, restaurants, menuItems } from '@rabbitty/database-restaurant/schema';
+import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { checkStockForItems, deductOrderInventory } from '@rabbitty/api/services/inventoryDeduction';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -159,14 +160,54 @@ export async function POST(req: Request) {
       deliveryAddressData,
     } = body;
 
+    // ── Tienda: qué se está comprando ──
+    // Un producto de tienda (`kind = PRODUCT`) usa el mismo carrito y la misma
+    // orden que un platillo, pero puede exigir envío y tener tope por pedido.
+    // Se consulta UNA vez, antes de decidir el tipo de entrega.
+    const rawItems = Array.isArray(items) ? (items as Array<{ id: string; quantity: number }>) : [];
+    const itemIds = [...new Set(rawItems.map((i) => i?.id).filter(Boolean))];
+    const catalogRows = itemIds.length
+      ? await restaurantDb
+          .select({
+            id: menuItems.id,
+            name: menuItems.name,
+            kind: menuItems.kind,
+            requiresShipping: menuItems.requiresShipping,
+            maxPerOrder: menuItems.maxPerOrder,
+          })
+          .from(menuItems)
+          .where(inArray(menuItems.id, itemIds))
+      : [];
+    const catalogById = new Map(catalogRows.map((row) => [row.id, row]));
+    const shippingRequired = catalogRows.some((row) => row.requiresShipping);
+
+    // Tope por pedido (stock limitado / preventa)
+    for (const line of rawItems) {
+      const meta = catalogById.get(line.id);
+      if (meta?.maxPerOrder && Number(line.quantity) > meta.maxPerOrder) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Solo puedes llevar ${meta.maxPerOrder} de ${meta.name} por pedido.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     // Domicilio / recoger / mesa: el POS necesita distinguirlo para prometer
     // tiempo de entrega y asignar repartidor.
+    // Si el pedido trae productos que se envían, no puede ser "para llevar"
+    // implícito: o se envía (con dirección) o el cliente elige recoger, que en
+    // operación es el mismo TAKEAWAY de siempre (no se inventa otro enum).
     const resolvedOrderType =
       tableId
         ? 'DINE_IN'
         : requestedOrderType === 'DELIVERY'
           ? 'DELIVERY'
-          : 'TAKEAWAY';
+          : shippingRequired
+            ? 'DELIVERY'
+            : 'TAKEAWAY';
     const addressResult =
       resolvedOrderType === 'DELIVERY'
         ? normalizeDeliveryAddress(
@@ -244,6 +285,27 @@ export async function POST(req: Request) {
       // que luego bloquean/confunden el cobro en el POS).
       if (!(grandTotal > 0)) {
         return NextResponse.json({ error: "El pedido no tiene monto. Agrega productos con precio." }, { status: 400 });
+      }
+
+      // ── Tienda: stock real antes de cobrar ──
+      // El POS puede vender de más y avisar; la app NO: el cliente paga y se
+      // queda sin producto. Sólo se bloquea lo que el comercio cuenta
+      // (insumos con fila de inventario); un platillo sin receta pasa igual.
+      const shortages = await checkStockForItems(
+        restaurantDb,
+        typedItems.map((item) => ({ menuItemId: item.id, quantity: item.quantity })),
+      );
+      if (shortages.length > 0) {
+        const detail = shortages
+          .map((s) => `${s.name} (quedan ${s.available})`)
+          .join(', ');
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Sin stock para completar el pedido: ${detail}.`,
+          },
+          { status: 409 },
+        );
       }
 
       // ── Fase C: ACUMULAR en el Tab abierto del PROPIO Rabbitter ──
@@ -590,6 +652,22 @@ export async function POST(req: Request) {
 
         if (sumPayments >= orderAfter.total) {
           await restaurantDb.update(orders).set({ status: 'PAID' }).where(eq(orders.id, targetOrderId));
+
+          // ── Inventario: la venta ya está cobrada ──
+          // Mismo motor que usa el POS (servicio compartido). Un fallo aquí no
+          // revierte el cobro: se registra para que el comercio lo ajuste.
+          try {
+            await restaurantDb.transaction(async (tx) => {
+              const deduction = await deductOrderInventory(tx, targetOrderId, paymentBranchId, {
+                notes: `Venta desde la app · orden ${targetOrderId}`,
+              });
+              if (deduction.warnings.length > 0) {
+                console.warn('[POS_CHECKOUT] inventario en negativo:', deduction.warnings.join(' · '));
+              }
+            });
+          } catch (invErr) {
+            console.error('[POS_CHECKOUT] no se pudo descontar inventario:', invErr);
+          }
         }
       } catch (paymentErr) {
         console.error('[POS_CHECKOUT_BUNZ] fallo al registrar el pago; compensando:', paymentErr);

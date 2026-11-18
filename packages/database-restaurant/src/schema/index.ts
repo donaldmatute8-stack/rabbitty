@@ -153,6 +153,18 @@ export const menuItems = pgTable("menu_items", {
   sku: text("sku"),
   /** Override por producto; si es NULL hereda la estación de su categoría. */
   stationId: text("stationId").references(() => stations.id, { onDelete: "set null" }),
+  /**
+   * DISH = platillo/bebida de menú · PRODUCT = artículo de tienda.
+   * Un producto usa el mismo carrito/orden/ticket que un platillo; cambia la
+   * presentación y, si `requiresShipping`, pide dirección de entrega.
+   */
+  kind: text("kind").default("DISH").notNull(),
+  /** Producto que necesita dirección de entrega (tienda). */
+  requiresShipping: boolean("requiresShipping").default(false).notNull(),
+  /** Peso en gramos, para cotizar envío. */
+  weightGrams: integer("weightGrams"),
+  /** Tope de unidades por pedido (stock limitado / preventa). */
+  maxPerOrder: integer("maxPerOrder"),
   isActive: boolean("isActive").default(true).notNull(),
   isAvailable: boolean("isAvailable").default(true).notNull(),
   sortOrder: integer("sortOrder").default(0).notNull(),

@@ -873,6 +873,11 @@ export const adminRouter = router({
         sku: z.string().optional(),
         isAvailable: z.boolean().optional(),
         sortOrder: z.number().optional(),
+        // Tienda: se vende como platillo pero se muestra aparte y puede enviarse.
+        kind: z.enum(["DISH", "PRODUCT"]).optional(),
+        requiresShipping: z.boolean().optional(),
+        weightGrams: z.number().int().nonnegative().optional(),
+        maxPerOrder: z.number().int().positive().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -887,6 +892,10 @@ export const adminRouter = router({
         sku: input.sku ?? null,
         isAvailable: input.isAvailable ?? true,
         sortOrder: input.sortOrder ?? 0,
+        kind: input.kind ?? "DISH",
+        requiresShipping: input.requiresShipping ?? false,
+        weightGrams: input.weightGrams ?? null,
+        maxPerOrder: input.maxPerOrder ?? null,
       }).returning();
       return menuItem;
     }),
@@ -904,6 +913,10 @@ export const adminRouter = router({
         sku: z.string().optional(),
         isAvailable: z.boolean().optional(),
         sortOrder: z.number().optional(),
+        kind: z.enum(["DISH", "PRODUCT"]).optional(),
+        requiresShipping: z.boolean().optional(),
+        weightGrams: z.number().int().nonnegative().nullable().optional(),
+        maxPerOrder: z.number().int().positive().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
