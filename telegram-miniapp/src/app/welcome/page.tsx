@@ -9,29 +9,26 @@ export default function WelcomePage() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleChooseRole = async (role: "RABBITTER" | "AFFILIATE") => {
-    setLoading(role);
+  // Sólo queda el alta de consumidor. El alta de negocio se retiró de la app
+  // (App Store 3.1.1) y vive únicamente en la web.
+  const handleStartAsRabbitter = async () => {
+    setLoading("RABBITTER");
     try {
       const mod = await import('@twa-dev/sdk');
       const app = mod.default;
       const initData = typeof window !== 'undefined' ? app.initData : '';
-      const targetRole = role === "RABBITTER" ? "USER" : "AFFILIATE";
       const headers = await PlatformBridge.getAuthHeaders();
 
       await fetch('/api/auth/set-role', {
         method: 'PATCH',
         headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: targetRole, initData }),
+        body: JSON.stringify({ role: "USER", initData }),
       });
 
-      if (role === "AFFILIATE") {
-        router.push('/business');
-      } else {
-        router.push('/');
-      }
+      router.push('/');
     } catch (e) {
       console.error(e);
-      router.push(role === "AFFILIATE" ? '/business' : '/');
+      router.push('/');
     } finally {
       setLoading(null);
     }
@@ -83,7 +80,7 @@ export default function WelcomePage() {
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
-          onClick={() => !loading && handleChooseRole("RABBITTER")}
+          onClick={() => !loading && handleStartAsRabbitter()}
           className="active:scale-[0.98] transition-transform transition-opacity duration-200 rounded-[14px] px-6 pt-6 pb-5"
           style={{
             backgroundColor: "var(--bg-elevated)",
@@ -106,33 +103,8 @@ export default function WelcomePage() {
           </div>
         </motion.div>
 
-        {/* Affiliate */}
-        <motion.div
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          onClick={() => !loading && handleChooseRole("AFFILIATE")}
-          className="active:scale-[0.98] transition-transform transition-opacity duration-200 rounded-[14px] px-6 pt-6 pb-5"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading && loading !== "AFFILIATE" ? 0.5 : 1,
-          }}
-        >
-          <p className="text-[15px] font-bold m-0 mb-1" style={{ color: "var(--text-primary)" }}>
-            Own a Business? Affiliate now.
-          </p>
-          <p className="text-xs m-0 mb-[14px]" style={{ color: "var(--text-muted)" }}>
-            List your business, configure rewards, and attract Rabbitters near you.
-          </p>
-          <div className="flex items-center gap-1.5">
-            <span className="text-base font-semibold" style={{ color: "var(--rabbitty-pink)" }}>→</span>
-            <span className="text-[13px] font-semibold" style={{ color: "var(--rabbitty-pink)" }}>
-              {loading === "AFFILIATE" ? "Setting up…" : "Start as Affiliate"}
-            </span>
-          </div>
-        </motion.div>
+        {/* El alta de negocios no se ofrece en la app: App Store la rechazó
+            (3.1.1) porque el registro B2B termina en una compra fuera de IAP. */}
       </div>
 
       {/* Already have account */}

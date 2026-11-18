@@ -239,6 +239,8 @@ export default function ProfilePage() {
   const spent = user?.totalBunzSpent ?? 0;
   const netBunz = Math.max(0, earned - spent);
   const visited = user?.distinctBusinesses ?? user?.visitedBusinesses ?? 0;
+  // El alta de negocio ya no existe en la app (App Store 3.1.1): esta tarjeta
+  // sólo aparece para quien YA tiene negocio y lleva a su portal.
   const isAffiliate = user?.role === 'AFFILIATE' || hasBusiness;
 
   return (
@@ -421,22 +423,7 @@ export default function ProfilePage() {
                 </button>
               </div>
             </div>
-          ) : (
-            <Link
-              href="/business"
-              onClick={() => PlatformBridge.hapticFeedback('light')}
-              className="flex items-center gap-3 rounded-2xl border border-(--border-subtle) bg-(--bg-elevated) p-4 active:scale-[0.98] transition-transform"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E91E63]/20 bg-[#E91E63]/10 text-[#E91E63]">
-                <Store size={18} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[13px] font-black text-(--text-primary)">¿Tienes un negocio?</p>
-                <p className="text-[11px] text-(--text-muted)">Afíliate y otorga Bunz</p>
-              </div>
-              <ChevronRight size={16} className="text-(--text-muted)" />
-            </Link>
-          )}
+          ) : null}
 
           {/* ── MENÚ ── */}
           <MenuGroup title="Mi cuenta" items={ACCOUNT_ITEMS} />

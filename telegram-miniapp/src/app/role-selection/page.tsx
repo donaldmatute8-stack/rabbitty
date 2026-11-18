@@ -11,10 +11,6 @@ export default function RoleSelectionPage() {
     router.push('/');
   };
 
-  const handleSelectBusiness = () => {
-    router.push('/business');
-  };
-
   return (
     <div className="min-h-[100dvh] flex flex-col bg-[#F4F4F4]" style={{ fontFamily: "var(--font-family-base)" }}>
       <div style={{ height: 'var(--safe-top)' }} />
@@ -68,22 +64,8 @@ export default function RoleSelectionPage() {
             </div>
           </motion.button>
 
-          <motion.button 
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            onClick={handleSelectBusiness}
-            className="active:scale-[0.98] transition-transform text-left bg-white rounded-xl p-6 pb-5 cursor-pointer"
-            style={{ border: "1px solid var(--border-light)" }}
-          >
-            <p className="text-[15px] font-bold mb-3.5" style={{ color: "var(--text-dark)" }}>
-              Own a Business? Affiliate now.
-            </p>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[16px]" style={{ color: "var(--primary-color)" }}>→</span>
-              <span className="text-[13px] font-medium" style={{ color: "var(--primary-color)" }}>Open an account</span>
-            </div>
-          </motion.button>
+          {/* El alta de negocios no se ofrece en la app (App Store 3.1.1: la
+              rechazaron por llevar el registro B2B a una compra fuera de IAP). */}
         </div>
 
         <motion.div 

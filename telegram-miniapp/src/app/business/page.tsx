@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import BusinessSetupForm from '@/features/business/BusinessSetupForm';
-import { BusinessWebGate } from '@/features/business/BusinessWebGate';
+import { BusinessSignupUnavailable } from '@/features/business/BusinessSignupUnavailable';
 import MobileAffiliateDashboard from '@/features/business/MobileAffiliateDashboard';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
@@ -13,8 +12,6 @@ export default function BusinessPage() {
   const initDataRef = useRef('');
   const [business, setBusiness] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [showLocalForm, setShowLocalForm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<'session' | 'network' | null>(null);
 
@@ -60,30 +57,6 @@ export default function BusinessPage() {
       initDataRef.current = mod.default.initData || '';
     });
   }, [user]);
-
-  const handleCreateBusiness = async (formData: Record<string, unknown>) => {
-    if (!user) return;
-    setSubmitting(true);
-    try {
-      const headers = await PlatformBridge.getAuthHeaders();
-      const res = await fetch('/api/business', {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          initData: initDataRef.current,
-          ...formData
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBusiness(data.business);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -151,15 +124,18 @@ export default function BusinessPage() {
     );
   }
 
-  // Flow 1: alta de negocio. La web es el canal oficial; el formulario local
-  // queda como alternativa secundaria (showLocalForm).
+  // Flow 1: sin negocio registrado.
+  //
+  // App Store 3.1.1 (rechazo de la 2.5 (18)): la app NO ofrece el alta de
+  // negocios. Antes había dos caminos —la puerta a `rabbitty.me/negocios`
+  // (paquete + contrato = compra fuera de IAP) y un formulario local— y ambos
+  // se retiraron. El alta vive sólo en la web (rabbitty.me/negocios), que no
+  // forma parte del binario. Un dueño con negocio entra por el mismo camino de
+  // siempre y ve su panel.
   if (business === null) {
-    if (showLocalForm) {
-      return <BusinessSetupForm onSubmit={handleCreateBusiness} isLoading={submitting} />;
-    }
     return (
-      <BusinessWebGate
-        onLocal={() => setShowLocalForm(true)}
+      <BusinessSignupUnavailable
+        variant={loadError ? 'load-failed' : 'no-business'}
         refreshing={refreshing}
         onRefresh={async () => {
           setRefreshing(true);
