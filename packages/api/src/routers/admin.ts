@@ -532,6 +532,8 @@ export const adminRouter = router({
       sortOrder: number;
       /** null = no controla existencias (producto sin receta) */
       stock: number | null;
+      /** Alguno de sus insumos está por debajo del mínimo. */
+      lowStock: boolean;
       sold30d: number;
       revenue30d: number;
     };

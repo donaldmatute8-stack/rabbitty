@@ -325,11 +325,13 @@ export default function StorePage() {
                           <Truck className="mr-1 h-3 w-3" /> envío
                         </Badge>
                       )}
-                      {outOfStock && (
+                      {outOfStock ? (
                         <Badge variant="warning">
                           <AlertTriangle className="mr-1 h-3 w-3" /> agotado
                         </Badge>
-                      )}
+                      ) : product.stock !== null && product.lowStock ? (
+                        <Badge variant="warning">bajo stock</Badge>
+                      ) : null}
                       {!product.isAvailable && <Badge variant="secondary">oculto</Badge>}
                     </div>
                     <p className="mt-0.5 text-[11px] text-gray-500">
@@ -365,6 +367,20 @@ export default function StorePage() {
                       aria-label="Bajar"
                     >
                       <ArrowDown className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() =>
+                        updateItem.mutate({ id: product.id, requiresShipping: !product.requiresShipping })
+                      }
+                      className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${
+                        product.requiresShipping
+                          ? 'border-sky-500/20 bg-sky-500/10 text-sky-300'
+                          : 'border-white/10 bg-white/5 text-gray-400'
+                      }`}
+                      title="¿Se envía a domicilio?"
+                    >
+                      <Truck className="h-3.5 w-3.5" />
+                      {product.requiresShipping ? 'Envío' : 'Sin envío'}
                     </button>
                     <button
                       onClick={() => updateItem.mutate({ id: product.id, isAvailable: !product.isAvailable })}
