@@ -128,3 +128,12 @@ credentials.json
 
 # Respaldos locales de Postgres (no son secretos, pero no van al repo)
 .local-backups/
+
+# ── Estado de usuario de Xcode / SwiftPM ───────────────────────────────────
+# Xcode reescribe estos archivos en cada archive/build (ventanas, esquemas
+# seleccionados). Versionarlos sólo mete ruido en los commits y provoca
+# conflictos: los esquemas COMPARTIDOS van en xcshareddata, que sí se versiona.
+.xcuserdata/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
