@@ -145,7 +145,12 @@ function AffiliateProfileContent() {
   });
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'menu' | 'tienda' | 'info'>('menu');
+  // `?tab=tienda|menu|info` permite enlazar directo a una pestaña (notificaciones,
+  // campañas, QR). Se valida contra la lista: un valor raro cae en el menú.
+  const initialTabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<'menu' | 'tienda' | 'info'>(
+    initialTabParam === 'tienda' || initialTabParam === 'info' ? initialTabParam : 'menu',
+  );
   const [storeProduct, setStoreProduct] = useState<CatalogItem | null>(null);
   const [membershipPlans, setMembershipPlans] = useState<{ planId: string; planName: string; planDescription?: string | null; versionId: string; priceFiat: number; currency: string; billingInterval: string; alreadySubscribed: boolean }[]>([]);
   const [subscribing, setSubscribing] = useState<string | null>(null);
@@ -657,31 +662,31 @@ function AffiliateProfileContent() {
         </button>
 
         {/* Central Floating Pill (Header Top) */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/15 bg-[var(--bg-elevated)]/85 backdrop-blur-xl shadow-xl pointer-events-auto max-w-[62%] sm:max-w-none">
-          <h1 className="text-xs sm:text-sm font-black tracking-tight text-white truncate m-0 max-w-[28vw] sm:max-w-[200px]">
+        {/* Píldora del header: primero el nombre, luego el estado. Categoría y
+            horario se ocultan en pantallas angostas (ya están en la identidad del
+            hero) para que el nombre no se corte a "6…". */}
+        <div className="inline-flex min-w-0 items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/15 bg-[var(--bg-elevated)]/85 backdrop-blur-xl shadow-xl pointer-events-auto max-w-[62%] sm:max-w-none">
+          <h1 className="m-0 min-w-0 truncate text-[12px] sm:text-sm font-black tracking-tight text-white max-w-[38vw] sm:max-w-[200px]">
             {affiliate.name}
           </h1>
           {affiliate.category && (
-            <>
-              <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
-              <span className="text-[9px] sm:text-[10px] font-black text-[var(--rabbitty-pink)] uppercase tracking-wider truncate max-w-[18vw] sm:max-w-[120px]">
+            <span className="hidden shrink-0 items-center gap-1.5 sm:inline-flex">
+              <span className="w-1 h-1 rounded-full bg-white/30" />
+              <span className="max-w-[120px] truncate text-[10px] font-black uppercase tracking-wider text-[var(--rabbitty-pink)]">
                 {affiliate.category}
               </span>
-            </>
+            </span>
           )}
           {affiliate.startTime && affiliate.endTime && (
-            <>
-              <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
-              <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-gray-300 shrink-0">
-                <Clock size={10} className="text-gray-400" />
-                <span>{affiliate.startTime}–{affiliate.endTime}</span>
-              </span>
-            </>
+            <span className="hidden shrink-0 items-center gap-1 text-[10px] font-bold text-gray-300 sm:inline-flex">
+              <Clock size={10} className="text-gray-400" />
+              <span>{affiliate.startTime}–{affiliate.endTime}</span>
+            </span>
           )}
-          <span className={`shrink-0 text-[8px] sm:text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[8px] font-black uppercase sm:text-[9px] ${
             openNow
-              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-              : 'bg-red-500/15 text-red-400 border border-red-500/30'
+              ? 'bg-[var(--success-soft)] text-[var(--success)] border border-[var(--success)]/30'
+              : 'bg-[var(--error-soft)] text-[var(--error)] border border-[var(--error)]/30'
           }`}>
             {openNow ? 'Abierto' : 'Cerrado'}
           </span>

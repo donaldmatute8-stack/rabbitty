@@ -48,6 +48,9 @@ function parseUserCategories(raw: unknown): string[] {
   } catch { return []; }
 }
 
+/** Evita repetir el aviso de bypass en cada request (sólo en desarrollo). */
+const devAuthLogged = new Set<string>();
+
 export async function getAuthenticatedUser(req: Request | NextRequest): Promise<AuthenticatedUser | null> {
   try {
     const authHeader = req.headers.get("authorization");
@@ -68,7 +71,10 @@ export async function getAuthenticatedUser(req: Request | NextRequest): Promise<
       if (devUserId) {
         const devUser = await db.query.users.findFirst({ where: eq(users.id, devUserId) });
         if (devUser) {
-          console.warn('[serverAuth] DEV AUTH → usuario', devUser.username ?? devUser.id);
+          if (!devAuthLogged.has(devUser.id)) {
+            devAuthLogged.add(devUser.id);
+            console.warn('[serverAuth] DEV AUTH → usuario', devUser.username ?? devUser.id);
+          }
           return {
             id: devUser.id,
             telegramId: devUser.telegramId,

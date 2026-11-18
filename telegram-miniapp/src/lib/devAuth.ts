@@ -45,6 +45,26 @@ export function getDevUserId(): string | null {
   }
 }
 
+/**
+ * Atajo para abrir una pantalla concreta en el simulador:
+ *   http://localhost:3000/affiliate/<id>?devUser=deltoro
+ * Sólo en desarrollo; en producción no hace nada (y el servidor ignora igual la
+ * cabecera). Acepta el alias (`deltoro`, `iaherrera`) o el uuid.
+ */
+export function captureDevUserFromUrl(): string | null {
+  if (!isDevAuthEnabled() || typeof window === 'undefined') return null;
+  try {
+    const raw = new URLSearchParams(window.location.search).get('devUser');
+    if (!raw) return null;
+    const alias = DEV_USERS.find((u) => u.label.toLowerCase().startsWith(raw.toLowerCase()));
+    const id = alias?.id ?? raw;
+    window.localStorage.setItem(KEY, id);
+    return id;
+  } catch {
+    return null;
+  }
+}
+
 export function setDevUserId(id: string | null): void {
   if (!isDevAuthEnabled() || typeof window === 'undefined') return;
   try {

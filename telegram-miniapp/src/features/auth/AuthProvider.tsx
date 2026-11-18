@@ -6,7 +6,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { readSettings, subscribeSettings } from '@/lib/userSettings';
 
 import { captureAffiliateIntent } from '@/lib/affiliateIntent';
-import { getDevUserId } from '@/lib/devAuth';
+import { captureDevUserFromUrl, getDevUserId } from '@/lib/devAuth';
 
 export interface UserProfile {
   id?: string;
@@ -108,6 +108,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
 
       // 1.5 DEV BYPASS (solo desarrollo local; el servidor lo ignora en prod)
+      // Acepta `?devUser=deltoro` para abrir una pantalla concreta en el simulador.
+      captureDevUserFromUrl();
       const devUserId = getDevUserId();
       if (devUserId) {
         try {
