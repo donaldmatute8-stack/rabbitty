@@ -50,6 +50,24 @@ function isDeployedRuntime(): boolean {
   return process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
 }
 
+/**
+ * ¿La URL necesita TLS?
+ *
+ * Se decide por el HOST, no por `NODE_ENV`. El criterio anterior
+ * (`NODE_ENV === 'production'`) rompía `next start` contra Postgres local con
+ * «The server does not support SSL connections» — y ahora el entorno local vive
+ * en localhost, así que producción ya no es sinónimo de "fuera de la máquina".
+ */
+export function needsSsl(url?: string): boolean {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return !(host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local'));
+  } catch {
+    return false;
+  }
+}
+
 /** Host de la URL, sin credenciales — lo único que es seguro loggear. */
 export function dbHost(url?: string): string {
   if (!url) return '(sin URL)';

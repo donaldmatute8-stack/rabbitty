@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '@rabbitty/database-restaurant/schema';
-import { resolveDbUrl, logDbResolution } from './config';
+import { resolveDbUrl, logDbResolution, needsSsl } from './config';
 
 // Ver `./config`: fail-fast si falta la URL en runtime desplegado (sin esto,
 // `pg` apunta en silencio a 127.0.0.1:5432 y el checkout/POS revientan con
@@ -24,9 +24,7 @@ const dbUrl = resolved.url;
 
 export const restaurantPool = new Pool({
   connectionString: dbUrl,
-  ssl: dbUrl && (dbUrl.includes('neon.tech') || process.env.NODE_ENV === 'production')
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: needsSsl(dbUrl) ? { rejectUnauthorized: false } : false,
 });
 
 export const restaurantDb = drizzle(restaurantPool, { schema });

@@ -4,6 +4,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, Trash2, ChevronRight, X, Sparkles, CheckCircle2 } from 'lucide-react';
 import { CatalogModifier } from './ProductDetailModal';
+import { useOverlayLock } from '@rabbitty/ui';
 
 export interface CartItem {
   id: string; // unique cart entry key
@@ -53,6 +54,8 @@ export function OrderCartSheet({
   businessName,
   checkedIn = false,
 }: OrderCartSheetProps) {
+  // Aísla los gestos de la página de atrás mientras el panel está abierto.
+  useOverlayLock(isOpen);
   const [submitting, setSubmitting] = React.useState(false);
   const [orderSuccess, setOrderSuccess] = React.useState(false);
   const [orderType, setOrderType] = React.useState<'DINE_IN' | 'PICKUP' | 'DELIVERY'>(

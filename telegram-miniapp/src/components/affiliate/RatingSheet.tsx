@@ -13,6 +13,7 @@ import { motion } from 'framer-motion';
 import { Star, X, Loader2, CheckCircle2 } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { toast } from '@rabbitty/ui';
+import { useOverlayLock } from '@rabbitty/ui';
 
 const ATTRS = [
   { id: 'atencion', label: 'Atención' },
@@ -38,6 +39,8 @@ export default function RatingSheet({
   /** H-RATE-UX: presentación compacta secundaria (post-liquidación) — la experiencia va ABAJO, atrás del éxito grande. */
   compact?: boolean;
 }) {
+  // Se monta sólo cuando está abierto: aísla gestos de la página de atrás.
+  useOverlayLock(true);
   const [stars, setStars] = useState<number>(0);
   const [attrs, setAttrs] = useState<Attr[]>([]);
   const [comment, setComment] = useState('');

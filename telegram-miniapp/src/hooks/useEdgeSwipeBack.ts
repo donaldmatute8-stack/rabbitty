@@ -13,6 +13,7 @@
  */
 
 import { useEffect } from "react";
+import { isOverlayOpen } from "@rabbitty/ui";
 
 const EDGE_PX = 28;
 const MIN_DISTANCE = 80;
@@ -27,6 +28,12 @@ export function useEdgeSwipeBack() {
     let tracking = false;
 
     const onStart = (event: TouchEvent) => {
+      // Con un panel abierto el swipe de borde no navega: el gesto pertenece
+      // al panel (o a su cierre). Antes te sacaba de la pantalla de atrás.
+      if (isOverlayOpen()) {
+        tracking = false;
+        return;
+      }
       const touch = event.touches[0];
       if (!touch) return;
       // Solo si el gesto nace pegado al borde izquierdo.

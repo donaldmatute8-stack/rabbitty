@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { X, Search, Check, Users } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
+import { useOverlayLock } from '@rabbitty/ui';
 
 interface Candidate {
   id: string;
@@ -23,6 +24,8 @@ interface Candidate {
 }
 
 export function CreateGroupSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Aísla los gestos de la página de atrás mientras la hoja está abierta.
+  useOverlayLock(open);
   const router = useRouter();
   const { showToast } = useToast();
   const [name, setName] = useState('');

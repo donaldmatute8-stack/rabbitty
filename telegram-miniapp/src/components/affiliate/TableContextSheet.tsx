@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QrCode, CheckCircle2, X, Users, Sparkles } from 'lucide-react';
+import { useOverlayLock } from '@rabbitty/ui';
 
 interface TableSpot {
   id: string;
@@ -29,6 +30,8 @@ export function TableContextSheet({
   onSelectTable,
   businessName,
 }: TableContextSheetProps) {
+  // Aísla los gestos de la página de atrás mientras el panel está abierto.
+  useOverlayLock(isOpen);
   const [activeArea, setActiveArea] = useState<string>('ALL');
 
   if (!isOpen) return null;

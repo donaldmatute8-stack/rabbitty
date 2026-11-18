@@ -7,6 +7,7 @@ import { PlatformBridge } from '@/lib/platform';
 import { toast } from '@rabbitty/ui';
 import { InAppPaySheet } from './InAppPaySheet';
 import { isCashPaymentRequested } from '@rabbitty/api/services/payments/contracts';
+import { useOverlayLock } from '@rabbitty/ui';
 
 interface TableBillSheetProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ export function TableBillSheet({
   businessName,
   payBase = 'https://admin.rabbitty.me',
 }: TableBillSheetProps) {
+  // Aísla los gestos de la página de atrás mientras el panel está abierto.
+  useOverlayLock(isOpen);
   const [loading, setLoading] = useState(false);
   const [bill, setBill] = useState<{
     hasActiveOrder: boolean;

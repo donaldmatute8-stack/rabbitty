@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from "react";
+import { useEffect, useState, type HTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../cn";
+import { useSwipeToDismiss } from "../hooks/useSwipeToDismiss";
+import { useOverlayLock } from "../hooks/useOverlayLock";
 
 interface DialogProps extends HTMLAttributes<HTMLDivElement> {
   open: boolean;
@@ -29,34 +31,19 @@ interface DialogProps extends HTMLAttributes<HTMLDivElement> {
 function Dialog({ open, onClose, title, kicker, hideClose, children, className }: DialogProps) {
   const [mounted, setMounted] = useState(false);
 
-  // ── Swipe hacia abajo para cerrar (gesto nativo, ADR-025) ──
-  // Solo se inicia en la cabecera del modal, para no pelear con el scroll
-  // del contenido.
-  const dragStartY = useRef<number | null>(null);
-  const [dragY, setDragY] = useState(0);
-  const HEADER_ZONE = 96;
-  const DISMISS_AT = 110;
-
-  const onTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const y = event.touches[0]?.clientY;
-    if (y == null) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (y - rect.top > HEADER_ZONE) return;
-    dragStartY.current = y;
-  };
-
-  const onTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (dragStartY.current == null) return;
-    const y = event.touches[0]?.clientY ?? dragStartY.current;
-    const delta = y - dragStartY.current;
-    if (delta > 0) setDragY(delta);
-  };
-
-  const onTouchEnd = () => {
-    if (dragY > DISMISS_AT) onClose();
-    dragStartY.current = null;
-    setDragY(0);
-  };
+  // ── Swipe hacia abajo para cerrar (ADR-025) ──
+  // La lógica vive en `useSwipeToDismiss`, compartida con las hojas inferiores
+  // y Rabbitty Mood: una sola implementación, mismo comportamiento en toda la
+  // app (sólo desde la cabecera, con umbral por distancia o por velocidad).
+  const swipe = useSwipeToDismiss({
+    onDismiss: onClose,
+    headerZone: 96,
+    threshold: 110,
+    disabled: !open,
+  });
+  // El candado evita que el gesto "atraviese" el modal y dispare el
+  // pull-to-refresh o el swipe de borde de la pantalla de atrás.
+  useOverlayLock(open);
 
   useEffect(() => {
     setMounted(true);
@@ -71,17 +58,6 @@ function Dialog({ open, onClose, title, kicker, hideClose, children, className }
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
   if (!mounted || !open) return null;
 
   return createPortal(
@@ -91,15 +67,12 @@ function Dialog({ open, onClose, title, kicker, hideClose, children, className }
         onClick={onClose}
       />
       <div
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        {...swipe.handlers}
         style={
-          dragY > 0
+          swipe.dragY > 0
             ? {
-                transform: `translateY(${dragY}px)`,
-                opacity: Math.max(0.45, 1 - dragY / 380),
-                transition: "none",
+                ...swipe.style,
+                opacity: Math.max(0.45, 1 - swipe.dragY / 380),
               }
             : undefined
         }

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { shouldDismissSwipe, useOverlayLock } from '@rabbitty/ui';
 import { 
   X, Sparkles, ExternalLink, Headphones, Coffee, Check, 
   ArrowRight, ShieldCheck, MapPin, Gift, Play, Disc3, 
@@ -157,6 +158,22 @@ export function MoodCheckInSheet({
     }
   };
 
+  // ── Cierre por gesto y aislamiento de la página de atrás ──
+  // El candado (compartido con BottomSheet/Dialog) impide que el swipe hacia
+  // abajo atraviese el panel y dispare el pull-to-refresh de la pantalla de
+  // atrás — el bug que se veía con Rabbitty Mood.
+  useOverlayLock(isOpen);
+  const dragControls = useDragControls();
+  const onDragEnd = useCallback(
+    (_: unknown, info: { offset: { y: number }; velocity: { y: number } }) => {
+      if (shouldDismissSwipe(info.offset.y, info.velocity.y / 1000)) {
+        PlatformBridge.hapticFeedback('light');
+        onClose();
+      }
+    },
+    [onClose],
+  );
+
   const handleDismiss = () => {
     PlatformBridge.hapticFeedback('light');
     if (dontAskToday) {
@@ -168,14 +185,18 @@ export function MoodCheckInSheet({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <div 
+      {isOpen && (
+      <motion.div
+        key="mood-sheet"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         className="fixed inset-0 z-200 flex items-end justify-center backdrop-blur-md"
         style={{
           background: isDark ? 'rgba(0, 0, 0, 0.78)' : 'rgba(0, 0, 0, 0.45)',
+          overscrollBehavior: 'contain',
         }}
       >
         {/* Backdrop click to dismiss */}
@@ -186,6 +207,13 @@ export function MoodCheckInSheet({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ type: 'spring', damping: 26, stiffness: 290 }}
+          drag="y"
+          dragListener={false}
+          dragControls={dragControls}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.5 }}
+          dragSnapToOrigin
+          onDragEnd={onDragEnd}
           className="relative w-full max-w-lg rounded-t-[34px] overflow-hidden flex flex-col max-h-[92vh] shadow-2xl z-10"
           style={{
             background: isDark ? '#0D0914' : '#FFFFFF',
@@ -205,8 +233,12 @@ export function MoodCheckInSheet({
             />
           )}
 
-          {/* Sticky Header */}
-          <div className="relative z-10 px-6 pt-3 pb-3">
+          {/* Sticky Header: zona donde nace el gesto de arrastre */}
+          <div
+            className="relative z-10 px-6 pt-3 pb-3"
+            style={{ touchAction: 'none' }}
+            onPointerDown={(event) => dragControls.start(event)}
+          >
             {/* Top Indicator / Drag Handle */}
             <div 
               className="w-10 h-1 rounded-full mx-auto mb-3" 
@@ -728,7 +760,8 @@ export function MoodCheckInSheet({
             )}
           </div>
         </motion.div>
-      </div>
+      </motion.div>
+      )}
     </AnimatePresence>
   );
 }

@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/contexts/ThemeContext';
+import { isOverlayOpen } from '@rabbitty/ui';
 
 const THRESHOLD = 64; // px de jalón que activa el refresh
 const MAX_PULL = 110;
@@ -50,6 +51,10 @@ export default function PullToRefresh({ onRefresh, children, enabled = true }: P
 
     const onStart = (e: TouchEvent) => {
       if (busy.current || e.touches.length !== 1) return;
+      // Con un panel abierto (Rabbitty Mood, hoja, modal) el gesto no es un
+      // refresh: es del panel. Antes se colaba y la página de atrás se
+      // recargaba al arrastrar dentro del panel.
+      if (isOverlayOpen()) return;
       if (scrollTopOf() <= 2) {
         startY.current = e.touches[0].clientY;
         active.current = true;
@@ -57,6 +62,8 @@ export default function PullToRefresh({ onRefresh, children, enabled = true }: P
     };
     const onMove = (e: TouchEvent) => {
       if (!active.current || startY.current === null || busy.current) return;
+      // Si un overlay se abrió a mitad del gesto, se desarma.
+      if (isOverlayOpen()) { active.current = false; setPullPx(0); return; }
       const dy = e.touches[0].clientY - startY.current;
       if (dy <= 0) { setPullPx(0); return; }
       // Resistencia suave: mientras más se jala, más cuesta
