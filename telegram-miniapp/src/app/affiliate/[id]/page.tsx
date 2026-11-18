@@ -882,85 +882,6 @@ function AffiliateProfileContent() {
           </p>
         </div>
 
-        {/* Interactive Segmented Experience Tabs */}
-        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[var(--bg-primary)]/95 backdrop-blur-xl">
-          <div className={`grid ${hasStore ? 'grid-cols-3' : 'grid-cols-2'} p-1 bg-[var(--bg-elevated)] rounded-2xl border border-white/10 shadow-lg`}>
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setActiveTab('menu');
-              }}
-              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'menu'
-                  ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <Utensils size={15} />
-              <span>Menú y Servicios</span>
-            </button>
-            {hasStore && (
-              <button
-                onClick={() => {
-                  PlatformBridge.hapticFeedback('light');
-                  setActiveTab('tienda');
-                }}
-                className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  activeTab === 'tienda'
-                    ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                <ShoppingBag size={15} />
-                <span>Tienda</span>
-              </button>
-            )}
-            <button
-              onClick={() => {
-                PlatformBridge.hapticFeedback('light');
-                setActiveTab('info');
-              }}
-              className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                activeTab === 'info'
-                  ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
-                  : 'text-white/60 hover:text-white'
-              }`}
-            >
-              <Layers size={15} />
-              <span>Sucursal</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Tab 1: Menú y Catálogo Estructurado */}
-        {activeTab === 'menu' && (
-          <div className="space-y-6">
-            <DigitalMenuCatalog
-              categories={menuOnlyCategories}
-              currency="MXN"
-              rewardPercentage={affiliate.rewardPercentage}
-              onAddToCart={handleAddToCart}
-              onWishlist={handleWishlist}
-              digitalOrderingEnabled={capabilities.digitalOrderingEnabled}
-            />
-          </div>
-        )}
-
-        {/* Tab 1b: Tienda de productos para llevar */}
-        {activeTab === 'tienda' && (
-          <StoreCatalog
-            products={products}
-            currency="MXN"
-            onSelectProduct={(item) => {
-              PlatformBridge.hapticFeedback('light');
-              setStoreProduct(item);
-            }}
-          />
-        )}
-
-        {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
-        {activeTab === 'info' && (
-          <div className="space-y-5">
         {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
         <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
           <motion.button
@@ -1026,6 +947,74 @@ function AffiliateProfileContent() {
           </motion.button>
         </div>
 
+        {/* Pestañas: etiquetas cortas y una línea por pestaña.
+            Con tres pestañas el texto largo ("Menú y Servicios") se partía y se
+            encimaba; ahora entra siempre, también en pantallas de 320 px. */}
+        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[var(--bg-primary)]/95 backdrop-blur-xl">
+          <div
+            className={`grid ${hasStore ? 'grid-cols-3' : 'grid-cols-2'} gap-1 p-1 bg-[var(--bg-elevated)] rounded-2xl border border-[var(--border-subtle)]`}
+          >
+            {[
+              { id: 'menu' as const, label: 'Menú', icon: Utensils, show: true },
+              { id: 'tienda' as const, label: 'Tienda', icon: ShoppingBag, show: hasStore },
+              { id: 'info' as const, label: 'Sucursal', icon: Layers, show: true },
+            ]
+              .filter((tab) => tab.show)
+              .map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      PlatformBridge.hapticFeedback('light');
+                      setActiveTab(tab.id);
+                    }}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-[11.5px] font-black leading-none transition-all ${
+                      isActive
+                        ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/25'
+                        : 'text-[var(--text-secondary)] hover:text-white'
+                    }`}
+                  >
+                    <Icon size={14} className="shrink-0" />
+                    <span className="truncate whitespace-nowrap">{tab.label}</span>
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* Tab 1: Menú y Catálogo Estructurado */}
+        {activeTab === 'menu' && (
+          <div className="space-y-6">
+            <DigitalMenuCatalog
+              categories={menuOnlyCategories}
+              currency="MXN"
+              rewardPercentage={affiliate.rewardPercentage}
+              onAddToCart={handleAddToCart}
+              onWishlist={handleWishlist}
+              digitalOrderingEnabled={capabilities.digitalOrderingEnabled}
+            />
+          </div>
+        )}
+
+        {/* Tab 1b: Tienda de productos para llevar */}
+        {activeTab === 'tienda' && (
+          <StoreCatalog
+            products={products}
+            currency="MXN"
+            onSelectProduct={(item) => {
+              PlatformBridge.hapticFeedback('light');
+              setStoreProduct(item);
+            }}
+          />
+        )}
+
+        {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
+        {activeTab === 'info' && (
+          <div className="space-y-5">
         {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ──
             H-PRESYNC: se oculta si ya estás checkeado (no puedes "planeo ir"
             cuando ya te registraste aquí), y muestra tu estado hidratado. */}

@@ -99,8 +99,18 @@ export function StoreCatalog({
                     className="object-cover transition-transform duration-300 group-active:scale-105"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <Package size={28} className="text-white/20" />
+                  // Sin foto del afiliado: el logo de Rabbitty en escala de grises,
+                  // igual que el POS cuando un producto no tiene imagen. Discreto,
+                  // no compite con las tarjetas que sí tienen foto.
+                  <div className="flex h-full w-full items-center justify-center bg-[var(--surface-1)] p-6">
+                    <Image
+                      src="/Ra.png"
+                      alt=""
+                      width={96}
+                      height={96}
+                      aria-hidden
+                      className="h-full w-full object-contain opacity-25 grayscale select-none"
+                    />
                   </div>
                 )}
 
