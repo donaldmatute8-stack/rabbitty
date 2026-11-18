@@ -103,6 +103,9 @@ DOCS/*
 # Plan de trabajo versionado (lo que sigue, por sesión): sí se versiona
 !DOCS/ROADMAP/
 !Docs/ROADMAP/
+# Sistema de diseño (tokens, jerarquía): sí se versiona
+!DOCS/design/
+!Docs/design/
 MB-REFERENCE.md
 \!LEEME.md
 

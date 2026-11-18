@@ -592,15 +592,15 @@ function AffiliateProfileContent() {
 
   if (loading) {
     return (
-      <div className="bg-[#0D0D15] min-h-screen flex items-center justify-center">
-        <div className="w-10 h-10 rounded-full border-3 border-white/10 border-t-[#E91E63] animate-spin" />
+      <div className="bg-[var(--bg-primary)] min-h-screen flex items-center justify-center">
+        <div className="w-10 h-10 rounded-full border-3 border-white/10 border-t-[var(--rabbitty-pink)] animate-spin" />
       </div>
     );
   }
 
   if (!affiliate) {
     return (
-      <div className="bg-[#0D0D15] min-h-screen flex items-center justify-center text-white/50 font-semibold">
+      <div className="bg-[var(--bg-primary)] min-h-screen flex items-center justify-center text-white/50 font-semibold">
         Negocio no encontrado.
       </div>
     );
@@ -638,33 +638,33 @@ function AffiliateProfileContent() {
           .join(' · ');
 
   return (
-    <div className="bg-[#0D0D15] min-h-screen pb-36 relative text-white">
+    <div className="bg-[var(--bg-primary)] min-h-screen pb-36 relative text-white">
       {/* Floating Dynamic Header */}
       <div 
         className={`fixed top-0 left-0 right-0 z-50 pt-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+8px)] pb-3 px-4 flex items-center justify-between transition-all duration-200 ${
           isScrolled 
-            ? 'bg-[#0D0D15]/95 backdrop-blur-xl border-b border-white/10 shadow-lg pointer-events-auto' 
+            ? 'bg-[var(--bg-primary)]/95 backdrop-blur-xl border-b border-white/10 shadow-lg pointer-events-auto' 
             : 'pointer-events-none'
         }`}
       >
         {/* Back Button */}
         <button
           onClick={() => router.back()}
-          className="w-10 h-10 rounded-full bg-[#14141A]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl pointer-events-auto active:scale-90 transition-transform shrink-0"
+          className="w-10 h-10 rounded-full bg-[var(--bg-elevated)]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl pointer-events-auto active:scale-90 transition-transform shrink-0"
           aria-label="Volver atrás"
         >
           <ChevronLeft size={20} />
         </button>
 
         {/* Central Floating Pill (Header Top) */}
-        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/15 bg-[#14141A]/85 backdrop-blur-xl shadow-xl pointer-events-auto max-w-[62%] sm:max-w-none">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/15 bg-[var(--bg-elevated)]/85 backdrop-blur-xl shadow-xl pointer-events-auto max-w-[62%] sm:max-w-none">
           <h1 className="text-xs sm:text-sm font-black tracking-tight text-white truncate m-0 max-w-[28vw] sm:max-w-[200px]">
             {affiliate.name}
           </h1>
           {affiliate.category && (
             <>
               <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
-              <span className="text-[9px] sm:text-[10px] font-black text-[#E91E63] uppercase tracking-wider truncate max-w-[18vw] sm:max-w-[120px]">
+              <span className="text-[9px] sm:text-[10px] font-black text-[var(--rabbitty-pink)] uppercase tracking-wider truncate max-w-[18vw] sm:max-w-[120px]">
                 {affiliate.category}
               </span>
             </>
@@ -695,10 +695,10 @@ function AffiliateProfileContent() {
               setIsFavorite(!isFavorite);
               showToast(isFavorite ? 'Eliminado de favoritos' : '¡Guardado en tus favoritos!', 'success');
             }}
-            className="w-10 h-10 rounded-full bg-[#14141A]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
+            className="w-10 h-10 rounded-full bg-[var(--bg-elevated)]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
             aria-label="Favorito"
           >
-            <Heart size={16} className={isFavorite ? 'fill-[#E91E63] text-[#E91E63]' : 'text-white/80'} />
+            <Heart size={16} className={isFavorite ? 'fill-[var(--rabbitty-pink)] text-[var(--rabbitty-pink)]' : 'text-white/80'} />
           </button>
           <button
             onClick={async () => {
@@ -718,7 +718,7 @@ function AffiliateProfileContent() {
                 showToast('Enlace de la sucursal copiado', 'info');
               }
             }}
-            className="w-10 h-10 rounded-full bg-[#14141A]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
+            className="w-10 h-10 rounded-full bg-[var(--bg-elevated)]/80 text-white flex items-center justify-center border border-white/15 backdrop-blur-xl shadow-xl active:scale-90 transition-transform"
             aria-label="Compartir"
           >
             <Share2 size={16} />
@@ -736,7 +736,7 @@ function AffiliateProfileContent() {
           priority
           className="object-cover opacity-85"
         />
-        <div className="absolute inset-0 bg-linear-to-t from-[#0D0D15] via-transparent to-black/50" />
+        <div className="absolute inset-0 bg-linear-to-t from-[var(--bg-primary)] via-transparent to-black/50" />
 
         {/* Floating Top Badges (Bunz Reward + Check-in + Mesa) */}
         <div className="absolute bottom-10 left-5 right-5 z-20 flex items-center justify-between gap-2 pointer-events-auto">
@@ -802,7 +802,7 @@ function AffiliateProfileContent() {
                     : 'bg-black/65 hover:bg-black/85 text-white border-white/20 hover:border-pink-500/60 shadow-[0_4px_16px_rgba(0,0,0,0.5)]'
                 }`}
               >
-                <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[#E91E63] animate-ping'}`} />
+                <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[var(--rabbitty-pink)] animate-ping'}`} />
                 <span>{hasPresenceCheckedIn ? '✓ Estoy Aquí' : checkingInPresence ? 'Activando...' : 'Estoy Aquí'}</span>
               </motion.button>
             )}
@@ -824,7 +824,7 @@ function AffiliateProfileContent() {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', delay: 0.15 }}
-            className="h-9 bg-linear-to-r from-[#E91E63] to-[#AD1457] text-white px-3.5 rounded-full flex items-center gap-1.5 shadow-[0_4px_16px_rgba(233,30,99,0.35)] border border-white/25 shrink-0"
+            className="h-9 bg-linear-to-r from-[var(--rabbitty-pink)] to-[var(--rabbitty-pink-dark)] text-white px-3.5 rounded-full flex items-center gap-1.5 shadow-[0_4px_16px_rgba(233,30,99,0.35)] border border-white/25 shrink-0"
           >
             <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span className="font-black text-sm">+{affiliate.rewardPercentage}%</span>
@@ -834,7 +834,7 @@ function AffiliateProfileContent() {
       </div>
 
       {/* Content Container (Card Overlap) */}
-      <div className="relative bg-[#0D0D15] rounded-t-[36px] -mt-8 px-5 pt-6 pb-20 border-t border-white/10 shadow-2xl space-y-5">
+      <div className="relative bg-[var(--bg-primary)] rounded-t-[36px] -mt-8 px-5 pt-6 pb-20 border-t border-white/10 shadow-2xl space-y-5">
         {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
         <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
           <motion.button
@@ -846,7 +846,7 @@ function AffiliateProfileContent() {
             }}
             className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-[#E91E63]/15 text-[#FF2E93] border border-[#E91E63]/30 flex items-center justify-center shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-[var(--rabbitty-pink)]/15 text-[var(--rabbitty-pink-light)] border border-[var(--rabbitty-pink)]/30 flex items-center justify-center shadow-sm">
               <Navigation size={18} />
             </div>
             <span className="text-[10px] font-black text-white/90 tracking-tight">Llegar</span>
@@ -920,8 +920,8 @@ function AffiliateProfileContent() {
         )}
 
         {/* Interactive Segmented Experience Tabs */}
-        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[#0D0D15]/95 backdrop-blur-xl">
-          <div className={`grid ${hasStore ? 'grid-cols-3' : 'grid-cols-2'} p-1 bg-[#161622] rounded-2xl border border-white/10 shadow-lg`}>
+        <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[var(--bg-primary)]/95 backdrop-blur-xl">
+          <div className={`grid ${hasStore ? 'grid-cols-3' : 'grid-cols-2'} p-1 bg-[var(--bg-elevated)] rounded-2xl border border-white/10 shadow-lg`}>
             <button
               onClick={() => {
                 PlatformBridge.hapticFeedback('light');
@@ -929,7 +929,7 @@ function AffiliateProfileContent() {
               }}
               className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 activeTab === 'menu'
-                  ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  ? 'bg-gradient-to-r from-[var(--rabbitty-pink-light)] to-[var(--rabbitty-pink)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -944,7 +944,7 @@ function AffiliateProfileContent() {
                 }}
                 className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   activeTab === 'tienda'
-                    ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                    ? 'bg-gradient-to-r from-[var(--rabbitty-pink-light)] to-[var(--rabbitty-pink)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
                     : 'text-white/60 hover:text-white'
                 }`}
               >
@@ -959,7 +959,7 @@ function AffiliateProfileContent() {
               }}
               className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 activeTab === 'info'
-                  ? 'bg-gradient-to-r from-[#FF2E93] to-[#E91E63] text-white shadow-md shadow-[#E91E63]/30'
+                  ? 'bg-gradient-to-r from-[var(--rabbitty-pink-light)] to-[var(--rabbitty-pink)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -1016,7 +1016,7 @@ function AffiliateProfileContent() {
           {hasPresenceCheckedIn ? (
             <div
               className="shrink-0 px-4 py-2.5 rounded-full text-xs font-bold flex items-center gap-1.5"
-              style={{ background: 'rgba(16,185,129,0.15)', color: '#34D399', border: '1px solid rgba(52,211,153,0.4)' }}
+              style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(52,211,153,0.4)' }}
             >
               <span>Check-in activo</span>
             </div>
@@ -1039,7 +1039,7 @@ function AffiliateProfileContent() {
               disabled={planVisitSent}
               className="shrink-0 px-4 py-2.5 rounded-full text-xs font-bold active:scale-95 transition-transform cursor-pointer"
               style={{
-                background: planVisitSent ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%)',
+                background: planVisitSent ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg, var(--accent-violet) 0%, var(--accent-violet) 100%)',
                 color: planVisitSent ? 'rgba(255,255,255,0.4)' : '#FFF',
               }}
             >
@@ -1054,8 +1054,8 @@ function AffiliateProfileContent() {
         {activeTab === 'info' && (
           <div className="space-y-5">
             {/* Happy Hour Bunz Highlight */}
-            <div className="p-4 bg-linear-to-br from-[#E91E63]/15 to-[#AD1457]/10 rounded-3xl border border-[#E91E63]/25 space-y-2">
-              <h4 className="text-sm font-black text-[#FF4081] flex items-center gap-2">
+            <div className="p-4 bg-linear-to-br from-[var(--rabbitty-pink)]/15 to-[var(--rabbitty-pink-dark)]/10 rounded-3xl border border-[var(--rabbitty-pink)]/25 space-y-2">
+              <h4 className="text-sm font-black text-[var(--rabbitty-pink-light)] flex items-center gap-2">
                 <Tag size={16} /> Recompensa Bunz
               </h4>
               <p className="text-xs text-white/75 leading-relaxed">
@@ -1064,9 +1064,9 @@ function AffiliateProfileContent() {
             </div>
 
             {/* Address & Hours card */}
-            <div className="bg-[#161622] rounded-3xl p-5 border border-white/10 space-y-4">
+            <div className="bg-[var(--bg-elevated)] rounded-3xl p-5 border border-white/10 space-y-4">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-[#E91E63] shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-[var(--rabbitty-pink)] shrink-0">
                   <MapPin size={18} />
                 </div>
                 <div>
@@ -1110,7 +1110,7 @@ function AffiliateProfileContent() {
                 className="w-full flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3.5 py-3 backdrop-blur-xl active:scale-[0.99] transition-transform"
               >
                 <span className="flex items-center gap-3 min-w-0">
-                  <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#FF2E93] to-[#8B5CF6] flex items-center justify-center shrink-0">
+                  <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--rabbitty-pink-light)] to-[var(--accent-violet)] flex items-center justify-center shrink-0">
                     <Navigation size={17} color="#fff" />
                   </span>
                   <span className="min-w-0 text-left">
@@ -1198,10 +1198,10 @@ function AffiliateProfileContent() {
                 PlatformBridge.hapticFeedback('medium');
                 setShowCartSheet(true);
               }}
-              className="w-full bg-linear-to-r from-[#E91E63] via-[#D81B60] to-[#C2185B] text-white py-3.5 px-5 rounded-2xl font-black text-sm shadow-[0_8px_25px_rgba(233,30,99,0.5)] border border-white/20 flex items-center justify-between transition-all"
+              className="w-full bg-linear-to-r from-[var(--rabbitty-pink)] via-[var(--rabbitty-pink)] to-[var(--rabbitty-pink-dark)] text-white py-3.5 px-5 rounded-2xl font-black text-sm shadow-[0_8px_25px_rgba(233,30,99,0.5)] border border-white/20 flex items-center justify-between transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full bg-white text-[#E91E63] flex items-center justify-center text-xs font-black shadow">
+                <div className="w-7 h-7 rounded-full bg-white text-[var(--rabbitty-pink)] flex items-center justify-center text-xs font-black shadow">
                   {totalCartCount}
                 </div>
                 <div className="text-left">
@@ -1243,7 +1243,7 @@ function AffiliateProfileContent() {
                 PlatformBridge.hapticFeedback('medium');
                 setShowBillSheet(true);
               }}
-              className="w-full bg-[#0F2B29] text-white py-3.5 px-5 rounded-2xl font-black text-sm shadow-[0_8px_25px_rgba(0,0,0,0.45)] border border-emerald-500/40 flex items-center justify-between transition-all"
+              className="w-full bg-[var(--success-soft)] text-white py-3.5 px-5 rounded-2xl font-black text-sm shadow-[0_8px_25px_rgba(0,0,0,0.45)] border border-emerald-500/40 flex items-center justify-between transition-all"
             >
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs shadow">
@@ -1377,7 +1377,7 @@ function AffiliateProfileContent() {
                     fontWeight: 900,
                     letterSpacing: 1,
                     textTransform: 'uppercase',
-                    color: '#FF8FB8',
+                    color: 'var(--rabbitty-pink-light)',
                   }}
                 >
                   {pendingPosOrder.orderType === 'DELIVERY'
@@ -1407,7 +1407,7 @@ function AffiliateProfileContent() {
                 </p>
               )}
               {pendingPosOrder.address && (
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#7DD3FC' }}>📍 {pendingPosOrder.address}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--info)' }}>📍 {pendingPosOrder.address}</p>
               )}
             </div>
 
@@ -1435,7 +1435,7 @@ function AffiliateProfileContent() {
                 style={{
                   flex: 1,
                   border: 'none',
-                  background: '#E91E63',
+                  background: 'var(--rabbitty-pink)',
                   color: '#fff',
                   borderRadius: 10,
                   fontSize: 12,
@@ -1461,7 +1461,7 @@ function AffiliateProfileContent() {
                 initial={{ width: '100%' }}
                 animate={{ width: '0%' }}
                 transition={{ duration: 5, ease: 'linear' }}
-                style={{ height: '100%', background: 'linear-gradient(90deg, #FF2E93, #8B5CF6)' }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, var(--rabbitty-pink-light), var(--accent-violet))' }}
               />
             </div>
           </div>
@@ -1500,7 +1500,7 @@ function AffiliateProfileContent() {
                     fontWeight: 900,
                     letterSpacing: 1,
                     textTransform: 'uppercase',
-                    color: '#6EE7B7',
+                    color: 'var(--success)',
                   }}
                 >
                   {sentOrder.orderType === 'DELIVERY'
@@ -1530,7 +1530,7 @@ function AffiliateProfileContent() {
                 </p>
               )}
               {sentOrder.address && (
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#7DD3FC' }}>📍 {sentOrder.address}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--info)' }}>📍 {sentOrder.address}</p>
               )}
             </div>
 
@@ -1551,7 +1551,7 @@ function AffiliateProfileContent() {
                 initial={{ width: '100%' }}
                 animate={{ width: '0%' }}
                 transition={{ duration: 2.8, ease: 'linear' }}
-                style={{ height: '100%', background: 'linear-gradient(90deg, #34D399, #10B981)' }}
+                style={{ height: '100%', background: 'linear-gradient(90deg, var(--success), var(--success))' }}
               />
             </div>
           </div>
@@ -1583,7 +1583,7 @@ function AffiliateProfileContent() {
                   void PlatformBridge.openExternalUrl(`https://www.google.com/maps/search/?api=1&query=${query}`);
                   setShowMapSelector(false);
                 }}
-                className="w-full bg-[#1E1E24] text-white p-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center gap-3 text-left"
+                className="w-full bg-[var(--bg-pressed)] text-white p-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center gap-3 text-left"
               >
                 🗺️ Abrir en Google Maps
               </button>
@@ -1593,7 +1593,7 @@ function AffiliateProfileContent() {
                   void PlatformBridge.openExternalUrl(`https://waze.com/ul?q=${query}&navigate=yes`);
                   setShowMapSelector(false);
                 }}
-                className="w-full bg-[#1E1E24] text-white p-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center gap-3 text-left"
+                className="w-full bg-[var(--bg-pressed)] text-white p-4 rounded-2xl border border-white/10 font-bold text-sm flex items-center gap-3 text-left"
               >
                 🚗 Abrir en Waze
               </button>
@@ -1608,7 +1608,7 @@ function AffiliateProfileContent() {
           <motion.div
             initial={{ y: 200, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="bg-[#161622] rounded-t-4xl p-6 w-full max-w-lg border border-white/10 space-y-4"
+            className="bg-[var(--bg-elevated)] rounded-t-4xl p-6 w-full max-w-lg border border-white/10 space-y-4"
           >
             <div className="flex justify-between items-center">
               <div>
@@ -1630,7 +1630,7 @@ function AffiliateProfileContent() {
                   setShowMessageSelector(false);
                   router.push(`/chat/${affiliate.id}`);
                 }}
-                className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white p-4 rounded-2xl font-black text-sm flex items-center gap-3 shadow-lg shadow-[#E91E63]/30"
+                className="w-full bg-[image:var(--brand-gradient)] text-white p-4 rounded-2xl font-black text-sm flex items-center gap-3 shadow-lg shadow-[var(--rabbitty-pink)]/30"
               >
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg">
                   💬
@@ -1657,7 +1657,7 @@ function AffiliateProfileContent() {
                     showToast('WhatsApp directo no configurado por el comercio', 'info');
                   }
                 }}
-                className="w-full bg-[#25D366] text-white p-4 rounded-2xl font-black text-sm flex items-center gap-3 shadow-lg shadow-[#25D366]/30"
+                className="w-full bg-[var(--whatsapp)] text-white p-4 rounded-2xl font-black text-sm flex items-center gap-3 shadow-lg shadow-[var(--whatsapp)]/30"
               >
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg">
                   📱
@@ -1674,8 +1674,8 @@ function AffiliateProfileContent() {
 
       {/* In-app browser modal */}
       {showInAppBrowser && (
-        <div className="fixed inset-0 z-9999 bg-[#05020A] flex flex-col">
-          <div className="pt-[max(env(safe-area-inset-top,0px),56px)] pb-3 px-4 bg-[#110720] border-b border-white/10 flex items-center justify-between">
+        <div className="fixed inset-0 z-9999 bg-[var(--bg-primary)] flex flex-col">
+          <div className="pt-[max(env(safe-area-inset-top,0px),56px)] pb-3 px-4 bg-[var(--bg-primary)] border-b border-white/10 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <button
                 onClick={() => setShowInAppBrowser(false)}
@@ -1690,7 +1690,7 @@ function AffiliateProfileContent() {
             </div>
             <button
               onClick={() => void PlatformBridge.openExternalUrl(formattedWebUrl)}
-              className="bg-[#E91E63] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs"
+              className="bg-[var(--rabbitty-pink)] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs"
             >
               Abrir en Navegador
             </button>
@@ -1727,8 +1727,8 @@ export default function AffiliateProfilePage() {
   return (
     <Suspense
       fallback={
-        <div className="bg-[#0D0D15] min-h-screen flex items-center justify-center">
-          <div className="w-10 h-10 rounded-full border-3 border-white/10 border-t-[#E91E63] animate-spin" />
+        <div className="bg-[var(--bg-primary)] min-h-screen flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full border-3 border-white/10 border-t-[var(--rabbitty-pink)] animate-spin" />
         </div>
       }
     >

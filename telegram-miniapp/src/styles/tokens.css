@@ -78,6 +78,24 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
+  /* ── Marca: un solo acento ──────────────────────────────────────────────
+     El degradado rosa→violeta es la firma de Rabbitty. Nada más compite con
+     él: los demás colores son estado (abierto, atención, error) o el canal
+     externo (WhatsApp). */
+  --accent-violet: #8B5CF6;
+  --brand-gradient: linear-gradient(135deg, #FF2E93 0%, #E91E63 100%);
+  --brand-gradient-soft: linear-gradient(135deg, rgba(255, 46, 147, 0.16) 0%, rgba(233, 30, 99, 0.04) 100%);
+
+  /* Superficies (3 niveles: base, tarjeta, tarjeta presionada) */
+  --surface-1: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.06);
+
+  /* Estado, en versión suave para fondos (nunca decorativo) */
+  --success-soft: rgba(52, 211, 153, 0.12);
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --error-soft: rgba(248, 113, 113, 0.12);
+  --whatsapp: #25D366;
+
   /* Glassmorphism Surface Tokens */
   --glass-bg: rgba(22, 22, 22, 0.75);
   --glass-border: rgba(255, 255, 255, 0.08);
