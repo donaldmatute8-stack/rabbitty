@@ -1,0 +1,81 @@
+/**
+ * ── Existencias de los productos de tienda ────────────────────────────────
+ *
+ * El stock NO vive en el producto: se deriva de la receta contra `inventory_items`
+ * (la misma fuente que descuenta el POS y la app al cobrar). Esta consulta se
+ * usaba en tres lugares (admin, catálogo del cliente e invariantes), así que vive
+ * aquí una sola vez.
+ *
+ * - Recetas con sub-recetas: se expanden con un CTE recursivo, con tope de
+ *   profundidad para no colgarse con un ciclo mal cargado.
+ * - Un producto **sin receta** no controla existencias: no aparece en el mapa.
+ * - `stock` es la cantidad de unidades que se pueden vender: `floor(inventario /
+ *   requerido)` tomando el insumo más restrictivo.
+ */
+
+import { sql, type SQLWrapper } from "drizzle-orm";
+
+type SqlRunner = { execute: (query: SQLWrapper | string) => Promise<unknown> };
+
+export interface ProductStock {
+  /** Unidades vendibles antes de quedarse sin insumo. */
+  stock: number;
+  /** ¿Está por debajo del mínimo del insumo? */
+  lowStock: boolean;
+}
+
+function rowsOf(result: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(result)) return result as Array<Record<string, unknown>>;
+  const maybe = result as { rows?: Array<Record<string, unknown>> } | null;
+  return maybe?.rows ?? [];
+}
+
+/**
+ * Mapa `menuItemId → { stock, lowStock }`. Los productos sin receta no aparecen.
+ */
+export async function getProductStockMap(
+  db: SqlRunner,
+  productIds: string[],
+): Promise<Map<string, ProductStock>> {
+  const out = new Map<string, ProductStock>();
+  if (productIds.length === 0) return out;
+
+  const idList = sql.join(
+    [...new Set(productIds)].map((id) => sql`${id}`),
+    sql`, `,
+  );
+
+  const res = await db.execute(sql`
+    WITH RECURSIVE req AS (
+      SELECT mi."menuItemId" AS root_id,
+             mi."inventoryItemId" AS inv_id,
+             mi."subRecipeId" AS sub_id,
+             mi."quantityRequired"::numeric AS qty,
+             0 AS depth
+      FROM "menu_item_ingredients" mi
+      WHERE mi."menuItemId" IN (${idList})
+      UNION ALL
+      SELECT r.root_id, mi."inventoryItemId", mi."subRecipeId",
+             (r.qty * mi."quantityRequired")::numeric, r.depth + 1
+      FROM req r
+      JOIN "menu_item_ingredients" mi ON mi."menuItemId" = r.sub_id
+      WHERE r.sub_id IS NOT NULL AND r.depth < 6
+    )
+    SELECT r.root_id AS id,
+           MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int AS stock,
+           BOOL_OR(ii.stock <= ii."minStock") AS low
+    FROM req r
+    JOIN "inventory_items" ii ON ii.id = r.inv_id
+    WHERE r.inv_id IS NOT NULL AND r.qty > 0
+    GROUP BY r.root_id
+  `);
+
+  for (const row of rowsOf(res)) {
+    const id = String(row.id ?? "");
+    if (!id) continue;
+    const stock = Number(row.stock ?? 0);
+    out.set(id, { stock: Number.isFinite(stock) ? stock : 0, lowStock: Boolean(row.low) });
+  }
+
+  return out;
+}

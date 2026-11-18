@@ -150,10 +150,15 @@ async function loadKdsQueue(
 
     const itemsWithNames = await Promise.all(visible.map(async (item: any) => {
       const [menuItem] = await ctx.restaurantDb.select().from(menuItems).where(eq(menuItems.id, item.menuItemId));
-      return { ...item, name: menuItem?.name ?? item.menuItemId };
+      return { ...item, name: menuItem?.name ?? item.menuItemId, kind: menuItem?.kind ?? "DISH" };
     }));
 
-    return { ...order, items: itemsWithNames };
+    // Los productos de tienda (kind = PRODUCT) no pasan por cocina: no hay nada
+    // que preparar, sólo entregar. Un pedido que sólo lleva productos no aparece
+    // en el KDS (sí en el POS y en la cuenta).
+    const kitchenItems = itemsWithNames.filter((item: any) => item.kind !== "PRODUCT");
+
+    return { ...order, items: kitchenItems };
   }));
 
   // Con estación: las comandas sin ítems para ella no se muestran.

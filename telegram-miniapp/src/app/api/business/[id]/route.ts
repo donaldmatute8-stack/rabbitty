@@ -11,6 +11,7 @@ import {
 } from '@/db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { resolveBusinessCover } from '@/lib/businessCover';
+import { getProductStockMap } from '@rabbitty/api/services/storeStock';
 
 interface BranchRecord {
   id: string;
@@ -143,11 +144,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
           itemsByCatId.get(item.categoryId)?.push(itemPayload);
         }
 
+        // ── Existencias de la tienda ──
+        // Sólo los productos controlan stock (los platillos no). Es la misma
+        // consulta que usa el admin y el invariante: receta contra inventario.
+        const productIds = items.filter((item) => item.kind === 'PRODUCT').map((item) => item.id);
+        const stockMap = productIds.length
+          ? await getProductStockMap(db, productIds).catch(() => new Map())
+          : new Map();
+
         categoriesWithItems = categories.map(cat => ({
           id: cat.id,
           name: cat.name,
           description: cat.description,
-          items: itemsByCatId.get(cat.id) || []
+          items: (itemsByCatId.get(cat.id) || []).map((item) => {
+            const stock = stockMap.get(item.id);
+            return stock
+              ? { ...item, stock: stock.stock, lowStock: stock.lowStock }
+              : item;
+          })
         }));
 
         // Fetch tables for table QR context

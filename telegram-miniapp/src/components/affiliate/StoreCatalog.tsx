@@ -72,7 +72,11 @@ export function StoreCatalog({
 
       <div className="grid grid-cols-2 gap-3">
         {products.map((product, index) => {
-          const soldOut = product.isAvailable === false;
+          // Agotado si el comercio lo ocultó o si no quedan existencias contadas.
+          const outOfStock = typeof product.stock === 'number' && product.stock <= 0;
+          const soldOut = product.isAvailable === false || outOfStock;
+          const showLeft =
+            typeof product.stock === 'number' && product.stock > 0 && Boolean(product.lowStock);
           return (
             <motion.button
               key={product.id}
@@ -129,7 +133,11 @@ export function StoreCatalog({
                     <Plus size={14} />
                   </span>
                 </div>
-                {product.maxPerOrder ? (
+                {showLeft ? (
+                  <p className="text-[9.5px] font-bold uppercase tracking-wide text-amber-300/90">
+                    Quedan {product.stock}
+                  </p>
+                ) : product.maxPerOrder ? (
                   <p className="text-[9.5px] font-bold uppercase tracking-wide text-white/35">
                     Máx. {product.maxPerOrder} por pedido
                   </p>

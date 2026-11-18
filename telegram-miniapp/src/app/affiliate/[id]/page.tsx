@@ -404,6 +404,25 @@ function AffiliateProfileContent() {
     PlatformBridge.hapticFeedback('light');
     const cartItemId = `${item.id}-${modifiers.map(m => m.id).sort().join('_')}-${notes.trim()}`;
 
+    // ── Tienda: topes antes de agregar ──
+    // El servidor también valida (nunca se confía en el cliente), pero aquí se
+    // evita que el cliente llegue a un error al confirmar.
+    const alreadyInCart = cart
+      .filter((line) => line.menuItemId === item.id)
+      .reduce((sum, line) => sum + line.quantity, 0);
+    const maxPerOrder = typeof item.maxPerOrder === 'number' ? item.maxPerOrder : null;
+    if (maxPerOrder && alreadyInCart + quantity > maxPerOrder) {
+      showToast(`Solo puedes llevar ${maxPerOrder} de ${item.name} por pedido`, 'info');
+      return;
+    }
+    if (typeof item.stock === 'number' && alreadyInCart + quantity > item.stock) {
+      showToast(
+        item.stock > 0 ? `Quedan ${item.stock} de ${item.name}` : `${item.name} está agotado`,
+        'info',
+      );
+      return;
+    }
+
     setCart(prev => {
       const existingIndex = prev.findIndex(ci => ci.id === cartItemId);
       if (existingIndex > -1) {

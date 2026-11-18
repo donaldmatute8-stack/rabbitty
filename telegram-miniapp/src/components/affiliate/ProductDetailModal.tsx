@@ -28,6 +28,9 @@ export interface CatalogItem {
   requiresShipping?: boolean | null;
   maxPerOrder?: number | null;
   sku?: string | null;
+  /** Existencias vendibles (sólo productos con receta). */
+  stock?: number | null;
+  lowStock?: boolean | null;
 }
 
 interface ProductDetailModalProps {

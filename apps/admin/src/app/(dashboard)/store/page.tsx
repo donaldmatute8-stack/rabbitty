@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
-import { Card, Badge, Button, Input, Select, toast } from "@rabbitty/ui";
+import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
 import { Package, Truck, ArrowUp, ArrowDown, Eye, EyeOff, AlertTriangle, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -40,6 +40,12 @@ export default function StorePage() {
 
   const restaurant = restaurantsQuery.data?.[0];
 
+  // ── Controlar existencias de un producto sin receta ──
+  // Reusa `inventory.createItem` + `inventory.addRecipeIngredient`: el insumo y la
+  // receta 1:1 son las piezas que ya descuentan stock al cobrar.
+  const [stockDialog, setStockDialog] = useState<{ id: string; name: string } | null>(null);
+  const [stockForm, setStockForm] = useState({ stock: 0, minStock: 2, unit: "pieza" });
+
   const [delivery, setDelivery] = useState<DeliveryConfig>({
     enabled: true,
     mode: "FLAT",
@@ -72,6 +78,9 @@ export default function StorePage() {
     onError: (error) => toast.error(error.message || "No se pudo guardar"),
   });
 
+  const createInventoryItem = trpc.inventory.createItem.useMutation();
+  const addRecipeIngredient = trpc.inventory.addRecipeIngredient.useMutation();
+
   const updateItem = trpc.admin.updateMenuItem.useMutation({
     onSuccess: () => {
       utils.admin.getStoreProducts.invalidate();
@@ -89,6 +98,32 @@ export default function StorePage() {
     const all = menuItemsQuery.data ?? [];
     return all.filter((item) => (item.kind ?? "DISH") !== "PRODUCT").slice(0, 6);
   }, [menuItemsQuery.data]);
+
+  const linkStock = async () => {
+    if (!stockDialog) return;
+    try {
+      const item = await createInventoryItem.mutateAsync({
+        name: stockDialog.name,
+        unit: stockForm.unit || "pieza",
+        stock: Number(stockForm.stock) || 0,
+        minStock: Number(stockForm.minStock) || 0,
+        costPerUnit: 0,
+      });
+      if (!item?.id) throw new Error("No se pudo crear el insumo");
+      await addRecipeIngredient.mutateAsync({
+        menuItemId: stockDialog.id,
+        inventoryItemId: item.id,
+        quantityRequired: 1,
+        unit: stockForm.unit || "pieza",
+      });
+      utils.admin.getStoreProducts.invalidate();
+      utils.inventory.getItems.invalidate();
+      toast.success("Existencias ligadas al inventario");
+      setStockDialog(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo ligar el inventario");
+    }
+  };
 
   const saveDelivery = () => {
     if (!restaurant?.id) {
@@ -220,12 +255,21 @@ export default function StorePage() {
       </Card>
 
       {/* ── Resumen de la tienda ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {[
           { label: "Publicados", value: totals?.published ?? 0, tone: "text-white" },
-          { label: "Ocultos", value: totals?.unpublished ?? 0, tone: "text-gray-300" },
           { label: "Agotados", value: totals?.outOfStock ?? 0, tone: "text-amber-400" },
           { label: "Vendidos (30 d)", value: totals?.sold30d ?? 0, tone: "text-emerald-400" },
+          {
+            label: "Ingresos (30 d)",
+            value: `$${(totals?.revenue30d ?? 0).toLocaleString("es-MX", { maximumFractionDigits: 0 })}`,
+            tone: "text-white",
+          },
+          {
+            label: "Margen (30 d)",
+            value: `$${(totals?.margin30d ?? 0).toLocaleString("es-MX", { maximumFractionDigits: 0 })}`,
+            tone: (totals?.margin30d ?? 0) >= 0 ? "text-emerald-400" : "text-red-400",
+          },
         ].map((stat) => (
           <Card key={stat.label} className="border border-white/5 bg-white/[0.03] p-5">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">{stat.label}</p>
@@ -297,6 +341,17 @@ export default function StorePage() {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {product.stock === null && (
+                      <button
+                        onClick={() => {
+                          setStockForm({ stock: 0, minStock: 2, unit: "pieza" });
+                          setStockDialog({ id: product.id, name: product.name });
+                        }}
+                        className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1.5 text-[11px] font-bold text-sky-300 hover:bg-sky-500/20"
+                      >
+                        Controlar existencias
+                      </button>
+                    )}
                     <button
                       onClick={() => move(product.id, product.sortOrder, -1)}
                       className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-gray-400 hover:text-white"
@@ -329,6 +384,52 @@ export default function StorePage() {
           </div>
         )}
       </Card>
+
+      <Dialog
+        open={Boolean(stockDialog)}
+        onClose={() => setStockDialog(null)}
+        title="Controlar existencias"
+        kicker="Inventario"
+      >
+        <div className="space-y-3">
+          <p className="text-xs leading-relaxed text-gray-400">
+            Se crea un insumo con el nombre del producto y una receta 1:1. Desde ahí, cada venta
+            descuenta una unidad del inventario (POS y app usan el mismo motor).
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <Input
+              label="Stock inicial"
+              type="number"
+              min={0}
+              value={stockForm.stock}
+              onChange={(e) => setStockForm((f) => ({ ...f, stock: Number(e.target.value) }))}
+            />
+            <Input
+              label="Mínimo"
+              type="number"
+              min={0}
+              value={stockForm.minStock}
+              onChange={(e) => setStockForm((f) => ({ ...f, minStock: Number(e.target.value) }))}
+            />
+            <Input
+              label="Unidad"
+              value={stockForm.unit}
+              onChange={(e) => setStockForm((f) => ({ ...f, unit: e.target.value.slice(0, 12) }))}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setStockDialog(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void linkStock()}
+              disabled={createInventoryItem.isPending || addRecipeIngredient.isPending}
+            >
+              {createInventoryItem.isPending || addRecipeIngredient.isPending ? "Ligando…" : "Ligar inventario"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* ── Candidatos: artículos del menú que ya son productos ── */}
       {candidates.length > 0 && (

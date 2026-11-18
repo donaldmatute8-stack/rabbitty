@@ -148,6 +148,59 @@ export async function collectInvariants({
   // (ops-scheduler), sin cron nuevo.
   out.push(await clientAppConfigInvariant());
 
+  // ── 0b. Tienda: productos publicados que se quedaron sin existencias ──
+  // Las existencias no se guardan en el producto: se derivan de la receta contra
+  // `inventory_items` (misma fuente que descuenta el POS y la app). Se avisa sólo
+  // cuando hay algo publicado y agotado; si se agotó TODO, es crítico.
+  try {
+    const res = (await restaurantDb.execute(sql.raw(`
+      WITH RECURSIVE req AS (
+        SELECT mi."menuItemId" AS root_id, mi."inventoryItemId" AS inv_id,
+               mi."subRecipeId" AS sub_id, mi."quantityRequired"::numeric AS qty, 0 AS depth
+        FROM "menu_item_ingredients" mi
+        JOIN "menu_items" p ON p.id = mi."menuItemId"
+        WHERE p."kind" = 'PRODUCT' AND p."isAvailable" = true AND p."isActive" = true
+        UNION ALL
+        SELECT r.root_id, mi."inventoryItemId", mi."subRecipeId",
+               (r.qty * mi."quantityRequired")::numeric, r.depth + 1
+        FROM req r
+        JOIN "menu_item_ingredients" mi ON mi."menuItemId" = r.sub_id
+        WHERE r.sub_id IS NOT NULL AND r.depth < 6
+      ),
+      stock AS (
+        SELECT r.root_id, MIN(FLOOR(ii.stock / NULLIF(r.qty, 0))) AS disponible
+        FROM req r JOIN "inventory_items" ii ON ii.id = r.inv_id
+        WHERE r.inv_id IS NOT NULL AND r.qty > 0
+        GROUP BY r.root_id
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM "menu_items" WHERE "kind" = 'PRODUCT' AND "isAvailable" = true AND "isActive" = true) AS publicados,
+        (SELECT COUNT(*)::int FROM stock WHERE disponible <= 0) AS agotados
+    `))) as { rows?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+    const row = (Array.isArray(res) ? res : res.rows ?? [])[0] ?? {};
+    const publicados = Number(row.publicados ?? 0);
+    const agotados = Number(row.agotados ?? 0);
+    if (publicados > 0) {
+      out.push({
+        metric: "tienda_agotados",
+        value: agotados,
+        status: agotados === 0 ? "ok" : agotados >= publicados ? "critical" : "warn",
+        detail:
+          agotados === 0
+            ? `${publicados} publicados`
+            : `${agotados} de ${publicados} publicados sin existencias`,
+      });
+    }
+  } catch (e) {
+    // Si la tabla aún no existe (migración pendiente) no se rompe el chequeo.
+    out.push({
+      metric: "tienda_agotados",
+      value: null,
+      status: "warn",
+      detail: e instanceof Error ? e.message.slice(0, 120) : "sin datos",
+    });
+  }
+
   // ── 1. Base de datos alcanzable ──
   for (const [name, db] of [
     ["db_restaurant", restaurantDb],

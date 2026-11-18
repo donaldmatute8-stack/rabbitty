@@ -9,6 +9,7 @@ import { restaurants, branches, orders, tables, staff, ledgerEntries, menuCatego
 import { referrals, users, levels, ownedBusinesses, transactions, treasury, systemSettings, auditEntries, webSessions, niches, nicheRequests, merchantCapacityAccounts } from "@rabbitty/database-core";
 import { customers } from "@rabbitty/database-restaurant/schema";
 import { miniappClient } from "../services/miniapp-client";
+import { getProductStockMap } from "../services/storeStock";
 import {
   acceptRecoveryProposal,
   getOrCreateTerms,
@@ -536,7 +537,15 @@ export const adminRouter = router({
     };
     const empty = {
       products: [] as StoreProductRow[],
-      totals: { published: 0, unpublished: 0, outOfStock: 0, sold30d: 0, revenue30d: 0 },
+      totals: {
+        published: 0,
+        unpublished: 0,
+        outOfStock: 0,
+        sold30d: 0,
+        revenue30d: 0,
+        cost30d: 0,
+        margin30d: 0,
+      },
     };
     if (!branchId) return empty;
 
@@ -551,32 +560,9 @@ export const adminRouter = router({
     const ids = rows.map((r) => r.id);
     const idList = sql.join(ids.map((id) => sql`${id}`), sql`, `);
 
-    type Row = { id: string; stock: number | null; sold: number | null; revenue: number | null };
-    const rawStock = (await ctx.restaurantDb.execute(sql`
-      WITH RECURSIVE req AS (
-        SELECT mi."menuItemId" AS root_id,
-               mi."inventoryItemId" AS inv_id,
-               mi."subRecipeId" AS sub_id,
-               mi."quantityRequired"::numeric AS qty,
-               0 AS depth
-        FROM "menu_item_ingredients" mi
-        WHERE mi."menuItemId" IN (${idList})
-        UNION ALL
-        SELECT r.root_id, mi."inventoryItemId", mi."subRecipeId",
-               (r.qty * mi."quantityRequired")::numeric, r.depth + 1
-        FROM req r
-        JOIN "menu_item_ingredients" mi ON mi."menuItemId" = r.sub_id
-        WHERE r.sub_id IS NOT NULL AND r.depth < 6
-      )
-      SELECT r.root_id AS id, MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int AS stock
-      FROM req r
-      JOIN "inventory_items" ii ON ii.id = r.inv_id
-      WHERE r.inv_id IS NOT NULL AND r.qty > 0
-      GROUP BY r.root_id
-    `)) as unknown;
-    const stockRows = (Array.isArray(rawStock)
-      ? rawStock
-      : (rawStock as { rows?: unknown[] })?.rows ?? []) as Array<{ id: string; stock: number | null }>;
+    // Existencias: misma consulta que usa el catálogo del cliente y los
+    // invariantes (una sola implementación de la receta contra inventario).
+    const stockMap = await getProductStockMap(ctx.restaurantDb, ids);
 
     const rawSales = (await ctx.restaurantDb.execute(sql`
       SELECT oi."menuItemId" AS id,
@@ -593,11 +579,11 @@ export const adminRouter = router({
       ? rawSales
       : (rawSales as { rows?: unknown[] })?.rows ?? []) as Array<{ id: string; sold: number | null; revenue: number | null }>;
 
-    const stockById = new Map(stockRows.map((r) => [r.id, r.stock]));
     const salesById = new Map(salesRows.map((r) => [r.id, r]));
 
     const products: StoreProductRow[] = rows.map((row) => {
-      const stock = stockById.get(row.id);
+      const stockInfo = stockMap.get(row.id);
+      const stock = stockInfo ? stockInfo.stock : null;
       const sales = salesById.get(row.id);
       return {
         id: row.id,
@@ -612,7 +598,8 @@ export const adminRouter = router({
         isAvailable: row.isAvailable,
         sortOrder: row.sortOrder,
         /** null = el producto no controla existencias (sin receta) */
-        stock: typeof stock === "number" ? stock : null,
+        stock,
+        lowStock: stockInfo?.lowStock ?? false,
         sold30d: Number(sales?.sold ?? 0),
         revenue30d: Number(sales?.revenue ?? 0),
       };
@@ -625,10 +612,21 @@ export const adminRouter = router({
         if (p.stock !== null && p.stock <= 0) acc.outOfStock += 1;
         acc.sold30d += p.sold30d;
         acc.revenue30d += p.revenue30d;
+        // Margen con el costo actual del producto (referencia contable).
+        acc.cost30d += p.sold30d * p.cost;
         return acc;
       },
-      { published: 0, unpublished: 0, outOfStock: 0, sold30d: 0, revenue30d: 0 },
+      {
+        published: 0,
+        unpublished: 0,
+        outOfStock: 0,
+        sold30d: 0,
+        revenue30d: 0,
+        cost30d: 0,
+        margin30d: 0,
+      },
     );
+    totals.margin30d = totals.revenue30d - totals.cost30d;
 
     return { products, totals };
   }),
