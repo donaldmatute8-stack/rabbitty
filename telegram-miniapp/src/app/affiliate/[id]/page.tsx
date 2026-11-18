@@ -798,8 +798,8 @@ function AffiliateProfileContent() {
                 }}
                 className={`h-9 px-3.5 rounded-full flex items-center gap-2 text-xs font-black shadow-lg border backdrop-blur-xl transition-all active:scale-95 cursor-pointer ${
                   hasPresenceCheckedIn
-                    ? 'bg-emerald-500/90 text-white border-emerald-400/40 shadow-[0_4px_16px_rgba(16,185,129,0.35)]'
-                    : 'bg-black/65 hover:bg-black/85 text-white border-white/20 hover:border-pink-500/60 shadow-[0_4px_16px_rgba(0,0,0,0.5)]'
+                    ? 'bg-[var(--surface-2)] text-[var(--success)] border-[var(--success)]/30'
+                    : 'bg-[var(--surface-2)] hover:bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:border-[var(--rabbitty-pink)]/40'
                 }`}
               >
                 <span className={`inline-block w-2 h-2 rounded-full ${hasPresenceCheckedIn ? 'bg-white' : 'bg-[var(--rabbitty-pink)] animate-ping'}`} />
@@ -811,9 +811,9 @@ function AffiliateProfileContent() {
             {tableNumber && (
               <button
                 onClick={() => setShowTableSheet(true)}
-                className="h-9 px-3.5 bg-gradient-to-r from-purple-600/90 to-indigo-600/90 backdrop-blur-xl text-white rounded-full flex items-center gap-1.5 text-xs font-black shadow-[0_4px_16px_rgba(147,51,234,0.35)] border border-purple-400/40 active:scale-95 transition-transform cursor-pointer"
+                className="h-9 px-3.5 bg-[var(--surface-2)] backdrop-blur-xl text-white rounded-full flex items-center gap-1.5 text-xs font-black border border-[var(--border-default)] active:scale-95 transition-transform cursor-pointer"
               >
-                <Utensils size={13} className="text-purple-200" />
+                <Utensils size={13} className="text-[var(--text-secondary)]" />
                 <span>Mesa #{tableNumber}</span>
               </button>
             )}
@@ -824,7 +824,7 @@ function AffiliateProfileContent() {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', delay: 0.15 }}
-            className="h-9 bg-linear-to-r from-[var(--rabbitty-pink)] to-[var(--rabbitty-pink-dark)] text-white px-3.5 rounded-full flex items-center gap-1.5 shadow-[0_4px_16px_rgba(233,30,99,0.35)] border border-white/25 shrink-0"
+            className="h-9 bg-[image:var(--brand-gradient)] text-white px-3.5 rounded-full flex items-center gap-1.5 border border-white/20 shrink-0"
           >
             <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             <span className="font-black text-sm">+{affiliate.rewardPercentage}%</span>
@@ -835,89 +835,52 @@ function AffiliateProfileContent() {
 
       {/* Content Container (Card Overlap) */}
       <div className="relative bg-[var(--bg-primary)] rounded-t-[36px] -mt-8 px-5 pt-6 pb-20 border-t border-white/10 shadow-2xl space-y-5">
-        {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
-        <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => {
-              PlatformBridge.hapticFeedback('medium');
-              // 1era opción automática: abre nuestro mapa interactivo
-              router.push(`/?tab=Freehands&affiliate=${affiliate.id}`);
-            }}
-            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-[var(--rabbitty-pink)]/15 text-[var(--rabbitty-pink-light)] border border-[var(--rabbitty-pink)]/30 flex items-center justify-center shadow-sm">
-              <Navigation size={18} />
-            </div>
-            <span className="text-[10px] font-black text-white/90 tracking-tight">Llegar</span>
-          </motion.button>
-
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => {
-              PlatformBridge.hapticFeedback('medium');
-              setShowMoodCheckIn(true);
-            }}
-            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center shadow-sm">
-              <Sparkles size={18} />
-            </div>
-            <span className="text-[10px] font-black text-amber-400 tracking-tight">Mood</span>
-          </motion.button>
-
-          {capabilities.tableServiceEnabled && tables.length > 0 ? (
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => setShowTableSheet(true)}
-              className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center justify-center shadow-sm">
-                <QrCode size={18} />
-              </div>
-              <span className="text-[10px] font-black text-white/90 tracking-tight">
-                {tableNumber ? `#${tableNumber}` : 'Mesa'}
-              </span>
-            </motion.button>
-          ) : (
-            <div className="flex flex-col items-center gap-1.5 py-1.5 px-1 opacity-30 pointer-events-none">
-              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500">
-                <QrCode size={18} />
-              </div>
-              <span className="text-[10px] font-bold text-gray-500">Mesa</span>
-            </div>
-          )}
-
-          <motion.button
-            whileTap={{ scale: 0.94 }}
-            onClick={() => setShowMessageSelector(true)}
-            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
-          >
-            <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-orange-400 border border-orange-500/30 flex items-center justify-center shadow-sm">
-              <MessageCircle size={18} />
-            </div>
-            <span className="text-[10px] font-black text-white/90 tracking-tight">Mensaje</span>
-          </motion.button>
-        </div>
-
         {/* Tu favorito (se aprende de tus pedidos) */}
         {favoriteProduct && (
-          <div className="mx-1 mb-2 flex items-center justify-between gap-2 rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-2">
+          <div className="mx-1 mb-2 flex items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-1)] px-3 py-2">
             <div className="min-w-0">
-              <p className="m-0 text-[9px] font-black uppercase tracking-wider text-fuchsia-300/80">Tu favorito aquí</p>
+              <p className="m-0 text-[9px] font-black uppercase tracking-wider text-[var(--text-muted)]">Tu favorito aquí</p>
               <p className="m-0 truncate text-[12.5px] font-bold text-white">{favoriteProduct.label}</p>
             </div>
             {favoriteItem && (
               <button
                 type="button"
                 onClick={() => handleAddToCart(favoriteItem, 1, [], '')}
-                className="shrink-0 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 px-3 py-1.5 text-[11px] font-black text-fuchsia-200 active:scale-95 transition-transform"
+                className="shrink-0 rounded-full bg-[image:var(--brand-gradient)] px-3 py-1.5 text-[11px] font-black text-white active:scale-95 transition-transform"
               >
                 Lo de siempre
               </button>
             )}
           </div>
         )}
+
+
+        {/* ── Identidad: qué es, si está abierto, cuánto devuelve ── */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${
+              openNow ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'
+            }`}>
+              ● {openNow ? 'Abierto ahora' : 'Cerrado'}
+            </span>
+            {affiliate.category && (
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                {affiliate.category}
+              </span>
+            )}
+            {affiliate.startTime && affiliate.endTime && (
+              <span className="text-[10px] font-bold text-[var(--text-muted)]">
+                {affiliate.startTime}–{affiliate.endTime}
+              </span>
+            )}
+          </div>
+          <h1 className="m-0 text-[26px] font-black leading-tight tracking-tight text-[var(--text-primary)]">
+            {affiliate.name}
+          </h1>
+          <p className="m-0 text-[13px] font-bold text-[var(--text-secondary)]">
+            Devuelve <span className="text-[var(--rabbitty-pink)]">+{affiliate.rewardPercentage}% en Bunz</span> en cada consumo
+          </p>
+        </div>
 
         {/* Interactive Segmented Experience Tabs */}
         <div className="sticky top-[calc(max(var(--safe-top,0px),env(safe-area-inset-top,0px))+56px)] z-30 -mx-1 px-1 py-1 bg-[var(--bg-primary)]/95 backdrop-blur-xl">
@@ -929,7 +892,7 @@ function AffiliateProfileContent() {
               }}
               className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 activeTab === 'menu'
-                  ? 'bg-gradient-to-r from-[var(--rabbitty-pink-light)] to-[var(--rabbitty-pink)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
+                  ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -944,7 +907,7 @@ function AffiliateProfileContent() {
                 }}
                 className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   activeTab === 'tienda'
-                    ? 'bg-gradient-to-r from-[var(--rabbitty-pink-light)] to-[var(--rabbitty-pink)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
+                    ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
                     : 'text-white/60 hover:text-white'
                 }`}
               >
@@ -959,7 +922,7 @@ function AffiliateProfileContent() {
               }}
               className={`py-2.5 rounded-xl text-xs font-black tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 activeTab === 'info'
-                  ? 'bg-gradient-to-r from-[var(--rabbitty-pink-light)] to-[var(--rabbitty-pink)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
+                  ? 'bg-[image:var(--brand-gradient)] text-white shadow-md shadow-[var(--rabbitty-pink)]/30'
                   : 'text-white/60 hover:text-white'
               }`}
             >
@@ -996,6 +959,73 @@ function AffiliateProfileContent() {
         )}
 
         {/* Tab 2: Sucursal, Ubicación, Happy Hour & Galería */}
+        {activeTab === 'info' && (
+          <div className="space-y-5">
+        {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
+        <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('medium');
+              // 1era opción automática: abre nuestro mapa interactivo
+              router.push(`/?tab=Freehands&affiliate=${affiliate.id}`);
+            }}
+            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-1)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center">
+              <Navigation size={18} />
+            </div>
+            <span className="text-[10px] font-black text-white/90 tracking-tight">Llegar</span>
+          </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => {
+              PlatformBridge.hapticFeedback('medium');
+              setShowMoodCheckIn(true);
+            }}
+            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-1)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center">
+              <Sparkles size={18} />
+            </div>
+            <span className="text-[10px] font-black text-[var(--text-secondary)] tracking-tight">Mood</span>
+          </motion.button>
+
+          {capabilities.tableServiceEnabled && tables.length > 0 ? (
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={() => setShowTableSheet(true)}
+              className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-[var(--surface-1)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center">
+                <QrCode size={18} />
+              </div>
+              <span className="text-[10px] font-black text-white/90 tracking-tight">
+                {tableNumber ? `#${tableNumber}` : 'Mesa'}
+              </span>
+            </motion.button>
+          ) : (
+            <div className="flex flex-col items-center gap-1.5 py-1.5 px-1 opacity-30 pointer-events-none">
+              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500">
+                <QrCode size={18} />
+              </div>
+              <span className="text-[10px] font-bold text-gray-500">Mesa</span>
+            </div>
+          )}
+
+          <motion.button
+            whileTap={{ scale: 0.94 }}
+            onClick={() => setShowMessageSelector(true)}
+            className="flex flex-col items-center gap-1.5 py-1.5 px-1 rounded-xl transition-all hover:bg-white/5 active:opacity-80 border-none bg-transparent cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[var(--surface-1)] text-[var(--text-secondary)] border border-[var(--border-subtle)] flex items-center justify-center">
+              <MessageCircle size={18} />
+            </div>
+            <span className="text-[10px] font-black text-white/90 tracking-tight">Mensaje</span>
+          </motion.button>
+        </div>
+
         {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ──
             H-PRESYNC: se oculta si ya estás checkeado (no puedes "planeo ir"
             cuando ya te registraste aquí), y muestra tu estado hidratado. */}
@@ -1051,8 +1081,7 @@ function AffiliateProfileContent() {
         {/* ── Membresías del negocio (marketplace compacto) ── */}
         <MembershipMarketplace businessId={id} compact />
 
-        {activeTab === 'info' && (
-          <div className="space-y-5">
+
             {/* Happy Hour Bunz Highlight */}
             <div className="p-4 bg-linear-to-br from-[var(--rabbitty-pink)]/15 to-[var(--rabbitty-pink-dark)]/10 rounded-3xl border border-[var(--rabbitty-pink)]/25 space-y-2">
               <h4 className="text-sm font-black text-[var(--rabbitty-pink-light)] flex items-center gap-2">

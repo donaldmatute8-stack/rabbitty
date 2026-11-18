@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn, Button, Dialog, toast } from "@rabbitty/ui";
-import { LayoutDashboard, Banknote, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Clock, Salad, Truck, Receipt, CreditCard, ReceiptText, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut, Zap, UtensilsCrossed, TrendingUp, TabletSmartphone, TerminalSquare, Crown, Scale, Rocket, Gamepad2, BarChart3, Star, ShieldCheck, Activity, Brain, FlaskConical, Compass, BookOpen, MessageSquarePlus, Ticket, Route, FileSearch, ShoppingCart } from "lucide-react";
+import { CircleDollarSign, LayoutDashboard, Banknote, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Clock, Salad, Truck, Receipt, CreditCard, ReceiptText, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut, Zap, UtensilsCrossed, TrendingUp, TabletSmartphone, TerminalSquare, Crown, Scale, Rocket, Gamepad2, BarChart3, Star, ShieldCheck, Activity, Brain, FlaskConical, Compass, BookOpen, MessageSquarePlus, Ticket, Route, FileSearch, ShoppingCart } from "lucide-react";
 import { useSidebar, useBranch } from "./DashboardClientWrapper";
 import RestaurantSwitcher from "./RestaurantSwitcher";
 import { AdminFeedbackModal } from "./AdminFeedbackModal";
@@ -156,14 +156,29 @@ const menuPillars: MenuPillar[] = [
       { href: "/staff/shifts", label: "Turnos y Reloj", icon: Clock },
       { href: "/table-layout", label: "Mapa de Mesas", icon: Table2 },
       { href: "/reservations", label: "Reservaciones", icon: BookUser },
-      { href: "/reports", label: "Reportes & Ingresos", icon: TrendingUp },
       { href: "/ratings", label: "Reputación de Servicio", icon: Star },
-      { href: "/reports/audit", label: "Cuadre & Auditoría", icon: ReceiptText, badge: "PDF" },
-      { href: "/cash-shifts", label: "Turnos de Caja", icon: Banknote },
       { href: "/settings/terminals", label: "Terminales POS", icon: TabletSmartphone },
       { href: "/settings/checkin", label: "Reloj checador", icon: Clock },
+    ],
+  },
+  {
+    // ── Dinero: una sola puerta para la contabilidad ──
+    // Antes estas siete entradas estaban repartidas entre Operación y
+    // Configuración. Siguen siendo páginas distintas (cada una responde una
+    // pregunta), pero se leen como un bloque: daily / cierre / fiscal.
+    id: "money",
+    title: "Dinero & Contabilidad",
+    icon: Banknote,
+    items: [
+      { href: "/money", label: "Resumen de dinero", icon: CircleDollarSign, badge: "Hub" },
+      { href: "/cash-shifts", label: "Turnos de Caja", icon: Banknote },
+      { href: "/reports", label: "Reportes & Ingresos", icon: TrendingUp },
+      { href: "/reports/audit", label: "Cuadre & Auditoría", icon: ReceiptText, badge: "PDF" },
+      { href: "/refunds", label: "Reembolsos & Ajustes", icon: Repeat },
+      { href: "/expenses", label: "Gastos Operativos", icon: Receipt },
+      { href: "/conciliaciones", label: "Conciliaciones", icon: Scale },
+      { href: "/payments", label: "Rieles de cobro", icon: CreditCard },
       { href: "/settings/billing", label: "Facturación CFDI", icon: Receipt },
-      { href: "/refunds", label: "Reembolsos & Pagos", icon: Repeat },
     ],
   },
   {
@@ -177,8 +192,6 @@ const menuPillars: MenuPillar[] = [
       { href: "/inventory", label: "Inventario & Stock", icon: Package },
       { href: "/purchases", label: "Órdenes de compra", icon: ShoppingCart, badge: "Nuevo" },
       { href: "/suppliers", label: "Proveedores", icon: Truck },
-      { href: "/payments", label: "Rieles de cobro", icon: CreditCard },
-      { href: "/expenses", label: "Gastos Operativos", icon: Receipt },
       { href: "/pricing", label: "Precios Dinámicos", icon: DollarSign },
       { href: "/menu-boards", label: "Menú Digital TV", icon: Monitor },
     ],
@@ -191,7 +204,6 @@ const menuPillars: MenuPillar[] = [
       { href: "/loyalty", label: "Cashback Bunz", icon: Award },
       { href: "/memberships", label: "Membresías & Planes", icon: Ticket, badge: "Nuevo" },
       { href: "/niches", label: "Expansión a nichos", icon: Compass, badge: "Nuevo" },
-      { href: "/conciliaciones", label: "Conciliaciones", icon: Scale },
       { href: "/catering", label: "Eventos & Catering", icon: CalendarCheck },
       { href: "/academy", label: "Guías & Academy", icon: BookOpen, badge: "Docs" },
       { href: "/operations-manual", label: "Manual Operativo & Caja", icon: BookOpen, badge: "PDF" },
