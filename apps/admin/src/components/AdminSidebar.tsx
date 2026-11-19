@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn, Button, Dialog, toast } from "@rabbitty/ui";
-import { CircleDollarSign, LayoutDashboard, Banknote, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Clock, Salad, Truck, Receipt, CreditCard, ReceiptText, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut, Zap, UtensilsCrossed, TrendingUp, TabletSmartphone, TerminalSquare, Crown, Scale, Rocket, Gamepad2, BarChart3, Star, ShieldCheck, Activity, Brain, FlaskConical, Compass, BookOpen, MessageSquarePlus, Ticket, Route, FileSearch, ShoppingCart } from "lucide-react";
+import { CircleDollarSign, Percent, LayoutDashboard, Banknote, Store, Users, Settings, ChefHat, ClipboardList, Package, Printer, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Clock, Salad, Truck, Receipt, CreditCard, ReceiptText, CalendarCheck, DollarSign, Monitor, Award, Gift, Megaphone, Cake, Repeat, QrCode, BookUser, Table2, Webhook, UserRound, LogOut, Zap, UtensilsCrossed, TrendingUp, TabletSmartphone, TerminalSquare, Crown, Scale, Rocket, Gamepad2, BarChart3, Star, ShieldCheck, Activity, Brain, FlaskConical, Compass, BookOpen, MessageSquarePlus, Ticket, Route, FileSearch, ShoppingCart } from "lucide-react";
 import { useSidebar, useBranch } from "./DashboardClientWrapper";
 import RestaurantSwitcher from "./RestaurantSwitcher";
 import { AdminFeedbackModal } from "./AdminFeedbackModal";
@@ -83,6 +83,7 @@ const godPillars: MenuPillar[] = [
       { href: "/god/ruta", label: "Ruta & Historial", icon: Route, badge: "Nuevo" },
       { href: "/god/validacion", label: "Validación económica", icon: FileSearch },
       { href: "/god/tenants", label: "Tenants & Vista Prueba", icon: Store },
+      { href: "/god/comisiones", label: "Comisión de plataforma", icon: Percent, badge: "God" },
     ],
   },
   {

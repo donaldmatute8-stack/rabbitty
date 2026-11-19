@@ -1,7 +1,7 @@
 import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import crypto from "crypto";
-import { and, eq, sql, desc, gte, inArray, lt } from "drizzle-orm";
+import { and, eq, sql, desc, gte, inArray, lt, asc } from "drizzle-orm";
 import { router, godAdminProcedure } from "../trpc";
 import {
   users,
@@ -153,6 +153,89 @@ export const godRouter = router({
       };
     });
   }),
+
+  /**
+   * ── Comisión de plataforma (solo God) ─────────────────────────────────────
+   *
+   * Es ingreso de Rabbitty, no una preferencia del inquilino: por eso **no** vive
+   * en `updateRestaurant` (el afiliado podría ponerla en 0). El comercio la ve en
+   * su panel sólo como lectura; encenderla o cambiarla es decisión de plataforma,
+   * y debe existir en su anexo económico antes de activarla.
+   */
+  listPlatformCommissions: godAdminProcedure.query(async ({ ctx }) => {
+    const rows = await ctx.restaurantDb
+      .select({
+        restaurantId: restaurants.id,
+        businessId: restaurants.businessId,
+        name: restaurants.name,
+        platformCommission: restaurants.platformCommission,
+      })
+      .from(restaurants)
+      .orderBy(asc(restaurants.name));
+
+    const bizRows = await ctx.coreDb
+      .select({ id: ownedBusinesses.id, name: ownedBusinesses.name, status: ownedBusinesses.status })
+      .from(ownedBusinesses);
+    const bizById = new Map(bizRows.map((b) => [b.id, b]));
+
+    return rows.map((r) => {
+      const cfg = (r.platformCommission ?? {}) as {
+        enabled?: boolean;
+        pct?: number;
+        appliesTo?: string;
+        minFeeMxn?: number;
+        notes?: string;
+      };
+      return {
+        restaurantId: r.restaurantId,
+        businessId: r.businessId,
+        businessName: bizById.get(r.businessId)?.name ?? r.name,
+        status: bizById.get(r.businessId)?.status ?? null,
+        enabled: cfg.enabled === true,
+        pct: typeof cfg.pct === "number" ? cfg.pct : 0.038,
+        appliesTo: cfg.appliesTo === "ALL" ? "ALL" : "APP_ORDERS",
+        minFeeMxn: cfg.minFeeMxn ?? 0,
+        notes: cfg.notes ?? "",
+      };
+    });
+  }),
+
+  setPlatformCommission: godAdminProcedure
+    .input(
+      z.object({
+        restaurantId: z.string(),
+        enabled: z.boolean(),
+        pct: z.number().min(0).max(0.3),
+        appliesTo: z.enum(["APP_ORDERS", "ALL"]).default("APP_ORDERS"),
+        minFeeMxn: z.number().min(0).max(500).default(0),
+        notes: z.string().max(200).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [rest] = await ctx.restaurantDb
+        .select({ id: restaurants.id })
+        .from(restaurants)
+        .where(eq(restaurants.id, input.restaurantId))
+        .limit(1);
+      if (!rest) throw new TRPCError({ code: "NOT_FOUND", message: "Restaurante no encontrado" });
+
+      await ctx.restaurantDb
+        .update(restaurants)
+        .set({
+          platformCommission: {
+            enabled: input.enabled,
+            pct: input.pct,
+            appliesTo: input.appliesTo,
+            minFeeMxn: input.minFeeMxn,
+            notes: input.notes ?? "",
+            updatedBy: "god",
+            updatedAt: new Date().toISOString(),
+          },
+        })
+        .where(eq(restaurants.id, input.restaurantId));
+
+      return { success: true };
+    }),
 
   // ── Link de re-onboarding de un afiliado existente (token de un solo uso) ──
   createReonboardingLink: godAdminProcedure

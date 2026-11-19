@@ -829,17 +829,6 @@ export const adminRouter = router({
           })
           .nullable()
           .optional(),
-        // ── Comisión de plataforma (marketplace, NO el excedente del riel) ──
-        platformCommission: z
-          .object({
-            enabled: z.boolean().optional(),
-            pct: z.number().min(0).max(0.3).optional(),
-            appliesTo: z.enum(["APP_ORDERS", "ALL"]).optional(),
-            minFeeMxn: z.number().min(0).max(500).optional(),
-            notes: z.string().max(200).optional(),
-          })
-          .nullable()
-          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

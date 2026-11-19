@@ -30,8 +30,12 @@ un aviso.
 
 ## Dónde se configura y se ve
 
-- **Admin → Tienda & Envíos**: tarjeta *Comisión de plataforma* (sobre qué se cobra,
-  %, mínimo por venta, activar) + comisión de 30 días, del mes y ventas gravadas.
+- **Admin → God · Comisión de plataforma** (`/god/comisiones`): **único lugar donde
+  se edita** (activar, %, alcance y mínimo por negocio). Es ingreso de Rabbitty: si
+  viviera en el panel del comercio, el afiliado podría ponerla en 0.
+- **Admin → Tienda & Envíos** (comercio): la misma tarjeta pero **solo lectura**
+  (tarifa vigente, comisión de 30 días, del mes y ventas gravadas) para que sepa
+  qué paga.
 - **Admin → Dinero (hub)**: tarjeta *Comisión plataforma (30 d)* junto a ventas.
 - **Conciliación de pagos**: el 1 % del riel sigue separado (`platformFeeMxn`).
 
@@ -50,7 +54,10 @@ proximidad, mood, descubrimiento). Un número defendible y competitivo es
 el costo total del comercio queda en **3–4 % en tarjeta** y **2–3 % en efectivo** —
 muy por debajo de una app de delivery y alineado con un POS moderno.
 
-**Recomendación:** `pct = 0.025` (2.5 %), `appliesTo = APP_ORDERS`, `minFeeMxn = 0`.
+**Tarifa de la casa: `3.8 %`** (`pct = 0.038`) sobre pedidos de la app, Bunz exento,
+sin mínimo por venta. El 8 es el número simbólico de Rabbitty; queda alineado con
+la banda 2–4 % que hace competitivo el modelo frente a delivery (20–30 %) y por
+encima del POS puro (0 %).
 
 ## Lo que falta para cobrarla de verdad
 
