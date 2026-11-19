@@ -37,6 +37,9 @@ expediente privado de la empresa.
 | 11 | Plan de depuración sandbox (Ka13 / Bull Box) | Listo para ejecutar | Operaciones | Autorizar y ejecutar |
 | 12 | Anexo A · Plantilla 626 post-reset | Plantilla | Legal + económico | Llenar tras re-onboarding |
 | 13 | Checklist corporativo interno | Interno | Fundador | Anexar documentos en privado |
+| 14 | Informe de observaciones (rev. 2, `2026-11-19.2`) | Actualizado | Abogado | Dictamen por materia |
+| 15 | Expediente técnico-jurídico de Bunz | Listo para el despacho | Abogado regulatorio | Padrón fiscal completo y universo del 20 % |
+| 16 | Matriz de tratamientos de datos | Borrador | Privacidad + legal | Cotejar con contratos y confirmar regiones |
 
 ---
 
@@ -63,13 +66,13 @@ de la corrección está en los documentos 06 y 07.
 
 ## 4. Orden sugerido de cierre
 
-1. Publicar el aviso de privacidad v1.0 en URL estable (G6).
+1. Verificar la publicación en **ambas** superficies (versión + hash servidos).
 2. Ejecutar el procedimiento ARCO con un caso controlado.
 3. Enviar solicitudes DPA (documento 05) y archivar respuestas.
-4. Corregir G1, G2 y G3–G5.
-5. Correr la prueba E2E de evidencia (documento 07).
+4. Completar el padrón fiscal de afiliados y el universo del 20 % (documento 15).
+5. Cotejar la matriz de tratamientos con los contratos firmados (documento 16).
 6. Entregar al contador el documento 09 con los cortes de ledger.
-7. Entregar al abogado regulatorio el documento 10.
+7. Entregar al abogado regulatorio los documentos 10, 14, 15 y 16.
 
 ---
 
