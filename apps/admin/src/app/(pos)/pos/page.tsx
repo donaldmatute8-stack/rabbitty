@@ -6179,41 +6179,44 @@ export default function PosPage() {
                           </button>
                         </div>
 
-                        {/* Membresía + rechazo: dos acciones que antes no existían
-                            para cuentas abiertas de la app. */}
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* Membresía: SOLO si esta cuenta tiene un Rabbitter
+                            vinculado (seleccionado, escaneado o pedido desde la
+                            app). No es una acción de vinculación: vive aparte
+                            para que no se confunda con "Agregar más". */}
+                        {tab.customer?.id ? (
                           <button
                             type="button"
                             onClick={() => void openTabMembership(tab)}
-                            disabled={!tab.customer?.id}
-                            className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-500/30 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
-                            title="Leer la membresía del Rabbitter y decidir si se usa"
+                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-500/30 text-xs font-black cursor-pointer active:scale-95 transition-transform"
+                            title="Leer la membresía del Rabbitter y decidir si se usa en este cobro"
                           >
                             <Ticket className="h-4 w-4" />
-                            Membresía
+                            Usar membresía de {String(tab.customer.name || "Rabbitter").split(" ")[0]}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRejectCode("OUT_OF_STOCK");
-                              setRejectNote("");
-                              setRejectTarget({
-                                orderId: tab.orderId,
-                                label: tab.tableNumber
-                                  ? `Mesa #${tab.tableNumber}`
-                                  : tab.orderType === "TO_GO"
-                                  ? "Para Llevar"
-                                  : tab.orderType,
-                                total: Number(tab.total ?? 0),
-                              });
-                            }}
-                            disabled={rejectOrderMutation.isPending}
-                            className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
-                          >
-                            <Ban className="h-4 w-4" />
-                            Rechazar
-                          </button>
-                        </div>
+                        ) : null}
+
+                        {/* Rechazo: disponible para pedidos que aún no se cobran. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRejectCode("OUT_OF_STOCK");
+                            setRejectNote("");
+                            setRejectTarget({
+                              orderId: tab.orderId,
+                              label: tab.tableNumber
+                                ? `Mesa #${tab.tableNumber}`
+                                : tab.orderType === "TO_GO"
+                                ? "Para Llevar"
+                                : tab.orderType,
+                              total: Number(tab.total ?? 0),
+                            });
+                          }}
+                          disabled={rejectOrderMutation.isPending}
+                          className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/25 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
+                        >
+                          <Ban className="h-4 w-4" />
+                          Rechazar pedido
+                        </button>
                       </div>
                     );
                   })()}
