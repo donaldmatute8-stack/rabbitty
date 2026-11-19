@@ -333,7 +333,27 @@ export const expensesRouter = router({
         .where(revenueWhere);
 
       const totalRevenue = revenue[0]?.total ?? 0;
-      const totalExpenses = expenseList.reduce((sum, e) => sum + e.amount, 0);
+
+      // ── Comisión de plataforma como costo ──
+      // Es dinero que el comercio no se queda: si no entra al P&L, el margen sale
+      // inflado. Se lee de las órdenes (tarifa congelada al vender).
+      let platformCommission = 0;
+      try {
+        const commissionRows = (await ctx.restaurantDb.execute(sql`
+          SELECT COALESCE(SUM("commissionCents"), 0) AS cents
+          FROM "orders"
+          WHERE "branchId" = ${ctx.staffRole ? ctx.staffBranchId : ctx.branchId}
+            AND "commissionCents" > 0
+            AND "createdAt" >= ${start.toISOString()}
+            AND "createdAt" < ${end.toISOString()}
+        `)) as { rows?: Array<{ cents: string | number | null }> } | Array<{ cents: string | number | null }>;
+        const rows = Array.isArray(commissionRows) ? commissionRows : commissionRows.rows ?? [];
+        platformCommission = Number(rows[0]?.cents ?? 0) / 100;
+      } catch {
+        /* si la columna no existe (migración pendiente), no se altera el P&L */
+      }
+
+      const totalExpenses = expenseList.reduce((sum, e) => sum + e.amount, 0) + platformCommission;
 
       const byCategory = EXPENSE_CATEGORIES.map((cat) => ({
         category: cat,
@@ -348,6 +368,7 @@ export const expensesRouter = router({
         netProfit: totalRevenue - totalExpenses,
         margin: totalRevenue > 0 ? ((totalRevenue - totalExpenses) / totalRevenue) * 100 : 0,
         byCategory,
+        platformCommission,
         totalTransactions: expenseList.length,
       };
     }),

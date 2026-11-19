@@ -23,7 +23,7 @@ import {
   wishlistGifts,
   wishlistItems,
 } from "@rabbitty/database-core";
-import { ledgerEntries, rabbitterScoreShadow } from "@rabbitty/database-restaurant/schema";
+import { ledgerEntries, rabbitterScoreShadow, platformCommissionHistory } from "@rabbitty/database-restaurant/schema";
 import {
   restaurants,
   branches,
@@ -219,6 +219,15 @@ export const godRouter = router({
         .limit(1);
       if (!rest) throw new TRPCError({ code: "NOT_FOUND", message: "Restaurante no encontrado" });
 
+      const [before] = await ctx.restaurantDb
+        .select({ businessId: restaurants.businessId })
+        .from(restaurants)
+        .where(eq(restaurants.id, input.restaurantId))
+        .limit(1);
+
+      const actorId = ctx.userId ?? null;
+      const actorEmail = ctx.user?.email ?? null;
+
       await ctx.restaurantDb
         .update(restaurants)
         .set({
@@ -228,11 +237,29 @@ export const godRouter = router({
             appliesTo: input.appliesTo,
             minFeeMxn: input.minFeeMxn,
             notes: input.notes ?? "",
-            updatedBy: "god",
+            updatedBy: actorEmail ?? actorId ?? "god",
             updatedAt: new Date().toISOString(),
           },
         })
         .where(eq(restaurants.id, input.restaurantId));
+
+      // Bitácora: quién cambió la tarifa y a qué valor. Sin esto, un cambio de
+      // 3.8 % a 0.5 % no dejaba rastro.
+      await ctx.restaurantDb
+        .insert(platformCommissionHistory)
+        .values({
+          restaurantId: input.restaurantId,
+          businessId: before?.businessId ?? null,
+          enabled: input.enabled,
+          pct: input.pct,
+          appliesTo: input.appliesTo,
+          minFeeMxn: input.minFeeMxn,
+          actorId,
+          actorEmail,
+        })
+        .catch((auditErr: unknown) => {
+          console.warn("[god] no se pudo registrar la bitácora de comisión:", auditErr);
+        });
 
       return { success: true };
     }),

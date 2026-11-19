@@ -22,6 +22,9 @@
  * - `ALL`: todo pedido con parte en dinero.
  */
 
+import { eq } from "drizzle-orm";
+import { orders, branches, restaurants } from "@rabbitty/database-restaurant/schema";
+
 export type CommissionAppliesTo = "APP_ORDERS" | "ALL";
 
 export interface PlatformCommissionConfig {
@@ -83,9 +86,55 @@ export function computePlatformCommission({
 
   const raw = Math.round(baseCents * pct);
   const minCents = toCents((config.minFeeMxn ?? 0) * 100);
-  const cents = Math.max(raw, minCents);
+  // El mínimo nunca puede superar la base: cobrar más comisión que el monto de la
+  // venta es un error de negocio (y de contrato).
+  const cents = Math.min(Math.max(raw, minCents), baseCents);
 
   return { baseCents, pct, cents };
+}
+
+/**
+ * Calcula la comisión de una orden ya existente y devuelve el "patch" listo para
+ * escribir en `orders`. Vive aquí para que **los dos** cierres del POS (cobro
+ * normal y cobro dividido) usen exactamente la misma regla.
+ *
+ * `fromApp` se deduce del `customerId`: un pedido que nació en la app y se cobró en
+ * caja sí genera comisión; la venta de mostrador a un cliente nuevo, no.
+ */
+export async function buildOrderCommissionPatch(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  orderId: string,
+): Promise<{ commissionBaseCents: number; commissionPct: number; commissionCents: number }> {
+  const [row] = await tx
+    .select({
+      platformCommission: restaurants.platformCommission,
+      total: orders.total,
+      bunzPaid: orders.bunzPaid,
+      customerId: orders.customerId,
+    })
+    .from(orders)
+    .innerJoin(branches, eq(branches.id, orders.branchId))
+    .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!row) {
+    return { commissionBaseCents: 0, commissionPct: 0, commissionCents: 0 };
+  }
+
+  const result = computePlatformCommission({
+    grossCents: Math.round(Number(row.total ?? 0) * 100),
+    bunzCents: Math.round(Number(row.bunzPaid ?? 0) * 100),
+    fromApp: Boolean(row.customerId),
+    config: row.platformCommission as PlatformCommissionConfig | null,
+  });
+
+  return {
+    commissionBaseCents: result.baseCents,
+    commissionPct: result.pct,
+    commissionCents: result.cents,
+  };
 }
 
 /** Formato corto para tickets y notas ("2 % · $11.20"). */

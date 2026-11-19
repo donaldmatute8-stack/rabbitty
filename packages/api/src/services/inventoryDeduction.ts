@@ -135,7 +135,16 @@ export async function deductOrderInventory(
   tx: AnyDb,
   orderId: string,
   branchId: string,
-  options: { notes?: string } = {},
+  options: {
+    notes?: string;
+    /**
+     * Si el stock no alcanza, lanza `INSUFFICIENT_STOCK:<insumo>` en lugar de
+     * registrar el faltante. Lo usa el POS cuando `RABBITTY_STOCK_STRICT=true`
+     * (no vender lo que no hay). Por defecto sólo advierte: en la app el cobro ya
+     * ocurrió y no se puede revertir desde aquí.
+     */
+    strict?: boolean;
+  } = {},
 ): Promise<InventoryDeductionResult> {
   const result: InventoryDeductionResult = { deducted: [], warnings: [] };
 
@@ -151,18 +160,38 @@ export async function deductOrderInventory(
   );
 
   for (const [inventoryItemId, quantity] of requirements) {
+    // ── Guarda atómica ──
+    // Se descuenta SÓLO si alcanza (`stock >= quantity`). Sin esto, dos ventas
+    // simultáneas (app + POS) podían dejar el inventario en negativo. La venta ya
+    // está cobrada, así que si no alcanza no se revierte: se registra el faltante.
+    const updated = (await tx.execute(
+      sql`UPDATE inventory_items
+          SET stock = stock - ${quantity}
+          WHERE id = ${inventoryItemId} AND stock >= ${quantity}
+          RETURNING id`,
+    )) as { rows?: unknown[] } | unknown[];
+    const rows = Array.isArray(updated) ? updated : updated.rows ?? [];
+
     await tx.insert(inventoryMovements).values({
       itemId: inventoryItemId,
       branchId,
-      type: "SALE_DEDUCTION",
-      quantity,
+      type: rows.length > 0 ? "SALE_DEDUCTION" : "SALE_SHORTAGE",
+      quantity: rows.length > 0 ? quantity : 0,
       reference: orderId,
-      notes: options.notes ?? `Order ${orderId} completed`,
+      notes:
+        rows.length > 0
+          ? options.notes ?? `Order ${orderId} completed`
+          : `Sin existencias al cobrar (faltaron ${quantity}) · orden ${orderId}`,
     });
-    await tx.execute(
-      sql`UPDATE inventory_items SET stock = stock - ${quantity} WHERE id = ${inventoryItemId}`,
-    );
-    result.deducted.push({ inventoryItemId, quantity });
+
+    if (rows.length > 0) {
+      result.deducted.push({ inventoryItemId, quantity });
+    } else if (options.strict) {
+      // POS estricto: se corta antes de cerrar la venta (la transacción revierte).
+      throw new Error(`INSUFFICIENT_STOCK:${inventoryItemId}`);
+    } else {
+      result.warnings.push(`sin existencias para descontar ${quantity} (insumo ${inventoryItemId})`);
+    }
   }
 
   if (result.deducted.length > 0) {

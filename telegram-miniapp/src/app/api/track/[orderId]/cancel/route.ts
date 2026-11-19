@@ -128,7 +128,13 @@ export async function POST(
         async (_o: any, _c: any) => {
           await tx
             .update(orders)
-            .set({ status: 'CANCELLED', voidReason: 'CANCELLED_BY_CUSTOMER', updatedAt: now })
+            .set({
+              status: 'CANCELLED',
+              voidReason: 'CANCELLED_BY_CUSTOMER',
+              // Cancelado por el cliente: sin comisión de plataforma.
+              commissionCents: 0,
+              updatedAt: now,
+            })
             .where(eq(orders.id, orderId));
         },
       );

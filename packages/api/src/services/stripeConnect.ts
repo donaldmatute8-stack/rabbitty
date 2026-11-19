@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { getRestaurantDb } from "../db";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { merchantPaymentAccounts, paymentIntents, orders } from "@rabbitty/database-restaurant/schema";
@@ -404,8 +405,24 @@ export async function createStripePaymentIntent(params: {
     }
   }
 
-  // Comisión de plataforma en centavos
-  const applicationFeeAmount = Math.max(0, intent.platformFeeCents);
+  // Comisión de plataforma en centavos.
+  // = 1 % por uso del riel (`platformFeeCents`, cubre el costo de cobrar) +
+  // comisión de marketplace congelada en la orden (`commissionCents`). Sin el
+  // segundo término la comisión se registraba pero no se retenía.
+  let orderCommissionCents = 0;
+  if (intent.orderId) {
+    try {
+      const [orderRow] = await getRestaurantDb()
+        .select({ commissionCents: orders.commissionCents })
+        .from(orders)
+        .where(eq(orders.id, intent.orderId))
+        .limit(1);
+      orderCommissionCents = Math.max(0, Number(orderRow?.commissionCents ?? 0));
+    } catch {
+      /* si falla, se retiene sólo el 1 % del riel (comportamiento anterior) */
+    }
+  }
+  const applicationFeeAmount = Math.max(0, intent.platformFeeCents) + orderCommissionCents;
 
   // Crear PaymentIntent con Destination Charge hacia la cuenta conectada e Idempotency Key de Stripe
   const pi = await stripe.paymentIntents.create(

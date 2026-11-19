@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { auth } from "@rabbitty/auth";
+import { getCoreDb, getRestaurantDb } from "@rabbitty/api/db";
+import { branches, restaurants, staff } from "@rabbitty/database-restaurant/schema";
+import { ownedBusinesses, users } from "@rabbitty/database-core/schema";
+import { isGodAdminIdentity } from "@rabbitty/api/services/god2fa";
 import {
   buildProductImageKey,
   IMAGE_TYPES,
@@ -16,6 +22,11 @@ export const runtime = "nodejs";
  * base64 dentro de Postgres). El binario va al bucket y en la columna queda una
  * URL.
  *
+ * **Requiere sesión y pertenencia**: el admin no tiene middleware, así que antes
+ * este endpoint era un basurero público (cualquiera subía archivos a nuestro
+ * bucket eligiendo el `branchId` del prefijo). Ahora se valida sesión + que la
+ * sucursal sea del negocio del usuario (dueño o staff activo), o God.
+ *
  * Formato: `multipart/form-data` con `file` y `branchId`.
  * Respuesta: `{ url }` absoluta contra la app del cliente (es quien la muestra).
  *
@@ -25,8 +36,61 @@ export const runtime = "nodejs";
 const APP_PUBLIC_URL =
   process.env.APP_PUBLIC_URL?.replace(/\/+$/, "") || "https://app.rabbitty.me";
 
+/** ¿El usuario de la sesión puede tocar esta sucursal? */
+async function canUseBranch(email: string | null | undefined, branchId: string): Promise<boolean> {
+  if (!email) return false;
+  if (isGodAdminIdentity(email, null)) return true;
+
+  const restaurantDb = getRestaurantDb();
+  const coreDb = getCoreDb();
+
+  // Staff activo de la sucursal (cajero, cocina, manager…)
+  const [staffRow] = await restaurantDb
+    .select({ id: staff.id })
+    .from(staff)
+    .where(and(eq(staff.email, email), eq(staff.branchId, branchId), eq(staff.isActive, true)))
+    .limit(1);
+  if (staffRow) return true;
+
+  // Dueño del negocio dueño de la sucursal
+  const [branchRow] = await restaurantDb
+    .select({ restaurantId: branches.restaurantId })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  if (!branchRow?.restaurantId) return false;
+
+  const [restRow] = await restaurantDb
+    .select({ businessId: restaurants.businessId })
+    .from(restaurants)
+    .where(eq(restaurants.id, branchRow.restaurantId))
+    .limit(1);
+  if (!restRow?.businessId) return false;
+
+  const [coreUser] = await coreDb
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (!coreUser?.id) return false;
+
+  const [owned] = await coreDb
+    .select({ id: ownedBusinesses.id })
+    .from(ownedBusinesses)
+    .where(
+      and(eq(ownedBusinesses.id, restRow.businessId), eq(ownedBusinesses.ownerId, coreUser.id)),
+    )
+    .limit(1);
+  return Boolean(owned);
+}
+
 export async function POST(req: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     if (!isMediaStorageConfigured()) {
       return NextResponse.json(
         { error: "El almacenamiento de imágenes no está configurado en este entorno." },
@@ -43,6 +107,11 @@ export async function POST(req: NextRequest) {
     }
     if (!/^[A-Za-z0-9-]{4,64}$/.test(branchId)) {
       return NextResponse.json({ error: "Sucursal inválida" }, { status: 400 });
+    }
+
+    // Aislamiento entre tenants: no se escribe bajo el prefijo de otra sucursal.
+    if (!(await canUseBranch(session.user.email, branchId))) {
+      return NextResponse.json({ error: "Sin permiso sobre esa sucursal" }, { status: 403 });
     }
 
     const ext = IMAGE_TYPES[file.type];

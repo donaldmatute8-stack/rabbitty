@@ -3,6 +3,7 @@ import { restaurantDb } from '@/db/restaurant';
 import { branches, restaurants, menuItems } from '@rabbitty/database-restaurant/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { quoteDelivery } from '@rabbitty/api/services/deliveryQuote';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,18 @@ export async function POST(req: Request) {
       items?: Array<{ id: string; quantity: number }>;
       addressData?: Record<string, unknown> | null;
     };
+
+    // ── Límite de uso ──
+    // Es público y, con Uber Direct configurado, cada llamada cuesta una
+    // cotización real. 30 por minuto e IP alcanza de sobra para un carrito.
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'anon';
+    const rl = await checkRateLimit(`quote:${ip}`, 30, 60);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { success: false, error: 'Demasiadas cotizaciones seguidas. Espera un momento.' },
+        { status: 429 },
+      );
+    }
 
     const ref = body.branchOrBusinessId;
     if (!ref) {

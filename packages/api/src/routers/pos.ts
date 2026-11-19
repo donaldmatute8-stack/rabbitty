@@ -13,7 +13,7 @@ import { resolveStationsForItems } from "../services/stationRouting";
 import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch } from "../services/businessContext";
 import { deductOrderInventory, checkStockForItems } from "../services/inventoryDeduction";
-import { computePlatformCommission, type PlatformCommissionConfig } from "../services/platformCommission";
+import { buildOrderCommissionPatch } from "../services/platformCommission";
 export { resolveBusinessIdFromBranch };
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
@@ -1391,39 +1391,15 @@ export const posRouter = router({
         const targetPayableAmount = Math.max(0, orderNetTotal);
         if (r2(totalPaid) >= targetPayableAmount) {
           // ── Comisión de plataforma ──
-          // Se congela al completar la venta. Sólo aplica a pedidos que nacieron
-          // en la app (`customerId` presente) cuando `appliesTo = APP_ORDERS`;
-          // la venta de mostrador a un cliente nuevo no paga comisión.
+          // Regla compartida con el otro cierre (cobro dividido). Sólo aplica a
+          // pedidos nacidos en la app cuando el alcance es APP_ORDERS.
           let commissionPatch: {
             commissionBaseCents?: number;
             commissionPct?: number;
             commissionCents?: number;
           } = {};
           try {
-            const [cfgRow] = await tx
-              .select({
-                platformCommission: restaurants.platformCommission,
-                total: orders.total,
-                bunzPaid: orders.bunzPaid,
-              })
-              .from(orders)
-              .innerJoin(branches, eq(branches.id, orders.branchId))
-              .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
-              .where(eq(orders.id, input.orderId))
-              .limit(1);
-            if (cfgRow) {
-              const commission = computePlatformCommission({
-                grossCents: Math.round(Number(cfgRow.total ?? 0) * 100),
-                bunzCents: Math.round(Number(cfgRow.bunzPaid ?? 0) * 100),
-                fromApp: Boolean(orderRow.customerId),
-                config: cfgRow.platformCommission as PlatformCommissionConfig | null,
-              });
-              commissionPatch = {
-                commissionBaseCents: commission.baseCents,
-                commissionPct: commission.pct,
-                commissionCents: commission.cents,
-              };
-            }
+            commissionPatch = await buildOrderCommissionPatch(tx, input.orderId);
           } catch (commissionErr) {
             // La comisión nunca debe tumbar un cobro ya autorizado.
             console.warn("[pos] no se pudo calcular la comisión de plataforma:", commissionErr);
@@ -2005,6 +1981,9 @@ export const posRouter = router({
             await tx.update(orders).set({
               status: "VOIDED",
               voidReason: input.reason,
+              // Una orden anulada no genera comisión: se reversa el importe y se
+              // conserva la tarifa/base como rastro de lo que se había calculado.
+              commissionCents: 0,
             }).where(eq(orders.id, input.orderId));
           },
         );
@@ -2934,7 +2913,22 @@ export const posRouter = router({
             });
           }
 
-          await tx.update(orders).set({ status: ORDER_STATUS.COMPLETED }).where(eq(orders.id, order.id));
+          // Comisión de plataforma: misma regla que el cobro normal.
+          let splitCommissionPatch: {
+            commissionBaseCents?: number;
+            commissionPct?: number;
+            commissionCents?: number;
+          } = {};
+          try {
+            splitCommissionPatch = await buildOrderCommissionPatch(tx, order.id);
+          } catch (commissionErr) {
+            console.warn("[pos] comisión (cobro dividido) no calculada:", commissionErr);
+          }
+
+          await tx
+            .update(orders)
+            .set({ status: ORDER_STATUS.COMPLETED, ...splitCommissionPatch })
+            .where(eq(orders.id, order.id));
 
           // Liberar la mesa: cerrar la sesión activa de la tabla para que el
           // próximo comensal pueda reclamarla (409 anti-robo no se convierte en DoS).
@@ -2948,59 +2942,13 @@ export const posRouter = router({
             ));
           }
 
-          // Deducción de stock con guarda atómica: no se vende lo que no hay.
-          const deductRecipe = async (menuItemId: string, qty: number, path: Set<string>) => {
-            if (path.has(menuItemId)) return;
-            path.add(menuItemId);
-            const ingredients = await tx.select()
-              .from(dbSchema.menuItemIngredients)
-              .where(eq(dbSchema.menuItemIngredients.menuItemId, menuItemId));
-
-            for (const ing of ingredients) {
-              if (ing.inventoryItemId) {
-                const deductionAmount = ing.quantityRequired * qty;
-                if (!(deductionAmount > 0)) continue;
-                const updated = await tx
-                  .update(dbSchema.inventoryItems)
-                  .set({ stock: sql`${dbSchema.inventoryItems.stock} - ${deductionAmount}` })
-                  .where(and(
-                    eq(dbSchema.inventoryItems.id, ing.inventoryItemId),
-                    gte(dbSchema.inventoryItems.stock, deductionAmount)
-                  ))
-                  .returning({ id: dbSchema.inventoryItems.id });
-
-                if (updated.length === 0) {
-                  if (strictStock) {
-                    throw new TRPCError({
-                      code: "CONFLICT",
-                      message: `INSUFFICIENT_STOCK:${ing.inventoryItemId}`,
-                    });
-                  }
-                  // Opt-out explícito (RABBITTY_STOCK_STRICT=false): negativo.
-                  await tx
-                    .update(dbSchema.inventoryItems)
-                    .set({ stock: sql`${dbSchema.inventoryItems.stock} - ${deductionAmount}` })
-                    .where(eq(dbSchema.inventoryItems.id, ing.inventoryItemId));
-                }
-
-                await tx.insert(dbSchema.inventoryMovements).values({
-                  itemId: ing.inventoryItemId,
-                  branchId: ctx.branchId,
-                  type: "SALE_DEDUCTION",
-                  quantity: deductionAmount,
-                  reference: order.id,
-                  notes: `Order ${order.id} completed via Direct POS`,
-                });
-              } else if (ing.subRecipeId) {
-                await deductRecipe(ing.subRecipeId, ing.quantityRequired * qty, path);
-              }
-            }
-            path.delete(menuItemId);
-          };
-
-          for (const item of input.items) {
-            await deductRecipe(item.menuItemId, item.quantity, new Set());
-          }
+          // Deducción de stock: mismo motor que la app (servicio compartido).
+          // Con RABBITTY_STOCK_STRICT=true se corta la venta si no alcanza; si no,
+          // se registra el faltante en la bitácora sin vender en negativo.
+          await deductOrderInventory(tx, order.id, ctx.branchId, {
+            notes: `Order ${order.id} completed via Direct POS`,
+            strict: strictStock,
+          });
             },
           );
         });

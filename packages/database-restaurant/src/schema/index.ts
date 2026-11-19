@@ -1262,6 +1262,23 @@ export const terminalReaders = pgTable("terminal_readers", {
   index("terminal_readers_branch_idx").on(t.branchId, t.status),
 ]);
 
+/**
+ * Bitácora de cambios de la comisión de plataforma. Un cambio de tarifa mueve
+ * dinero del comercio: tiene que quedar quién, cuándo y a qué valor.
+ */
+export const platformCommissionHistory = pgTable("platform_commission_history", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  restaurantId: text("restaurantId").notNull(),
+  businessId: text("businessId"),
+  enabled: boolean("enabled").notNull(),
+  pct: real("pct").notNull(),
+  appliesTo: text("appliesTo").default("APP_ORDERS").notNull(),
+  minFeeMxn: real("minFeeMxn").default(0).notNull(),
+  actorId: text("actorId"),
+  actorEmail: text("actorEmail"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const providerFees = pgTable("provider_fees", {
   id: id(),
   provider: text("provider").notNull(),
