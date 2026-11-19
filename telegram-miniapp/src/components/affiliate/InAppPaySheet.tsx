@@ -266,6 +266,39 @@ export function InAppPaySheet({
   type PayMethod = 'bunz' | 'card' | 'mp' | 'cash';
   const [method, setMethod] = useState<PayMethod>('card');
   const methodTouchedRef = useRef(false);
+  // ── Pagar en caja: avisar al POS de verdad ──
+  // Antes "Pagar en caja" sólo mostraba un texto: no cambiaba el estado ni
+  // avisaba a nadie, así que el cliente tocaba y no pasaba nada. Ahora marca la
+  // orden como CASH_PAYMENT_REQUESTED (el POS la ve como "pidió pagar en caja")
+  // y confirma en pantalla.
+  const [cashBusy, setCashBusy] = useState(false);
+  const [cashRequested, setCashRequested] = useState(false);
+  const [cashMessage, setCashMessage] = useState<string | null>(null);
+
+  const requestCashAtCounter = async () => {
+    if (!orderId || cashBusy) return;
+    setCashBusy(true);
+    setCashMessage(null);
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/pos/request-cash', {
+        method: 'POST',
+        headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || 'No se pudo avisar en caja');
+      }
+      setCashRequested(true);
+      PlatformBridge.hapticFeedback('success');
+    } catch (e: any) {
+      setCashMessage(e?.message || 'No se pudo avisar en caja. Intenta de nuevo.');
+    } finally {
+      setCashBusy(false);
+    }
+  };
+
   // ── Mercado Pago (Checkout Pro) ──
   const [mpAvailable, setMpAvailable] = useState(false);
   const [mpMode, setMpMode] = useState<'test' | 'live'>('live');
@@ -333,6 +366,8 @@ export function InAppPaySheet({
       setReceipt(null);
       setReceiptChecked(false);
       setResolvedBusiness(null);
+      setCashRequested(false);
+      setCashMessage(null);
     }
   }, [isOpen, total]);
 
@@ -354,6 +389,8 @@ export function InAppPaySheet({
         if (d?.ok) {
           setReceipt(d as PayReceipt);
           if (d.businessName) setResolvedBusiness(String(d.businessName));
+          // Si ya pidió cobro en caja, la hoja lo refleja al reabrir.
+          if (d?.order?.status === 'CASH_PAYMENT_REQUESTED') setCashRequested(true);
           if (d.settled) setStep('settled');
         }
       } catch { /* si falla, el flujo normal de pago sigue disponible */ }
@@ -952,7 +989,38 @@ export function InAppPaySheet({
                   <p className="text-[12px] text-white/50 mt-1 leading-relaxed m-0">
                     Tu cuenta queda abierta en el POS. El personal registra el cobro y tu pedido se marca como pagado.
                   </p>
-                  <p className="text-[10px] text-white/30 mt-3 m-0">No cierres esta pantalla hasta que te confirmen el cobro.</p>
+
+                  {cashRequested ? (
+                    <div className="mt-3 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-3">
+                      <p className="m-0 flex items-center gap-2 text-[12px] font-black text-emerald-200">
+                        <CheckCircle2 size={15} />
+                        Avisamos en caja
+                      </p>
+                      <p className="m-0 mt-1 text-[11px] leading-relaxed text-emerald-100/70">
+                        El cajero ya ve tu cuenta como «pidió pagar en caja». Te
+                        cobran en el mostrador; no necesitas hacer nada más.
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void requestCashAtCounter()}
+                      disabled={cashBusy || !orderId}
+                      className="mt-3 w-full rounded-2xl border border-amber-400/35 bg-amber-400/15 py-3 text-[12.5px] font-black text-amber-100 active:scale-[0.99] transition-transform disabled:opacity-50"
+                    >
+                      {cashBusy ? 'Avisando en caja…' : 'Avisar en caja'}
+                    </button>
+                  )}
+
+                  {cashMessage && (
+                    <p className="m-0 mt-2 text-[11px] leading-relaxed text-red-300">{cashMessage}</p>
+                  )}
+
+                  <p className="text-[10px] text-white/30 mt-3 m-0">
+                    {cashRequested
+                      ? 'Si prefieres, cambia arriba a Bunz o tarjeta y paga al instante.'
+                      : 'No cierres esta pantalla hasta que te confirmen el cobro.'}
+                  </p>
                 </div>
               )}
 
