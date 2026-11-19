@@ -149,3 +149,6 @@ credentials.json
 xcuserdata/
 *.xcuserstate
 *.xcscmblueprint
+
+# Borradores de correo legal (se redactan aquí y NO se versionan)
+LEGAL-CORREO-AFILIADOS.md
