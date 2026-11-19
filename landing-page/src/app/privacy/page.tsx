@@ -1,349 +1,136 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, ShieldCheck, Lock, AlertCircle, Sparkles, Scale } from 'lucide-react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { LEGAL_VERSION, PUBLISHED_LEGAL_DOCS } from '@rabbitty/legal';
 
 export const metadata: Metadata = {
   title: 'Aviso de Privacidad y Términos de Servicio | Rabbitty México 2026',
-  description: 'Términos y Condiciones, Aviso de Privacidad y Política de Tratamiento de Datos Personales de Rabbitty conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP) en México.',
+  description:
+    'Términos y Condiciones, Aviso de Privacidad, Anexo de Pagos y Reglamento de Bunz de Rabbitty, conforme a la LFPDPPP y a las disposiciones de consumo aplicables en México.',
 };
 
+/**
+ * ── /privacy — documentos legales (una sola fuente) ────────────────────────
+ *
+ * Antes esta página tenía su **propio** texto, con otra fecha y contenido
+ * distinto del que la app muestra y registra al aceptar. Dos políticas de
+ * privacidad divergentes es un problema de cumplimiento.
+ *
+ * Ahora renderiza desde `@rabbitty/legal`, la misma fuente que usa la app
+ * (`app.rabbitty.me/legal`). Si cambias el texto, sube `LEGAL_VERSION` en el
+ * paquete y ambas superficies quedan alineadas de una vez.
+ *
+ * Se conserva `/privacy` (y sus anclas `#privacidad`, `#terminos`, …) porque es
+ * la URL que se declara en las tiendas de aplicaciones.
+ */
 export default function PrivacyPage() {
-  const lastUpdated = '7 de Noviembre de 2026';
-
   return (
     <div className="min-h-screen bg-[#07070F] text-white selection:bg-[#E91E63] selection:text-white">
-      {/* Background Glows */}
-      <div className="fixed top-0 left-1/4 w-96 h-96 bg-[#E91E63]/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="fixed bottom-10 right-1/4 w-96 h-96 bg-[#9C27B0]/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="fixed top-0 left-1/4 h-96 w-96 rounded-full bg-[#E91E63]/10 blur-[140px] pointer-events-none" />
+      <div className="fixed bottom-10 right-1/4 h-96 w-96 rounded-full bg-[#9C27B0]/10 blur-[140px] pointer-events-none" />
 
-      {/* Header */}
-      <header className="z-10 border-b border-white/10 backdrop-blur-xl bg-black/40 sticky top-0">
-        <div className="max-w-5xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors text-sm font-semibold">
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/40 backdrop-blur-xl">
+        <div className="mx-auto flex h-20 max-w-5xl items-center justify-between px-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-white/60 transition-colors hover:text-white"
+          >
             <ArrowLeft size={18} />
             <span>Volver al inicio</span>
           </Link>
           <div className="flex items-center gap-2.5">
             <Image src="/icon_ra.png" alt="Rabbitty" width={28} height={28} className="object-contain" />
-            <span className="font-black tracking-tight text-white">Rabbitty</span>
-            <span className="text-[11px] font-black uppercase tracking-wider bg-[#E91E63]/20 text-[#E91E63] px-2.5 py-0.5 rounded-full border border-[#E91E63]/30">
+            <span className="font-black tracking-tight">Rabbitty</span>
+            <span className="rounded-full border border-[#E91E63]/30 bg-[#E91E63]/20 px-2.5 py-0.5 text-[11px] font-black uppercase tracking-wider text-[#E91E63]">
               Legal México 2026
             </span>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="relative z-10 max-w-4xl mx-auto px-6 py-14">
-        {/* Title Section */}
-        <div className="mb-12">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-white/70 mb-4">
+      <main className="relative z-10 mx-auto max-w-4xl px-6 py-14">
+        <div className="mb-10">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-white/70">
             <ShieldCheck size={14} className="text-[#E91E63]" />
-            Apego a LFPDPPP y Regulaciones de Consumo PROFECO (México 2026)
+            LFPDPPP · PROFECO · México 2026
           </div>
-          <h1 className="text-3xl md:text-5xl font-black tracking-tight mb-4 text-white">
-            Aviso de Privacidad Integral y Términos de Servicio
+          <h1 className="mb-4 text-3xl font-black tracking-tight md:text-5xl">
+            Aviso de Privacidad y Términos de Servicio
           </h1>
-          <p className="text-white/60 text-base leading-relaxed">
-            Última actualización y entrada en vigor: <strong className="text-white">{lastUpdated}</strong>.
-            En Rabbitty garantizamos la transparencia, seguridad y confidencialidad de tus datos, protegiendo tanto a nuestros usuarios («Rabbitters») como a nuestros negocios locales afiliados.
+          <p className="text-base leading-relaxed text-white/60">
+            Versión vigente: <strong className="text-white">{LEGAL_VERSION}</strong>. Este es el mismo
+            texto que se muestra y se acepta dentro de la app (
+            <a
+              href="https://app.rabbitty.me/legal"
+              className="text-[#FF8FB8] underline underline-offset-2"
+            >
+              app.rabbitty.me/legal
+            </a>
+            ). En Rabbitty protegemos los datos de quienes consumen y de los negocios afiliados.
           </p>
         </div>
 
-        {/* Quick Summary Pill Box */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-14">
-          <div className="p-5 rounded-2xl bg-white/3 border border-white/10 flex flex-col gap-2">
-            <div className="w-10 h-10 rounded-xl bg-[#E91E63]/15 flex items-center justify-center text-[#E91E63] mb-1">
-              <Lock size={20} />
-            </div>
-            <h3 className="font-bold text-sm text-white">Tus Datos Son Tuyos</h3>
-            <p className="text-xs text-white/50 leading-relaxed">
-              No comercializamos ni vendemos información personal a intermediarios o brokers de datos.
-            </p>
-          </div>
+        {/* Índice */}
+        <nav className="mb-12 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+          <p className="m-0 mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+            Documentos
+          </p>
+          <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
+            {PUBLISHED_LEGAL_DOCS.map((doc) => (
+              <li key={doc.slug}>
+                <a
+                  href={`#${doc.slug}`}
+                  className="inline-block rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11.5px] font-bold text-white/70 transition-colors hover:border-[#E91E63]/40 hover:text-white"
+                >
+                  {doc.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-          <div className="p-5 rounded-2xl bg-white/3 border border-white/10 flex flex-col gap-2">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/15 flex items-center justify-center text-purple-400 mb-1">
-              <Sparkles size={20} />
-            </div>
-            <h3 className="font-bold text-sm text-white">Bunz = Recompensas</h3>
-            <p className="text-xs text-white/50 leading-relaxed">
-              Los Bunz son unidades de lealtad y puntos promocionales no canjeables por dinero en efectivo de curso legal.
-            </p>
-          </div>
+        <div className="space-y-14">
+          {PUBLISHED_LEGAL_DOCS.map((doc) => (
+            <section key={doc.slug} id={doc.slug} className="scroll-mt-28">
+              <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-[#E91E63]">
+                {doc.audience} · actualizado {doc.updated}
+              </p>
+              <h2 className="mb-3 mt-2 text-2xl font-black tracking-tight text-white md:text-3xl">
+                {doc.title}
+              </h2>
+              <p className="mb-6 text-sm leading-relaxed text-white/60">{doc.summary}</p>
 
-          <div className="p-5 rounded-2xl bg-white/3 border border-white/10 flex flex-col gap-2">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 mb-1">
-              <Scale size={20} />
-            </div>
-            <h3 className="font-bold text-sm text-white">Derechos ARCO</h3>
-            <p className="text-xs text-white/50 leading-relaxed">
-              Acceso, Rectificación, Cancelación y Oposición con respuesta en los plazos legales de 20 días hábiles y ejecución en 15 días hábiles.
-            </p>
-          </div>
+              <div className="space-y-6">
+                {doc.sections.map((section) => (
+                  <div key={`${doc.slug}-${section.heading}`}>
+                    <h3 className="mb-2 text-sm font-black text-white">{section.heading}</h3>
+                    <div className="space-y-2">
+                      {section.body.map((paragraph) => (
+                        <p
+                          key={paragraph.slice(0, 48)}
+                          className="m-0 text-[13.5px] leading-relaxed text-white/60"
+                        >
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
 
-        {/* Legal Body Sections */}
-        <div className="space-y-12 text-white/80 text-[15px] leading-[1.8]">
-
-          {/* Section 1 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                01
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Identidad y Domicilio del Responsable</h2>
-            </div>
-            <p>
-              El presente documento establece las condiciones de uso y la política de privacidad de la plataforma <strong>RABBITTY</strong>, operada en México por <strong>MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.</strong> (en adelante «RABBITTY», «nosotros» o «la Plataforma»).
-            </p>
-            <p className="mt-3">
-              El responsable del tratamiento es <strong className="text-white">MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V.</strong>, RFC <strong className="text-white">MEB2402087Z3</strong>, que opera la marca comercial <strong className="text-white">RABBITTY</strong> (nombre comercial AGOD ECOSYSTEM), con domicilio fiscal en <strong className="text-white">Lázaro Cárdenas 74, Col. Dorada, C.P. 63732, Bucerías, Nayarit, México</strong>. Aplica a nuestro sitio web oficial (<code>rabbitty.me</code>), aplicaciones móviles nativas para iOS y Android, y la integración de Telegram Mini App.
-            </p>
-            <p className="mt-3">
-              <strong>Canal de Atención Oficial y Oficial de Privacidad:</strong> Correo electrónico:{' '}
-              <a href="mailto:privacidad@rabbitty.me" className="text-[#E91E63] font-semibold underline underline-offset-4 hover:text-[#ff3d7f]">
-                privacidad@rabbitty.me
-              </a> / <a href="mailto:legal@rabbitty.me" className="text-[#E91E63] font-semibold underline underline-offset-4 hover:text-[#ff3d7f]">
-                legal@rabbitty.me
-              </a>.
-            </p>
-          </section>
-
-          {/* Section 2 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                02
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Datos Personales Recabados</h2>
-            </div>
-            <p>
-              En cumplimiento del principio de proporcionalidad y minimización establecido en la <em>Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP)</em> y su Reglamento, recabamos únicamente los datos necesarios para brindar la experiencia de recompensas y geolocalización:
-            </p>
-            <ul className="list-disc pl-6 mt-3 space-y-2 text-white/70">
-              <li>
-                <strong className="text-white">Identificación y Perfil:</strong> Nombre, número de teléfono (para verificación por SMS/OTP), nombre de usuario, identificador de Telegram (Telegram User ID / Chat ID en caso de utilizar este canal), dirección de correo electrónico y foto de perfil si el usuario la suministra voluntariamente.
-              </li>
-              <li>
-                <strong className="text-white">Datos de Operación y Transaccionalidad:</strong> Historial de visitas a cafeterías y comercios afiliados, registros de escaneo de códigos QR, folios de tickets procesados, saldo y movimientos de puntos «Bunz», niveles en el programa de gamificación y códigos de referidos.
-              </li>
-              <li>
-                <strong className="text-white">Datos de Geolocalización:</strong> Coordenadas aproximadas o precisas de tu dispositivo, con tu autorización, para mostrarte comercios afiliados y Happy Hours cercanos. Si activas las alertas de proximidad, podemos usar la ubicación también en segundo plano (con permiso del sistema) para avisarte cuando estés cerca de un comercio; puedes desactivar ese permiso en cualquier momento. Se conserva el último punto asociado a la sesión y los eventos técnicos necesarios para seguridad y prevención de fraude.
-              </li>
-              <li>
-                <strong className="text-white">Acceso a Cámara:</strong> Uso del sensor de cámara estrictamente para el escaneo de códigos QR en mostrador o tickets de compra. <em>RABBITTY no almacena imágenes de la galería personal de los usuarios sin su acción directa.</em>
-              </li>
-              <li>
-                <strong className="text-white">Biometría y passkeys:</strong> RABBITTY no recibe ni almacena plantillas biométricas. Face ID / Touch ID se procesa localmente por el sistema operativo. Cuando se usa una passkey/WebAuthn, RABBITTY almacena la credencial pública y metadatos técnicos de autenticación, no la biometría. La autenticación biométrica es opcional y existe una alternativa no biométrica.
-              </li>
-              <li>
-                <strong className="text-white">Datos de Negocios Afiliados:</strong> Nombre comercial, razón social, RFC, domicilio, representante y facultades, capacidad comercial autorizada y recuperada, dirección física de la sucursal, horarios de atención, menús y datos de contacto del responsable operativo.
-              </li>
-            </ul>
-          </section>
-
-          {/* Section 3 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                03
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Finalidades del Tratamiento de Datos</h2>
-            </div>
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-white/2 border border-white/5">
-                <h4 className="font-bold text-white mb-1">Finalidades Primarias (Indispensables):</h4>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-white/70">
-                  <li>Creación, autenticación y administración de la cuenta del usuario o comercio.</li>
-                  <li>Acreditación y débito de puntos promocionales «Bunz» por consumos válidos.</li>
-                  <li>Prevención de fraudes, escaneos duplicados o manipulación de tickets comerciales.</li>
-                  <li>Validación de límites de crédito y balance de promociones entre comercios y clientes.</li>
-                  <li>Atención a solicitudes de soporte, incidencias y reclamos técnicos.</li>
-                </ul>
-              </div>
-
-              <div className="p-4 rounded-xl bg-white/2 border border-white/5">
-                <h4 className="font-bold text-white mb-1">Finalidades Secundarias (Opcionales):</h4>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-white/70">
-                  <li>Envío de notificaciones de promociones, Happy Hours y nuevas cafeterías afiliadas.</li>
-                  <li>Métricas de telemetría agregadas y anónimas para evaluar el impacto de zonas comerciales.</li>
-                </ul>
-                <p className="text-xs text-white/50 mt-2">
-                  Puedes revocar en cualquier momento el consentimiento para finalidades secundarias desactivando las notificaciones en tu dispositivo o escribiéndonos a <span className="text-white">privacidad@rabbitty.me</span>.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* Section 4 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                04
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Naturaleza Jurídica de los Puntos «Bunz»</h2>
-            </div>
-            <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-200/90 text-sm leading-relaxed mb-4">
-              <div className="flex items-center gap-2 font-black text-amber-300 mb-1.5 text-base">
-                <AlertCircle size={18} />
-                Aviso Importante sobre Tokens y Puntos de Fidelidad
-              </div>
-              Los puntos «Bunz» son unidades promocionales y de fidelización interna emitidas exclusivamente para incentivar el consumo en la red de comercios asociados a Rabbitty.
-            </div>
-            <ul className="list-disc pl-6 space-y-2 text-white/70">
-              <li>
-                <strong>No constituyen moneda de curso legal:</strong> Los Bunz no son dinero fiat, divisas extranjeras, valores bursátiles ni activos de captación financiera bancaria protegidos por el IPAB ni la CNBV.
-              </li>
-              <li>
-                <strong>No convertibles a efectivo:</strong> No podrán ser canjeados directamente por dinero en efectivo de curso legal ante Rabbitty ni ante los negocios afiliados, salvo en promociones o descuentos en productos definidos por cada comercio.
-              </li>
-              <li>
-                <strong>Vigencia y Reglas de Caducidad:</strong> Los Bunz acreditados no expiran mientras la cuenta permanezca activa. Cuentas inactivas por más de 12 meses consecutivos podrán ser sujetas a depuración previa notificación de 30 días naturales.
-              </li>
-              <li>
-                <strong>Capacidad comercial de afiliados:</strong> La capacidad para recibir redenciones no es dinero, depósito, inversión ni compra de Bunz. Puede incluir un incentivo de incorporación y capacidad adelantada recuperable. La recuperación se propone por ciclo con importe exacto y requiere aceptación del afiliado; nunca se aplica sobre capacidad comprometida ni genera intereses.
-              </li>
-            </ul>
-          </section>
-
-          {/* Section 5 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                05
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Ejercicio de Derechos ARCO</h2>
-            </div>
-            <p>
-              Usted tiene el derecho inalienable de <strong>Acceder</strong> a sus datos personales en nuestro poder; <strong>Rectificarlos</strong> en caso de ser inexactos o incompletos; <strong>Cancelarlos</strong> cuando considere que no se requieren para las finalidades señaladas; u <strong>Oponerse</strong> al tratamiento de los mismos para fines específicos (Derechos ARCO).
-            </p>
-            <p className="mt-3">
-              Para ejercer cualquiera de sus derechos ARCO o solicitar la eliminación total de su cuenta y registros:
-            </p>
-            <div className="mt-3 p-4 rounded-xl bg-white/4 border border-white/10 text-sm">
-              <p className="font-semibold text-white mb-2">Procedimiento de Solicitud:</p>
-              <ol className="list-decimal pl-5 space-y-1 text-white/70">
-                <li>Envíe un correo a <strong className="text-white">privacidad@rabbitty.me</strong> con el asunto «Solicitud ARCO - [Su Nombre o Usuario]».</li>
-                <li>Adjunte una copia digital de su identificación oficial para validar titularidad.</li>
-                <li>Describa puntualmente los datos sobre los que desea ejercer el derecho (ej. eliminación total de cuenta).</li>
-                <li>RABBITTY acusará recibo y responderá en un plazo máximo de <strong>20 días hábiles</strong>, prorrogable por una sola vez conforme a la ley. Si la solicitud es procedente, ejecutará la medida en un plazo máximo de <strong>15 días hábiles</strong>.</li>
-              </ol>
-            </div>
-          </section>
-
-          {/* Section 6 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                06
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Reglas de Conducta y Prevención de Abusos</h2>
-            </div>
-            <p>
-              Para mantener la equidad entre comercios locales y usuarios, queda estrictamente prohibido:
-            </p>
-            <ul className="list-disc pl-6 mt-3 space-y-2 text-white/70">
-              <li>Escanear tickets de consumo ajenos o sustraídos sin haber realizado el consumo real.</li>
-              <li>Generar cuentas automatizadas («bots») para la acumulación fraudulenta de puntos de bienvenida o referidos.</li>
-              <li>Incurrir en colusión entre dependientes de sucursal y clientes para simular transacciones.</li>
-            </ul>
-            <p className="mt-3 text-sm text-white/60">
-              Rabbitty se reserva el derecho de auditar, congelar preventivamente saldos de Bunz o dar de baja definitiva las cuentas que infrinjan estas directrices de buena fe.
-            </p>
-          </section>
-
-          {/* Section 8 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                08
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Encargados, Transferencias y Conservación</h2>
-            </div>
-            <p>
-              RABBITTY se apoya en proveedores que tratan datos por su cuenta o por instrucciones documentadas. La siguiente lista identifica los flujos principales; el inventario completo de tratamientos se mantiene actualizado y disponible para la autoridad competente.
-            </p>
-            <div className="mt-4 overflow-x-auto rounded-2xl border border-white/10">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-white/5 text-white/60 uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="px-3 py-2.5">Proveedor</th>
-                    <th className="px-3 py-2.5">Datos que recibe</th>
-                    <th className="px-3 py-2.5">Región</th>
-                    <th className="px-3 py-2.5">Rol</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/10 text-white/75">
-                  <tr><td className="px-3 py-2.5">Railway</td><td className="px-3 py-2.5">Infraestructura, logs y tráfico de la aplicación</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de hosting</td></tr>
-                  <tr><td className="px-3 py-2.5">Neon</td><td className="px-3 py-2.5">Base de datos PostgreSQL y respaldos</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de base de datos</td></tr>
-                  <tr><td className="px-3 py-2.5">Stripe</td><td className="px-3 py-2.5">Pagos, suscripciones y datos fiscales de cobro</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Responsable/encargado según el flujo de pago</td></tr>
-                  <tr><td className="px-3 py-2.5">Resend</td><td className="px-3 py-2.5">Correo transaccional y de avisos</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de mensajería</td></tr>
-                  <tr><td className="px-3 py-2.5">Telegram</td><td className="px-3 py-2.5">Identificadores, mensajes y datos de uso del canal</td><td className="px-3 py-2.5">Internacional</td><td className="px-3 py-2.5">Proveedor del canal; rol según el flujo</td></tr>
-                  <tr><td className="px-3 py-2.5">SignalWire</td><td className="px-3 py-2.5">Números y códigos de verificación SMS</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de mensajería</td></tr>
-                  <tr><td className="px-3 py-2.5">AWS S3</td><td className="px-3 py-2.5">Archivos, imágenes y medios del chat</td><td className="px-3 py-2.5">Según región configurada</td><td className="px-3 py-2.5">Encargado de almacenamiento</td></tr>
-                  <tr><td className="px-3 py-2.5">OpenAI</td><td className="px-3 py-2.5">Consultas y contexto necesario para asistencia IA</td><td className="px-3 py-2.5">EE. UU.</td><td className="px-3 py-2.5">Encargado de procesamiento IA</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-white/50">
-              Estos proveedores pueden estar ubicados en México o en el extranjero. RABBITTY verifica las medidas contractuales y de seguridad aplicables y no vende datos personales. Cuando actúa como encargado de un afiliado, sigue sus instrucciones documentadas.
-            </p>
-            <h3 className="mt-6 text-sm font-black text-white">Conservación</h3>
-            <ul className="list-disc pl-6 mt-2 space-y-1.5 text-sm text-white/70">
-              <li><strong className="text-white">Cuenta:</strong> mientras esté activa y por el plazo necesario para el cierre, aclaraciones y obligaciones legales.</li>
-              <li><strong className="text-white">Operaciones y Bunz:</strong> por los plazos fiscales, contables y de reclamaciones aplicables.</li>
-              <li><strong className="text-white">Evidencia contractual y aceptación:</strong> por el plazo de prescripción y para defensa de reclamaciones.</li>
-              <li><strong className="text-white">IP, logs y seguridad:</strong> por la ventana necesaria para investigación, prevención de fraude y seguridad.</li>
-              <li><strong className="text-white">Ubicación:</strong> el último punto de la sesión y los eventos técnicos necesarios; no se conserva en segundo plano.</li>
-              <li><strong className="text-white">Documentación de afiliados:</strong> durante la vigencia contractual y los plazos legales posteriores.</li>
-              <li><strong className="text-white">Sandbox:</strong> se depura al cerrar la prueba, salvo la evidencia que deba conservarse por obligación legal.</li>
-            </ul>
-            <p className="mt-3 text-xs text-white/50">
-              Al concluir los plazos, los datos se bloquean o suprimen conforme a la ley. Los registros que deban conservarse se separan y restringen.
-            </p>
-          </section>
-
-          {/* Section 7 */}
-          <section className="border-t border-white/10 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-[#E91E63]">
-                07
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight">Modificaciones al Presente Aviso</h2>
-            </div>
-            <p>
-              Rabbitty se reserva el derecho de efectuar en cualquier momento modificaciones o actualizaciones al presente Aviso de Privacidad y Términos de Servicio, motivadas por reformas legislativas, criterios de autoridades reguladoras (INAI, PROFECO) o mejoras tecnológicas de la Plataforma.
-            </p>
-            <p className="mt-3">
-              Cualquier cambio sustancial será notificado oportunamente mediante banner visible en la aplicación o publicación prioritaria en <code>rabbitty.me/privacy</code> con al menos 5 días de anticipación a su entrada en vigor.
-            </p>
-          </section>
-
-        </div>
-
-        {/* Bottom Contact Card */}
-        <div className="mt-16 p-8 rounded-3xl bg-linear-to-r from-[#E91E63]/15 to-purple-600/15 border border-[#E91E63]/30 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div>
-            <h3 className="text-xl font-black text-white mb-1">¿Tienes dudas legales o de privacidad?</h3>
-            <p className="text-sm text-white/70">
-              Nuestro equipo legal y de protección de datos en México está a tu disposición directa.
-            </p>
-          </div>
-          <a
-            href="mailto:privacidad@rabbitty.me"
-            className="px-6 py-3 rounded-full bg-[#E91E63] hover:bg-[#D81B60] text-white font-bold text-sm transition-transform active:scale-95 shrink-0 shadow-lg shadow-[#E91E63]/30"
-          >
-            Contactar al Oficial de Privacidad
+        <p className="mt-14 border-t border-white/10 pt-6 text-[11px] leading-relaxed text-white/35">
+          ¿Dudas sobre tus datos? Escribe a{' '}
+          <a href="mailto:privacidad@rabbitty.me" className="text-[#FF8FB8]">
+            privacidad@rabbitty.me
           </a>
-        </div>
+          . Los Bunz son puntos de lealtad: no son dinero, no se compran con dinero y no se convierten
+          a efectivo.
+        </p>
       </main>
-
-      {/* Mini Footer */}
-      <footer className="border-t border-white/10 py-8 text-center text-xs text-white/40">
-        <p>© 2026 MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. · RABBITTY · RFC MEB2402087Z3. Todos los derechos reservados. México.</p>
-      </footer>
     </div>
   );
 }

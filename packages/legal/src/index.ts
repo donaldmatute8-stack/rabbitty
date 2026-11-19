@@ -1,3 +1,4 @@
+export * from "./documents";
 export {
   CONTRACT_APPROVED_AT,
   CONTRACT_SECTIONS,
