@@ -1,6 +1,11 @@
 # Corpus legal Rabbitty — índice y advertencia
 
-**Versión del corpus:** 2026-11-18 · **Estado:** borradores operativos, listos para revisión legal
+**Versión del corpus:** 2026-11-19.1 · **Estado:** revisión 1 aplicada (ver `14-INFORME-OBSERVACIONES-2026-11-19.md`)
+
+> **Texto canónico publicado:** `packages/legal/src/documents.ts` — es lo que ven,
+> aceptan y registran la app, la landing y el panel. Los archivos de esta carpeta
+> son el **borrador de trabajo**; si divergen, manda el publicado. Toda corrección
+> va en ese archivo, con `LEGAL_VERSION` y `LEGAL_CONTENT_HASH` actualizados.
 **Ámbito:** México · plataforma digital, POS presencial, economía de lealtad (Bunz)
 
 ---
