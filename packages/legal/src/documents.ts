@@ -34,6 +34,17 @@ export type LegalDoc = {
 
 export const LEGAL_VERSION = "2026-11-19";
 
+/**
+ * Huella del TEXTO de los documentos.
+ *
+ * Existe para que no se pueda cambiar un documento y olvidar subir la versión:
+ * una prueba compara esta huella con el contenido real y falla si no coincide.
+ * Si editas cualquier texto: sube `LEGAL_VERSION`, actualiza esta huella y
+ * commitea las dos cosas juntas. Con eso, la re-aceptación (afiliado y
+ * consumidor) queda siempre alineada con lo publicado.
+ */
+export const LEGAL_CONTENT_HASH = "08e10d68dd8e31e7";
+
 export const LEGAL_DOCS: LegalDoc[] = [
   {
     slug: "terminos",
