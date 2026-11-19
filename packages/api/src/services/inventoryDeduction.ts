@@ -86,8 +86,35 @@ export async function resolveInventoryRequirements(
 }
 
 /**
+ * Unidades comprometidas por pedidos de la app aún sin pagar (reserva blanda).
+ * Mismo criterio que el catálogo: 60 minutos de ventana.
+ */
+async function pendingUnitsByProduct(
+  tx: AnyDb,
+  productIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (productIds.length === 0) return out;
+  const res = (await tx.execute(sql`
+    SELECT oi."menuItemId" AS id, SUM(oi.quantity)::int AS units
+    FROM "order_items" oi
+    JOIN "orders" o ON o.id = oi."orderId"
+    WHERE oi."menuItemId" IN (${sql.join(productIds.map((id) => sql`${id}`), sql`, `)})
+      AND o."status" IN ('PENDING', 'PENDING_PAYMENT', 'CASH_PAYMENT_REQUESTED')
+      AND o."createdAt" >= now() - interval '60 minutes'
+    GROUP BY 1
+  `)) as { rows?: Array<{ id: string; units: number }> } | Array<{ id: string; units: number }>;
+  const rows = Array.isArray(res) ? res : res.rows ?? [];
+  for (const row of rows) out.set(String(row.id), Number(row.units ?? 0));
+  return out;
+}
+
+/**
  * ¿Alcanza el stock? Devuelve la lista de faltantes (vacía = todo bien).
  * Se usa ANTES de crear/cobrar el pedido para no vender lo que no hay.
+ *
+ * Descuenta la **reserva blanda** (pedidos pendientes de pago): si otro cliente
+ * ya tiene la última unidad en su carrito confirmado, aquí no aparece disponible.
  */
 export async function checkStockForItems(
   tx: AnyDb,
@@ -107,13 +134,27 @@ export async function checkStockForItems(
   const stockRows = Array.isArray(rows) ? rows : rows.rows ?? [];
   const byId = new Map(stockRows.map((r) => [r.id, r]));
 
+  // Reserva blanda: unidades ya comprometidas por pedidos pendientes.
+  const pending = await pendingUnitsByProduct(
+    tx,
+    items.map((i) => i.menuItemId),
+  );
+
   const shortages: StockShortage[] = [];
   for (const [inventoryItemId, required] of requirements) {
     const row = byId.get(inventoryItemId);
     // Sin fila de inventario no se bloquea la venta: el comercio no lo está
     // controlando y el POS tampoco lo bloqueaba. Sólo se bloquea lo contado.
     if (!row) continue;
-    const available = Number(row.stock ?? 0);
+
+    // Sólo se descuenta la reserva cuando el pedido es 1:1 con un insumo (el caso
+    // normal de tienda). Con recetas compuestas la reserva es aproximada y se usa
+    // el stock duro.
+    const single = requirements.size === 1;
+    const reserved = single
+      ? items.reduce((sum, i) => sum + (pending.get(i.menuItemId) ?? 0), 0)
+      : 0;
+    const available = Math.max(0, Number(row.stock ?? 0) - reserved);
     if (required > available) {
       shortages.push({
         inventoryItemId,

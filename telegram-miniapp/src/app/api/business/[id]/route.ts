@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
+import { restaurantDb } from '@/db/restaurant';
 import {
   ownedBusinesses,
   restaurants,
@@ -70,7 +71,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     // Try finding direct restaurant profile, with graceful fallback to pilot restaurant if F&B
-    let restaurant = await db.query.restaurants.findFirst({
+    let restaurant = await restaurantDb.query.restaurants.findFirst({
       where: eq(restaurants.businessId, businessId)
     });
 
@@ -79,7 +80,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     );
 
     if (!restaurant && isFoodAndBeverage) {
-      restaurant = await db.query.restaurants.findFirst({
+      restaurant = await restaurantDb.query.restaurants.findFirst({
         where: eq(restaurants.businessId, 'rabbitty-main')
       });
     }
@@ -95,7 +96,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       // devolvía la que apareciera primero: el catálogo mostraba la carta de
       // Sandbox (sin productos de tienda) o la de una sucursal archivada.
       // Misma regla que el checkout y la cotización de envío.
-      const allBranches = (await db.query.branches.findMany({
+      const allBranches = (await restaurantDb.query.branches.findMany({
         where: eq(branches.restaurantId, restaurant.id),
       })) as BranchRecord[];
       const activeBranches = allBranches.filter((b) => b.isActive !== false);
@@ -108,7 +109,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
       if (primaryBranch) {
         // Fetch categories for this branch
-        const categories = await db.query.menuCategories.findMany({
+        const categories = await restaurantDb.query.menuCategories.findMany({
           where: and(
             eq(menuCategories.branchId, primaryBranch.id),
             eq(menuCategories.isActive, true)
@@ -117,7 +118,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         });
 
         // Fetch items for this branch
-        const items = await db.query.menuItems.findMany({
+        const items = await restaurantDb.query.menuItems.findMany({
           where: and(
             eq(menuItems.branchId, primaryBranch.id),
             eq(menuItems.isActive, true)
@@ -126,7 +127,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         });
 
         // Fetch modifiers
-        const allModifiers = await db.query.menuItemModifiers.findMany({
+        const allModifiers = await restaurantDb.query.menuItemModifiers.findMany({
           orderBy: [asc(menuItemModifiers.sortOrder)]
         });
 
@@ -158,7 +159,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         // consulta que usa el admin y el invariante: receta contra inventario.
         const productIds = items.filter((item) => item.kind === 'PRODUCT').map((item) => item.id);
         const stockMap = productIds.length
-          ? await getProductStockMap(db, productIds).catch(() => new Map())
+          ? await getProductStockMap(restaurantDb, productIds).catch(() => new Map())
           : new Map();
 
         categoriesWithItems = categories.map(cat => ({
@@ -174,7 +175,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         }));
 
         // Fetch tables for table QR context
-        const foundTables = await db.query.tables.findMany({
+        const foundTables = await restaurantDb.query.tables.findMany({
           where: and(
             eq(tables.branchId, primaryBranch.id),
             eq(tables.isActive, true)

@@ -66,14 +66,32 @@ export async function getProductStockMap(
       JOIN "menu_item_ingredients" mi ON mi."menuItemId" = r.sub_id
       WHERE r.sub_id IS NOT NULL AND r.depth < 6
     )
+    ,
+    -- ── Reserva blanda ──
+    -- Unidades comprometidas en pedidos creados desde la app y aún sin pagar.
+    -- No se mueve el inventario (evita doble descuento al cobrar): sólo se
+    -- restan de la disponibilidad para que dos clientes no compren la última.
+    pending AS (
+      SELECT oi."menuItemId" AS id, SUM(oi.quantity)::int AS units
+      FROM "order_items" oi
+      JOIN "orders" o ON o.id = oi."orderId"
+      WHERE o."status" IN ('PENDING', 'PENDING_PAYMENT', 'CASH_PAYMENT_REQUESTED')
+        AND o."createdAt" >= now() - interval '60 minutes'
+      GROUP BY 1
+    )
     SELECT r.root_id AS id,
-           MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int AS stock,
+           CASE
+             WHEN COUNT(DISTINCT r.inv_id) = 1
+               THEN GREATEST(0, MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int - COALESCE(p.units, 0))
+             ELSE MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int
+           END AS stock,
            BOOL_OR(ii.stock <= ii."minStock") AS low,
            CASE WHEN COUNT(DISTINCT r.inv_id) = 1 THEN MIN(r.inv_id) END AS item_id
     FROM req r
     JOIN "inventory_items" ii ON ii.id = r.inv_id
+    LEFT JOIN pending p ON p.id = r.root_id
     WHERE r.inv_id IS NOT NULL AND r.qty > 0
-    GROUP BY r.root_id
+    GROUP BY r.root_id, p.units
   `);
 
   for (const row of rowsOf(res)) {

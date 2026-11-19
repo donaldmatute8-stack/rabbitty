@@ -581,7 +581,7 @@ function AffiliateProfileContent() {
     for (const category of categories) {
       const dishes: CatalogItem[] = [];
       for (const item of category.items as CatalogItem[]) {
-        if (item.kind === 'PRODUCT') storeProducts.push(item);
+        if (item.kind === 'PRODUCT') storeProducts.push({ ...item, categoryName: category.name });
         else dishes.push(item);
       }
       if (dishes.length > 0) menuCats.push({ ...category, items: dishes });

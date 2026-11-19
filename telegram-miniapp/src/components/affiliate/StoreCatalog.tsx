@@ -16,7 +16,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Package, Truck, Plus, ShoppingBag } from 'lucide-react';
+import { Package, Truck, Plus, ShoppingBag, Search, X } from 'lucide-react';
 import { CatalogItem } from './ProductDetailModal';
 
 interface StoreCatalogProps {
@@ -45,6 +45,23 @@ export function StoreCatalog({
   onSelectProduct,
   showsShippingNote = true,
 }: StoreCatalogProps) {
+  const [query, setQuery] = React.useState('');
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(null);
+
+  const categories = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) if (p.categoryName) set.add(p.categoryName);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const visible = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return products.filter((p) => {
+      if (activeCategory && p.categoryName !== activeCategory) return false;
+      if (!q) return true;
+      return `${p.name} ${p.description ?? ''}`.toLowerCase().includes(q);
+    });
+  }, [products, query, activeCategory]);
   if (products.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center">
@@ -70,8 +87,74 @@ export function StoreCatalog({
         </p>
       </div>
 
+      {/* Buscador y categorías propias de la tienda. La tienda reusa el catálogo
+          del menú, pero aquí se navega como escaparate: por nombre o por tipo. */}
+      {products.length > 3 && (
+        <div className="space-y-2">
+          <div className="relative">
+            <Search
+              size={15}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40"
+            />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar en la tienda…"
+              className="w-full rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-1)] py-2.5 pl-10 pr-9 text-xs text-white placeholder-white/40 focus:border-[var(--rabbitty-pink)]/60 focus:outline-none"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Limpiar búsqueda"
+                className="absolute right-2.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white/60"
+              >
+                <X size={11} />
+              </button>
+            )}
+          </div>
+
+          {categories.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setActiveCategory(null)}
+                className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black ${
+                  activeCategory === null
+                    ? 'border-transparent bg-[image:var(--brand-gradient)] text-white'
+                    : 'border-[var(--border-subtle)] bg-[var(--surface-1)] text-[var(--text-secondary)]'
+                }`}
+              >
+                Todo
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setActiveCategory((prev) => (prev === cat ? null : cat))}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black ${
+                    activeCategory === cat
+                      ? 'border-transparent bg-[image:var(--brand-gradient)] text-white'
+                      : 'border-[var(--border-subtle)] bg-[var(--surface-1)] text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {visible.length === 0 ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-8 text-center">
+          <p className="text-sm font-bold text-white/70">Sin resultados</p>
+          <p className="mt-1 text-xs text-white/40">Prueba con otro nombre o quita el filtro.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-3">
-        {products.map((product, index) => {
+        {visible.map((product, index) => {
           // Agotado si el comercio lo ocultó o si no quedan existencias contadas.
           const outOfStock = typeof product.stock === 'number' && product.stock <= 0;
           const soldOut = product.isAvailable === false || outOfStock;
@@ -157,6 +240,7 @@ export function StoreCatalog({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

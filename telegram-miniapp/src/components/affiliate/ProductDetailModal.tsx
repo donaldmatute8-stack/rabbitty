@@ -30,6 +30,8 @@ export interface CatalogItem {
   sku?: string | null;
   /** Existencias vendibles (sólo productos con receta). */
   stock?: number | null;
+  /** Nombre de la categoría del menú (para agrupar en la tienda). */
+  categoryName?: string | null;
   lowStock?: boolean | null;
 }
 

@@ -1144,6 +1144,25 @@ export const adminRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Platillo no encontrado en esta sucursal" });
       }
+      // ── Foto anterior ──
+      // Si cambia la imagen y la anterior era nuestra (bucket), se borra el objeto
+      // para no acumular huérfanos. Si era externa o dataURL, no se toca.
+      if (input.imageUrl !== undefined) {
+        const [prev] = await ctx.restaurantDb
+          .select({ imageUrl: dbSchema.menuItems.imageUrl })
+          .from(dbSchema.menuItems)
+          .where(eq(dbSchema.menuItems.id, input.id))
+          .limit(1);
+        const { productImageKeyFromUrl, deleteObject } = await import("../services/mediaStorage");
+        const oldKey = productImageKeyFromUrl(prev?.imageUrl ?? null);
+        const newKey = productImageKeyFromUrl(input.imageUrl);
+        if (oldKey && oldKey !== newKey) {
+          await deleteObject(oldKey).catch(() => {
+            /* best-effort: un huérfano no rompe nada */
+          });
+        }
+      }
+
       await ctx.restaurantDb.update(dbSchema.menuItems).set(input).where(eq(dbSchema.menuItems.id, input.id));
       return { success: true };
     }),

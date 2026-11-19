@@ -6296,6 +6296,17 @@ export default function PosPage() {
                             🐰 {ord.customerName}
                           </span>
                         )}
+                        {/* Comisión de plataforma congelada en esta venta. Se muestra
+                            al comercio para que cuadre lo que le queda. */}
+                        {Number(ord.commissionCents ?? 0) > 0 && (
+                          <span
+                            className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
+                            title={`Base $${((ord.commissionBaseCents ?? 0) / 100).toFixed(2)} · ${((ord.commissionPct ?? 0) * 100).toFixed(2)} %`}
+                          >
+                            Comisión ${((ord.commissionCents ?? 0) / 100).toFixed(2)} · neto $
+                            {(Number(ord.total) - (ord.commissionCents ?? 0) / 100).toFixed(2)}
+                          </span>
+                        )}
                       </div>
                     </div>
 

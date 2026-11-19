@@ -66,6 +66,20 @@ export function buildProductImageKey(branchId: string, mime: string): string {
   return `menu/${branchId}/${id}.${ext}`;
 }
 
+/**
+ * Saca la key de una URL servida por `/api/media/product/<key>`.
+ * Devuelve null si la URL no es nuestra (foto externa, dataURL viejo…), para no
+ * borrar objetos ajenos por accidente.
+ */
+export function productImageKeyFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = "/api/media/product/";
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const key = url.slice(idx + marker.length).split("?")[0] ?? "";
+  return key && isProductImageKey(key) ? key : null;
+}
+
 /** ¿La key es una foto de producto válida? (evita saltar a otras carpetas) */
 export function isProductImageKey(key: string): boolean {
   return /^menu\/[A-Za-z0-9-]+\/[A-Za-z0-9-]+\.(jpg|jpeg|png|webp|gif)$/i.test(key);

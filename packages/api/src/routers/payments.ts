@@ -1003,8 +1003,27 @@ export const paymentsRouter = router({
         }
       }
 
-      // Estimación de procesador Stripe (2.9% + 2.50 MXN)
-      const estimatedProcessorFeeCents = Math.round(netFiatCents * 0.029) + (succeededCount * 250);
+      // ── Costo real del riel ──
+      // Sale de `provider_fees` (tarifa vigente del PSP, con IVA). Si no hay
+      // fila configurada, cae al estimado anterior para no romper la conciliación.
+      let estimatedProcessorFeeCents = Math.round(netFiatCents * 0.029) + (succeededCount * 250);
+      try {
+        const { providerFees } = await import("@rabbitty/database-restaurant/schema");
+        const [feeRow] = await ctx.restaurantDb
+          .select()
+          .from(providerFees)
+          .where(eq(providerFees.provider, "STRIPE"))
+          .orderBy(desc(providerFees.activeFrom))
+          .limit(1);
+        if (feeRow) {
+          const variable = Math.round(netFiatCents * Number(feeRow.percent ?? 0));
+          const fixed = Math.round(succeededCount * Number(feeRow.fixedMxn ?? 0) * 100);
+          const iva = Math.round((variable + fixed) * Number(feeRow.ivaPercent ?? 0));
+          estimatedProcessorFeeCents = variable + fixed + iva;
+        }
+      } catch {
+        /* sin tabla/tarifa: se mantiene el estimado */
+      }
       const netSettledToMerchantCents = Math.max(0, netFiatCents - platformFeeCents - estimatedProcessorFeeCents);
 
       return {
