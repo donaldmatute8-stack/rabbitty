@@ -33,7 +33,7 @@ export type LegalDoc = {
   published?: boolean;
 };
 
-export const LEGAL_VERSION = "2026-11-19.1";
+export const LEGAL_VERSION = "2026-11-19.2";
 
 /**
  * Huella del TEXTO de los documentos.
@@ -43,7 +43,7 @@ export const LEGAL_VERSION = "2026-11-19.1";
  * Si editas cualquier texto: sube `LEGAL_VERSION`, actualiza esta huella y
  * commitea las dos cosas juntas.
  */
-export const LEGAL_CONTENT_HASH = "aecdcc878a5a8d03";
+export const LEGAL_CONTENT_HASH = "b0575a3677188a60";
 
 /** Identificación del responsable legal (fuente: expediente corporativo). */
 const ENTIDAD =
@@ -372,6 +372,118 @@ export const LEGAL_DOCS: LegalDoc[] = [
     ],
   },
   {
+    slug: "membresias",
+    title: "Política de Membresías y Suscripciones",
+    audience: "Comensales y afiliados",
+    version: LEGAL_VERSION,
+    updated: "19 de noviembre de 2026 (rev. 1)",
+    summary:
+      "Quién vende la membresía, qué incluye, cómo se renueva, cómo se cancela y qué pasa si el negocio deja de operar.",
+    sections: [
+      {
+        heading: "1. Quién vende y quién opera",
+        body: [
+          "La membresía la vende y la presta el negocio afiliado que la publica. Rabbitty administra la tecnología, el cobro y el registro del beneficio; no sustituye al negocio en la prestación.",
+          "Antes de contratar se muestra: precio total con impuestos, vigencia, renovación, beneficios incluidos y limitaciones, sucursales participantes y tope por ticket o por ciclo.",
+        ],
+      },
+      {
+        heading: "2. Vigencia y renovación",
+        body: [
+          "La vigencia y el ciclo (semanal, mensual u otro) son los que publique el negocio. Si hay renovación automática, se informa antes de contratar y se puede desactivar antes del siguiente corte.",
+          "El cambio de precio se avisa con 30 días naturales. Si no estás de acuerdo, puedes cancelar antes de que entre en vigor y conservas el ciclo ya pagado.",
+        ],
+      },
+      {
+        heading: "3. Uso del beneficio",
+        body: [
+          "Los beneficios aplican en las sucursales y horarios que el negocio indique, con los topes publicados. El uso es personal y requiere tu cuenta activa.",
+          "Los beneficios no son acumulables entre ciclos ni canjeables por efectivo, salvo que el negocio lo indique expresamente.",
+        ],
+      },
+      {
+        heading: "4. Cancelación",
+        body: [
+          "Puedes cancelar desde la app o con el negocio. La cancelación detiene las renovaciones siguientes; el ciclo en curso se conserva hasta su vencimiento salvo que el negocio aplique una política más favorable.",
+          "Si el cobro se hizo con tarjeta, la cancelación no genera cargos adicionales.",
+        ],
+      },
+      {
+        heading: "5. Reembolsos",
+        body: [
+          "Si el beneficio no se disfrutó, procede el reembolso de la parte no usada del ciclo conforme a la política del negocio, que debe estar visible antes de pagar.",
+          "Si el cargo fue indebido o duplicado, se devuelve íntegro por el mismo medio de pago.",
+        ],
+      },
+      {
+        heading: "6. Indisponibilidad y cierre del negocio",
+        body: [
+          "Si el negocio no puede prestar el beneficio por un periodo relevante (cierre temporal, cambio de giro, pérdida de sucursal), el comensal puede pedir el reembolso proporcional del ciclo en curso.",
+          "Si el negocio deja de operar definitivamente, se reembolsa la parte no disfrutada del ciclo en curso. Rabbitty colabora con el afiliado para resolverlo y, si el afiliado no responde, acompaña al comensal en el reclamo.",
+        ],
+      },
+      {
+        heading: "7. Obligaciones del afiliado",
+        body: [
+          "Publicar precio total, vigencia, beneficios, limitaciones y política de cancelación antes del cobro; honrar el beneficio mientras esté vigente; y atender reclamaciones en un plazo razonable.",
+          "El afiliado es responsable de la relación de consumo con su cliente y de sus obligaciones fiscales por la venta de la membresía.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "propinas",
+    title: "Política de Propinas y Distribución",
+    audience: "Comensales y afiliados",
+    version: LEGAL_VERSION,
+    updated: "19 de noviembre de 2026 (rev. 1)",
+    summary:
+      "La propina es voluntaria. Aquí está cómo se sugiere, cómo se modifica, quién la recibe y de quién es la responsabilidad de repartirla.",
+    sections: [
+      {
+        heading: "1. Voluntariedad",
+        body: [
+          "La propina es voluntaria y no es requisito para recibir el servicio. Puedes dejarla en cero, elegir un porcentaje sugerido o capturar un monto.",
+          "En México no se puede exigir propina: el sistema solo la sugiere y permite modificarla antes de pagar.",
+        ],
+      },
+      {
+        heading: "2. Cómo se registra",
+        body: [
+          "La propina se registra como un concepto separado de la venta y se identifica en el comprobante, para que no se confunda con el consumo ni con la comisión de plataforma.",
+          "Si se paga con tarjeta, se cobra junto con la cuenta en un solo movimiento y se reporta por separado en la conciliación del negocio.",
+        ],
+      },
+      {
+        heading: "3. Quién la recibe",
+        body: [
+          "La propina la recibe el **negocio afiliado**, que la entrega al personal conforme a su política interna y a sus obligaciones laborales.",
+          "Rabbitty **no es beneficiario de la propina**, no cobra comisión sobre ella y no decide su reparto.",
+        ],
+      },
+      {
+        heading: "4. Modificación y devolución",
+        body: [
+          "Puedes modificar o retirar la propina antes de confirmar el pago. Una vez pagada, cualquier ajuste se solicita al negocio y queda registrado en la bitácora para que la conciliación lo refleje.",
+          "Si el consumo se reembolsa, la propina se devuelve junto con el importe correspondiente.",
+        ],
+      },
+      {
+        heading: "5. Responsabilidad del afiliado",
+        body: [
+          "El afiliado es responsable de la distribución, los registros y el tratamiento fiscal y laboral de las propinas, incluida su declaración cuando corresponda.",
+          "Debe informar a su personal y a sus clientes cómo se reparte, sin que Rabbitty intervenga en esa decisión.",
+        ],
+      },
+      {
+        heading: "6. Qué no es una propina",
+        body: [
+          "No es la comisión de plataforma, ni un cargo por servicio obligatorio, ni un ingreso de Rabbitty. Si el negocio cobra un cargo por servicio, debe informarlo aparte y con claridad antes de pagar.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "privacidad",
     title: "Aviso de Privacidad",
     audience: "Comensales, personal y afiliados",
@@ -530,7 +642,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           "Son puntos de recompensa del ecosistema Rabbitty. Se obtienen por consumir en negocios afiliados y por misiones y promociones.",
           "No son dinero de curso legal, ni moneda electrónica, ni saldo prepagado, ni criptoactivo, ni inversión. No se compran con dinero ni se convierten a efectivo en ningún caso.",
           "No otorgan derecho a retiro en efectivo ni a rendimiento. Su valor es promocional y se agota al canjearse en la red de afiliados.",
-          "[REVISAR-ABOGADO] La calificación regulatoria de la red (emisión, administración, transferencia y redención) requiere dictamen expreso sobre el artículo 22 de la Ley para Regular las Instituciones de Tecnología Financiera, considerando el funcionamiento real del sistema.",
+          "[REVISAR-ABOGADO] La calificación regulatoria de la red (emisión, administración, transferencia y redención) requiere dictamen expreso sobre los artículos 22 y 23 de la Ley para Regular las Instituciones de Tecnología Financiera y, en particular, sobre la exclusión del artículo 24, fracción I (programas de lealtad o recompensa), que exige que los derechos sean aceptados por la persona moral que los ofrece o por sociedades afiliadas, no sean convertibles a moneda de curso legal y que las sociedades afiliadas no excedan el 20 % del total de establecimientos habilitados para recibir pagos con tarjeta. Ese cálculo debe hacerse con datos reales de la red.",
         ],
       },
       {
@@ -554,10 +666,9 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "4. Vigencia y saldos",
         body: [
-          "Los Bunz en una cuenta registrada no vencen.",
-          "Si se emiten a un teléfono sin cuenta (Bóveda Temporal), hay 3 meses para registrarse y reclamarlos. Al vencer, el saldo se cancela y no es reclamable en dinero.",
-          "Una cuenta inactiva por 24 meses recibe aviso por correo y en la app; el saldo no usado puede cancelarse 30 días después del aviso. El titular puede evitar la cancelación iniciando sesión o respondiendo al aviso.",
-          "[REVISAR-ABOGADO] La caducidad de la bóveda y la cancelación por inactividad deben justificarse en naturaleza, proporcionalidad y procedimiento antes de considerarse definitivas.",
+          "Los Bunz acreditados en una cuenta registrada **no vencen y no se cancelan por inactividad**. Si una cuenta pasa mucho tiempo sin actividad, Rabbitty puede limitar temporalmente funciones (transferencias, canje) por seguridad, avisando en la app y por correo; el saldo se conserva y se reactiva al iniciar sesión.",
+          "Bóveda Temporal: si los Bunz se emiten a un teléfono que todavía no tiene cuenta, hay 3 meses para registrarse y reclamarlos. El plazo se informa al momento de generar el beneficio, se envía recordatorio antes del vencimiento y el titular puede acreditar que el número es suyo. Si hay un error técnico o una imposibilidad imputable a Rabbitty, el plazo se suspende y el beneficio se repone.",
+          "[REVISAR-ABOGADO] La caducidad de la Bóveda Temporal se mantiene de forma provisional y sujeta a validación jurídica (naturaleza del derecho promocional, proporcionalidad y procedimiento).",
         ],
       },
       {
@@ -670,7 +781,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "8. Baja y responsabilidad",
         body: [
-          "Puedes cerrar tu cuenta desde la app o por correo. Al cerrarla, el saldo de Bunz se pierde 30 días después del aviso; durante ese plazo puedes reclamarlo o transferirlo conforme al Reglamento.",
+          "Puedes cerrar tu cuenta desde la app o por correo. **Cerrar la cuenta no confisca tus Bunz**: durante 30 días conservas el saldo para consultarlo, transferirlo o reclamarlo conforme al Reglamento; se te avisa al inicio y al final de ese plazo.",
+          "Si al terminar el plazo no lo reclamaste ni transferiste, los Bunz se cancelan por ser un beneficio promocional sin uso, dejando constancia. En ningún caso se convierten en dinero ni en deuda a tu cargo.",
           "Rabbitty responde por el funcionamiento de su plataforma, no por el servicio del negocio. Nada limita los derechos que la ley reconoce como irrenunciables al consumidor.",
           `Para aclaraciones y reclamaciones: ${CONTACTO}. Conservamos la evidencia de la contratación electrónica conforme al Aviso de Privacidad.`,
         ],

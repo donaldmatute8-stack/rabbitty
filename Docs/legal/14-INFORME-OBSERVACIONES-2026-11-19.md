@@ -31,13 +31,51 @@ Cambiarlas requiere decisión del negocio y, en dos casos, dictamen.
 
 ---
 
+## 1 bis. Verificación de publicación (rev. 2 · `2026-11-19.2`)
+
+La revisión anterior se hizo sobre una versión en caché. Comprobado en vivo el
+2026-11-19 con `?t=<timestamp>`:
+
+| URL | Prueba encontrada |
+|---|---|
+| `app.rabbitty.me/legal/privacidad` | "Responsable del tratamiento" + "MXHUB ECOSISTEMA BLOCKCHAIN" |
+| `app.rabbitty.me/legal/payments` | "Flujo del dinero y obligación de liquidar" |
+| `app.rabbitty.me/legal/terminos` | "Suspensión, retención y limitación" |
+| `app.rabbitty.me/legal/rabbitter` | "política mínima común" |
+| `app.rabbitty.me/legal/bunz` | nota `[REVISAR-ABOGADO]` |
+| `rabbitty.me/legal` | misma fuente (`@rabbitty/legal`) |
+
+La página pública y la app leen el **mismo** archivo, así que no puede haber
+textos distintos entre superficies: sólo caché del revisor.
+
+**Rev. 2 aplica además:** caducidad por inactividad **eliminada**; cierre de cuenta
+**sin confiscación** (30 días para consultar, transferir o reclamar, con aviso al
+inicio y al final); Bóveda Temporal mantenida de forma provisional con aviso al
+emitir, recordatorio, prueba de titularidad y suspensión por error técnico; y dos
+documentos nuevos publicados (**Membresías y Suscripciones**, **Propinas y
+Distribución**).
+
+---
+
 ## 2. Los tres dictámenes que no deberían esperar a 2027
 
 ### 2.1 Bunz — clasificación regulatoria (LRITF art. 22)
 
-**Qué preguntar:** si la emisión, administración, transferencia y redención de
-Bunz en una red de comercios encuadra en “fondos de pago electrónico”, aunque no
-se compren con dinero ni sean convertibles.
+**Qué preguntar (revisado):** no basta con el artículo 22. El dictamen debe
+cubrir:
+
+1. ¿Rabbitty encaja en la **exclusión del artículo 24, fracción I** (programas de
+   lealtad o recompensa)?
+2. ¿Qué comercios cuentan como **sociedades afiliadas** para ese supuesto?
+3. **¿Cómo se calcula el límite del 20 %** del total de establecimientos
+   habilitados para recibir pagos con tarjeta, con datos reales de la red?
+4. ¿Las **transferencias entre usuarios** afectan la clasificación o son
+   compatibles con el programa?
+5. ¿La **compensación entre comercios** crea una obligación distinta de la mera
+   aceptación de puntos promocionales?
+
+El art. 23 define los elementos de los fondos de pago electrónico y el 24 las
+exclusiones; analizar el 22 aislado lleva a una conclusión incompleta.
 
 **Hechos que el abogado debe ponderar:** fungibilidad entre comercios,
 transferencias entre usuarios, respaldo por negocio emisor, compensación de red,
@@ -47,9 +85,10 @@ imposibilidad de retiro.
 no se compran con dinero, no hay retiro, no hay rendimiento, cada emisión queda en
 el libro con negocio/orden/motivo, y el saldo negativo no es exigible en dinero.
 
-**Decisión pendiente del negocio:** caducidad de bóveda (3 meses) y cancelación
-por inactividad (24 + 30 días). Hoy están descritas con procedimiento y aviso,
-pero falta justificación legal expresa.
+**Decisión aplicada:** se **eliminó** la cancelación por inactividad y la
+confiscación al cerrar cuenta. La caducidad de la Bóveda Temporal (3 meses) se
+mantiene **provisional**, con aviso al emitir, recordatorio, prueba de titularidad
+y suspensión por error técnico, a la espera del dictamen.
 
 ### 2.2 Pagos — quién es dueño de qué
 
@@ -97,10 +136,10 @@ pagos) y ajustar la lista de encargados a los contratos firmados.
 
 | Dato | Valor usado en los documentos | Verificar |
 |---|---|---|
-| Razón social | MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. | Acta constitutiva y que sea la sociedad que factura |
-| RFC | MEB2402087Z3 | Constancia de situación fiscal |
-| Domicilio | Lázaro Cárdenas 74, Col. Dorada, C.P. 63732, Bucerías, Nayarit | Comprobante de domicilio |
-| Representante | Marco Arturo Muñoz Del Toro (CEO) | Poder vigente para obligarse |
+| Razón social | MXHUB ECOSISTEMA BLOCKCHAIN, S.A. DE C.V. | Confirmado por el negocio; falta cotejo con acta y que sea la sociedad que factura |
+| RFC | MEB2402087Z3 | Confirmado por el negocio; falta constancia de situación fiscal |
+| Domicilio | Lázaro Cárdenas 74, Col. Dorada, C.P. 63732, Bucerías, Nayarit | Confirmado por el negocio; falta comprobante a nombre de la sociedad |
+| Representante | Marco Arturo Muñoz Del Toro (CEO) | Confirmado por el negocio; falta poder notarial en el expediente |
 | Contacto contractual | hola@rabbitty.me | Que el buzón esté atendido |
 | Contacto de privacidad | privacidad@rabbitty.me | Responsable interno designado |
 

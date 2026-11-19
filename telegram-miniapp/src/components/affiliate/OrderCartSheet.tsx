@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingBag, Trash2, ChevronRight, X, Sparkles, CheckCircle2, Truck } from 'lucide-react';
 import { CatalogModifier } from './ProductDetailModal';
 import { useOverlayLock } from '@rabbitty/ui';
+import { PlatformBridge } from '@/lib/platform';
 
 export interface CartItem {
   id: string; // unique cart entry key
@@ -26,7 +27,10 @@ interface OrderCartSheetProps {
   onSubmitOrder: (
     orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY',
     address?: { text: string; data: Record<string, unknown> },
+    paymentMethod?: CartPaymentMethod,
   ) => Promise<void>;
+  /** Saldo de Bunz del Rabbitter (para mostrar si le alcanza). */
+  bunzBalance?: number;
   tableNumber?: number | null;
   currency?: string;
   rewardPercentage?: number;
@@ -45,6 +49,15 @@ interface OrderCartSheetProps {
   branchOrBusinessId?: string | null;
 }
 
+export type CartPaymentMethod = 'CASH' | 'BUNZ' | 'CARD';
+
+/** ¿Qué puede pagar el cliente? Lo resuelve `/api/pay/capabilities`. */
+type PayCapabilities = {
+  cash?: { available: boolean };
+  bunz?: { available: boolean };
+  card?: { available: boolean; reason?: string | null; label?: string };
+};
+
 export function OrderCartSheet({
   isOpen,
   onClose,
@@ -59,6 +72,7 @@ export function OrderCartSheet({
   businessName,
   checkedIn = false,
   branchOrBusinessId = null,
+  bunzBalance = 0,
 }: OrderCartSheetProps) {
   // Aísla los gestos de la página de atrás mientras el panel está abierto.
   useOverlayLock(isOpen);
@@ -67,6 +81,23 @@ export function OrderCartSheet({
   const [orderType, setOrderType] = React.useState<'DINE_IN' | 'PICKUP' | 'DELIVERY'>(
     tableNumber ? 'DINE_IN' : 'PICKUP'
   );
+  const [paymentMethod, setPaymentMethod] = React.useState<CartPaymentMethod>('CASH');
+  const [payCaps, setPayCaps] = React.useState<PayCapabilities | null>(null);
+
+  // Capacidades reales: si el riel de tarjeta no está configurado, la opción se
+  // muestra deshabilitada con el motivo, no se esconde a ciegas.
+  React.useEffect(() => {
+    if (!isOpen) return;
+    let alive = true;
+    fetch('/api/pay/capabilities', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (alive && data?.success) setPayCaps(data.methods as PayCapabilities);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isOpen]);
+
   const [address, setAddress] = React.useState({
     street1: '',
     street2: '',
@@ -165,6 +196,7 @@ export function OrderCartSheet({
         orderType === 'DELIVERY'
           ? { text: addressText, data: { ...address, country: address.country.trim().toUpperCase() || 'MX' } }
           : undefined,
+        paymentMethod,
       );
       onClose();
     } catch (e) {
@@ -415,6 +447,82 @@ export function OrderCartSheet({
               {/* Summary & Checkout Button */}
               {cart.length > 0 && (
                 <div className="pt-4 border-t border-white/10 space-y-3">
+                  {/* ── Cómo quiere pagar ──
+                      Tres caminos con flujo distinto: caja (el POS lo cobra),
+                      Bunz (se debita al confirmar) y tarjeta (Rabbitty Pay). */}
+                  <div className="space-y-2">
+                    <p className="m-0 text-[10px] font-black uppercase tracking-[0.16em] text-white/40">
+                      ¿Cómo pagas?
+                    </p>
+                    <div className="grid gap-2">
+                      {([
+                        {
+                          id: 'CASH' as const,
+                          icon: '💵',
+                          label: 'Pagar en caja',
+                          hint: 'La cocina arranca cuando cobras en el local.',
+                          available: payCaps?.cash?.available !== false,
+                          reason: null as string | null,
+                        },
+                        {
+                          id: 'BUNZ' as const,
+                          icon: '🐰',
+                          label: 'Pagar con Bunz',
+                          hint:
+                            bunzBalance > 0
+                              ? `Tienes ${bunzBalance.toLocaleString('es-MX')} Bunz.`
+                              : 'Necesitas saldo Bunz para esta opción.',
+                          available: payCaps?.bunz?.available !== false,
+                          reason: null as string | null,
+                        },
+                        {
+                          id: 'CARD' as const,
+                          icon: '💳',
+                          label: payCaps?.card?.label || 'Rabbitty Pay · tarjeta',
+                          hint: payCaps?.card?.available
+                            ? 'Pago seguro con tarjeta desde la app.'
+                            : 'No disponible por ahora.',
+                          available: payCaps?.card?.available === true,
+                          reason: payCaps?.card?.reason ?? null,
+                        },
+                      ]).map((option) => {
+                        const active = paymentMethod === option.id;
+                        const disabled = !option.available;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => {
+                              if (disabled) return;
+                              PlatformBridge.hapticFeedback('light');
+                              setPaymentMethod(option.id);
+                            }}
+                            className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                              active
+                                ? 'border-[var(--rabbitty-pink)]/60 bg-[var(--rabbitty-pink)]/10'
+                                : 'border-white/10 bg-white/[0.03]'
+                            } ${disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'}`}
+                          >
+                            <span className="text-base leading-none">{option.icon}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[12px] font-black text-white">{option.label}</span>
+                              <span className="mt-0.5 block text-[10.5px] leading-snug text-white/50">
+                                {option.hint}
+                                {disabled && option.reason ? ` · ${option.reason}` : ''}
+                              </span>
+                            </span>
+                            <span
+                              className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border ${
+                                active ? 'border-[var(--rabbitty-pink)] bg-[var(--rabbitty-pink)]' : 'border-white/25'
+                              }`}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between text-xs text-white/60">
                     <span>Recompensa estimada:</span>
                     <span className="font-bold text-pink-400 flex items-center gap-1">

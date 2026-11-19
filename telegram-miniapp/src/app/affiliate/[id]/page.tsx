@@ -36,6 +36,8 @@ import type { TrackedOrder } from '@/lib/useOrderTracking';
 import { OrderCartSheet, CartItem } from '@/components/affiliate/OrderCartSheet';
 import { CatalogItem, CatalogModifier, ProductDetailModal } from '@/components/affiliate/ProductDetailModal';
 import { StoreCatalog } from '@/components/affiliate/StoreCatalog';
+import { InAppPaySheet } from '@/components/affiliate/InAppPaySheet';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 interface AffiliateData {
   id: string;
@@ -131,6 +133,7 @@ function AffiliateProfileContent() {
   const id = params?.id as string;
   const { showToast } = useToast();
 
+  const { user } = useAuth();
   const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [tables, setTables] = useState<Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>>([]);
@@ -186,7 +189,13 @@ function AffiliateProfileContent() {
     payload: Record<string, unknown>;
     items: Array<{ name: string; quantity: number }>;
     total: number;
+    paymentMethod: 'CASH' | 'BUNZ' | 'CARD';
   } | null>(null);
+
+  // ── Pago con tarjeta (Rabbitty Pay) ──
+  // El pedido se crea primero (PENDING_PAYMENT) y el cobro ocurre en el sheet.
+  // Si el cliente cierra sin pagar, el POS lo muestra en "Por cobrar".
+  const [payOrder, setPayOrder] = useState<{ orderId: string; total: number } | null>(null);
   const [sentOrder, setSentOrder] = useState<{
     orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY';
     address?: string;
@@ -478,6 +487,7 @@ function AffiliateProfileContent() {
     address?: string;
     items: Array<{ name: string; quantity: number }>;
     total: number;
+    paymentMethod: 'CASH' | 'BUNZ' | 'CARD';
   }) => {
     try {
       // Fase C: headers de auth → la orden queda con customerId y se acumula
@@ -497,7 +507,16 @@ function AffiliateProfileContent() {
       PlatformBridge.hapticFeedback('success');
       setSentOrder(order);
       window.setTimeout(() => setSentOrder(null), 2800);
-      showToast('¡Orden enviada a cocina / personal con éxito!', 'success');
+
+      if (order.paymentMethod === 'CARD') {
+        // El pedido ya existe sin pagar: se cobra aquí mismo.
+        showToast('Pedido creado. Completa el pago con tarjeta.', 'info');
+        if (data.orderId) setPayOrder({ orderId: data.orderId, total: order.total });
+      } else if (order.paymentMethod === 'BUNZ') {
+        showToast('¡Pagado con Bunz! La cocina ya lo tiene.', 'success');
+      } else {
+        showToast('Pedido enviado. Paga en caja para que la cocina arranque.', 'success');
+      }
     } catch {
       showToast('Error al enviar orden', 'error');
     }
@@ -526,6 +545,7 @@ function AffiliateProfileContent() {
   const handleSubmitOrder = async (
     orderType: 'DINE_IN' | 'PICKUP' | 'DELIVERY',
     address?: { text: string; data: Record<string, unknown> },
+    paymentMethod: 'CASH' | 'BUNZ' | 'CARD' = 'CASH',
   ) => {
     PlatformBridge.hapticFeedback('heavy');
 
@@ -544,7 +564,7 @@ function AffiliateProfileContent() {
         quantity: item.quantity,
         notes: item.notes || null,
       })),
-      paymentMethod: 'CASH',
+      paymentMethod,
     };
 
     // El pedido sale solo tras la barra de 5 s, con la tarjeta inferior para
@@ -553,6 +573,7 @@ function AffiliateProfileContent() {
       orderType,
       address: address?.text,
       payload,
+      paymentMethod,
       items: cart.map((item) => ({ name: item.name, quantity: item.quantity })),
       total: cart.reduce((acc, item) => {
         const mods = (item.modifiers || []).reduce((m, mod) => m + (Number(mod.priceAdjust) || 0), 0);
@@ -1363,6 +1384,21 @@ function AffiliateProfileContent() {
         rewardPercentage={affiliate?.rewardPercentage ?? 0}
       />
 
+      {/* Pago con tarjeta del pedido recién creado (Rabbitty Pay / Stripe) */}
+      {payOrder && (
+        <InAppPaySheet
+          isOpen={Boolean(payOrder)}
+          onClose={() => setPayOrder(null)}
+          orderId={payOrder.orderId}
+          total={payOrder.total}
+          businessName={affiliate?.name}
+          onPaid={() => {
+            setPayOrder(null);
+            showToast('¡Pago recibido! La cocina ya tiene tu pedido.', 'success');
+          }}
+        />
+      )}
+
       <OrderCartSheet
         isOpen={showCartSheet}
         onClose={() => setShowCartSheet(false)}
@@ -1377,6 +1413,7 @@ function AffiliateProfileContent() {
         // H-ORDEN-LOCAL: check-in activo ⇒ pedido directo al local, sin picker.
         checkedIn={hasPresenceCheckedIn}
         branchOrBusinessId={affiliate.id}
+        bunzBalance={Math.max(0, (user?.totalBunzEarned ?? 0) - (user?.totalBunzSpent ?? 0))}
       />
 
       {/* Pedido en rampa: identidad de tarjeta de pedido + barra de 5 s */}
