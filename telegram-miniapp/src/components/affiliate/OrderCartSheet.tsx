@@ -89,14 +89,17 @@ export function OrderCartSheet({
   React.useEffect(() => {
     if (!isOpen) return;
     let alive = true;
-    fetch('/api/pay/capabilities', { cache: 'no-store' })
+    // Por negocio: un afiliado sin alta de Stripe Connect no debe ver la opción
+    // de tarjeta como si funcionara.
+    const query = branchOrBusinessId ? `?businessId=${encodeURIComponent(branchOrBusinessId)}` : '';
+    fetch(`/api/pay/capabilities${query}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (alive && data?.success) setPayCaps(data.methods as PayCapabilities);
       })
       .catch(() => {});
     return () => { alive = false; };
-  }, [isOpen]);
+  }, [isOpen, branchOrBusinessId]);
 
   const [address, setAddress] = React.useState({
     street1: '',
