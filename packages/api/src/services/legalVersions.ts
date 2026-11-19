@@ -15,11 +15,21 @@
 export { LEGAL_VERSION } from "@rabbitty/legal";
 import { LEGAL_VERSION } from "@rabbitty/legal";
 
-export type BusinessDoc = "TERMS" | "PAYMENTS" | "PRIVACY" | "BUNZ" | "EQUIPMENT";
+export type BusinessDoc =
+  | "TERMS"
+  | "PAYMENTS"
+  | "CHARGEBACKS"
+  | "DPA"
+  | "PRIVACY"
+  | "BUNZ"
+  | "EQUIPMENT";
 
 export const BUSINESS_DOCS: Array<{ doc: BusinessDoc; label: string; published: boolean }> = [
   { doc: "TERMS", label: "Términos y Condiciones de la Plataforma", published: true },
   { doc: "PAYMENTS", label: "Anexo de Pagos (comisiones y liquidaciones)", published: true },
+  // Antes se citaban pero no se publicaban: el afiliado no podía consultarlos.
+  { doc: "CHARGEBACKS", label: "Anexo de Contracargos y Reembolsos", published: true },
+  { doc: "DPA", label: "Acuerdo de Tratamiento de Datos (DPA)", published: true },
   { doc: "PRIVACY", label: "Aviso de Privacidad", published: true },
   { doc: "BUNZ", label: "Reglamento de la Economía Bunz", published: true },
   // Se activa el día que haya hardware en el local.
