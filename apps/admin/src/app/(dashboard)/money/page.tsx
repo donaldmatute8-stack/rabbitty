@@ -4,6 +4,7 @@ import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge } from "@rabbitty/ui";
 import {
+  Percent,
   TrendingUp,
   ReceiptText,
   Banknote,
@@ -134,6 +135,7 @@ export default function MoneyPage() {
     { enabled: Boolean(branchId), retry: false },
   );
   const { data: storeTotals } = trpc.admin.getStoreProducts.useQuery(undefined, { retry: false });
+  const { data: commission } = trpc.admin.getCommissionSummary.useQuery(undefined, { retry: false });
 
   // `getSalesTrends` devuelve una fila por día con `totalSales`.
   const sumDays = (rows: Array<{ totalSales?: number | string | null }> | undefined): number =>
@@ -172,6 +174,19 @@ export default function MoneyPage() {
             <ShoppingBag className="h-3 w-3" /> Tienda (30 d)
           </p>
           <p className="mt-1 text-3xl font-black text-white">{money(storeTotals?.totals.revenue30d ?? 0)}</p>
+        </Card>
+        <Card className="border border-white/5 bg-white/[0.03] p-5">
+          <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+            <Percent className="h-3 w-3" /> Comisión plataforma (30 d)
+          </p>
+          <p className="mt-1 text-3xl font-black text-white">
+            {money((commission?.last30d ?? 0) / 100)}
+          </p>
+          <p className="mt-0.5 text-[10px] font-semibold text-gray-500">
+            {commission?.enabled
+              ? `${((commission.pct ?? 0) * 100).toFixed(2)} % · ${commission.last30dOrders} ventas`
+              : 'Apagada'}
+          </p>
         </Card>
         <Card className="border border-white/5 bg-white/[0.03] p-5">
           <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">

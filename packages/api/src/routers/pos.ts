@@ -13,6 +13,7 @@ import { resolveStationsForItems } from "../services/stationRouting";
 import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch } from "../services/businessContext";
 import { deductOrderInventory, checkStockForItems } from "../services/inventoryDeduction";
+import { computePlatformCommission, type PlatformCommissionConfig } from "../services/platformCommission";
 export { resolveBusinessIdFromBranch };
 import { deriveOrderStage, type OrderStage, orderStageStepIndex } from "@rabbitty/events";
 import { tables as tablesTable, tableSessions, branches, menuCategories, menuItems, orders, orderItems, deliveries, payments, menuItemModifiers, restaurants, events as posEvents, paymentIntents, bunzReserves, bunzRedemptionAttempts, bunzLedgerEntries, bunzObligations, bunzObligationEvents, bunzEconomicLimits, bunzControlState, posChargeRequests } from "@rabbitty/database-restaurant/schema";
@@ -1389,7 +1390,49 @@ export const posRouter = router({
 
         const targetPayableAmount = Math.max(0, orderNetTotal);
         if (r2(totalPaid) >= targetPayableAmount) {
-          await tx.update(orders).set({ status: ORDER_STATUS.COMPLETED }).where(eq(orders.id, input.orderId));
+          // ── Comisión de plataforma ──
+          // Se congela al completar la venta. Sólo aplica a pedidos que nacieron
+          // en la app (`customerId` presente) cuando `appliesTo = APP_ORDERS`;
+          // la venta de mostrador a un cliente nuevo no paga comisión.
+          let commissionPatch: {
+            commissionBaseCents?: number;
+            commissionPct?: number;
+            commissionCents?: number;
+          } = {};
+          try {
+            const [cfgRow] = await tx
+              .select({
+                platformCommission: restaurants.platformCommission,
+                total: orders.total,
+                bunzPaid: orders.bunzPaid,
+              })
+              .from(orders)
+              .innerJoin(branches, eq(branches.id, orders.branchId))
+              .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+              .where(eq(orders.id, input.orderId))
+              .limit(1);
+            if (cfgRow) {
+              const commission = computePlatformCommission({
+                grossCents: Math.round(Number(cfgRow.total ?? 0) * 100),
+                bunzCents: Math.round(Number(cfgRow.bunzPaid ?? 0) * 100),
+                fromApp: Boolean(orderRow.customerId),
+                config: cfgRow.platformCommission as PlatformCommissionConfig | null,
+              });
+              commissionPatch = {
+                commissionBaseCents: commission.baseCents,
+                commissionPct: commission.pct,
+                commissionCents: commission.cents,
+              };
+            }
+          } catch (commissionErr) {
+            // La comisión nunca debe tumbar un cobro ya autorizado.
+            console.warn("[pos] no se pudo calcular la comisión de plataforma:", commissionErr);
+          }
+
+          await tx
+            .update(orders)
+            .set({ status: ORDER_STATUS.COMPLETED, ...commissionPatch })
+            .where(eq(orders.id, input.orderId));
 
           const paidOrderRow = await tx.select({ tableId: orders.tableId }).from(orders).where(eq(orders.id, input.orderId)).limit(1);
           if (paidOrderRow[0]?.tableId) {

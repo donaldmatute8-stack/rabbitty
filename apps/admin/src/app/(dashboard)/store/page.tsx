@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, Badge, Button, Dialog, Input, Select, toast } from "@rabbitty/ui";
-import { Package, Truck, ArrowUp, ArrowDown, Eye, EyeOff, AlertTriangle, ExternalLink } from "lucide-react";
+import { Package, Truck, ArrowUp, ArrowDown, Eye, EyeOff, AlertTriangle, ExternalLink, Percent } from "lucide-react";
 import Link from "next/link";
 import { useBranch } from "../../../components/DashboardClientWrapper";
 
@@ -23,6 +23,15 @@ import { useBranch } from "../../../components/DashboardClientWrapper";
  * Crear o editar el producto en sí se hace en **Menú** (mismo formulario que un
  * platillo): aquí sólo se administra lo de tienda, sin duplicar formularios.
  */
+
+type PlatformCommission = {
+  enabled?: boolean;
+  /** 0.02 = 2 % */
+  pct?: number;
+  appliesTo?: "APP_ORDERS" | "ALL";
+  minFeeMxn?: number;
+  notes?: string;
+};
 
 type DeliveryConfig = {
   enabled?: boolean;
@@ -68,6 +77,18 @@ export default function StorePage() {
   } | null>(null);
   const [stockForm, setStockForm] = useState({ stock: 0, minStock: 2, unit: "pieza" });
 
+  // ── Comisión de plataforma (marketplace) ──
+  // Separada del excedente por uso del riel (1 % de payment_intents). Bunz nunca
+  // paga comisión. Apagada hasta que el negocio la acepte.
+  const [commission, setCommission] = useState<PlatformCommission>({
+    enabled: false,
+    pct: 0.02,
+    appliesTo: "APP_ORDERS",
+    minFeeMxn: 0,
+    notes: "",
+  });
+  const commissionQuery = trpc.admin.getCommissionSummary.useQuery(undefined, { refetchOnWindowFocus: false });
+
   const [delivery, setDelivery] = useState<DeliveryConfig>({
     enabled: true,
     mode: "FLAT",
@@ -91,6 +112,36 @@ export default function StorePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restaurant?.id]);
+
+  useEffect(() => {
+    const cfg = (restaurant as { platformCommission?: PlatformCommission | null } | undefined)?.platformCommission;
+    if (cfg && typeof cfg === "object") {
+      setCommission({
+        enabled: cfg.enabled === true,
+        pct: typeof cfg.pct === "number" ? cfg.pct : 0.02,
+        appliesTo: cfg.appliesTo === "ALL" ? "ALL" : "APP_ORDERS",
+        minFeeMxn: cfg.minFeeMxn ?? 0,
+        notes: cfg.notes ?? "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restaurant?.id]);
+
+  const saveCommission = () => {
+    if (!restaurant?.id) {
+      toast.error("No encontré tu restaurante");
+      return;
+    }
+    updateRestaurant.mutate(
+      { id: restaurant.id, platformCommission: commission },
+      {
+        onSuccess: () => {
+          utils.admin.getCommissionSummary.invalidate();
+          toast.success("Comisión de plataforma guardada");
+        },
+      },
+    );
+  };
 
   const updateRestaurant = trpc.admin.updateRestaurant.useMutation({
     onSuccess: () => {
@@ -337,6 +388,103 @@ export default function StorePage() {
             falla, se usa la tarifa fija de arriba — nunca se deja el envío en cero sin avisar.
           </p>
         )}
+      </Card>
+
+      {/* ── Comisión de plataforma ── */}
+      <Card className="border border-white/5 bg-white/[0.03] p-6">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+              <Percent className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white">Comisión de plataforma</h2>
+              <p className="text-xs text-gray-400">
+                Lo que Rabbitty cobra por traerte clientes. <strong>Sólo sobre la parte pagada en dinero</strong>:
+                los Bunz nunca pagan comisión.
+              </p>
+            </div>
+          </div>
+          <Badge variant={commission.enabled ? "success" : "secondary"}>
+            {commission.enabled ? `${((commission.pct ?? 0) * 100).toFixed(2)} %` : "Apagada"}
+          </Badge>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Select
+            label="Sobre qué se cobra"
+            value={commission.appliesTo}
+            onChange={(e) =>
+              setCommission((c) => ({
+                ...c,
+                appliesTo: e.target.value === "ALL" ? "ALL" : "APP_ORDERS",
+              }))
+            }
+            options={[
+              { value: "APP_ORDERS", label: "Sólo pedidos que llegan por la app" },
+              { value: "ALL", label: "Todos los pedidos con parte en dinero" },
+            ]}
+          />
+          <Input
+            label="Comisión (%)"
+            type="number"
+            min={0}
+            max={30}
+            step="0.1"
+            value={(commission.pct ?? 0) * 100}
+            onChange={(e) =>
+              setCommission((c) => ({ ...c, pct: Number(e.target.value) / 100 }))
+            }
+          />
+          <Input
+            label="Mínimo por venta (MXN)"
+            type="number"
+            min={0}
+            step="1"
+            value={commission.minFeeMxn ?? 0}
+            onChange={(e) => setCommission((c) => ({ ...c, minFeeMxn: Number(e.target.value) }))}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm font-semibold text-gray-300">
+            <input
+              type="checkbox"
+              checked={commission.enabled === true}
+              onChange={(e) => setCommission((c) => ({ ...c, enabled: e.target.checked }))}
+              className="h-4 w-4 accent-pink-500"
+            />
+            Cobrar comisión (requiere estar en tu contrato)
+          </label>
+          <Button onClick={saveCommission} disabled={updateRestaurant.isPending}>
+            {updateRestaurant.isPending ? "Guardando…" : "Guardar comisión"}
+          </Button>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-center">
+            <p className="text-[10px] font-black uppercase tracking-wide text-gray-500">Comisión 30 d</p>
+            <p className="mt-1 text-xl font-black text-white">
+              ${((commissionQuery.data?.last30d ?? 0) / 100).toLocaleString("es-MX", { maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-center">
+            <p className="text-[10px] font-black uppercase tracking-wide text-gray-500">Del mes</p>
+            <p className="mt-1 text-xl font-black text-white">
+              ${((commissionQuery.data?.monthToDate ?? 0) / 100).toLocaleString("es-MX", { maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3 text-center">
+            <p className="text-[10px] font-black uppercase tracking-wide text-gray-500">Ventas gravadas</p>
+            <p className="mt-1 text-xl font-black text-white">{commissionQuery.data?.last30dOrders ?? 0}</p>
+          </div>
+        </div>
+
+        <p className="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-relaxed text-amber-200/80">
+          Nada se cobra mientras esté apagada. Al activarla, cada venta guarda su tarifa y su monto en la
+          orden (auditoría y liquidación); cambiar el % después no reescribe lo ya vendido. El{" "}
+          <strong>1 % por uso del riel</strong> es aparte y vive en la conciliación de pagos.
+        </p>
       </Card>
 
       {/* ── Resumen de la tienda ── */}

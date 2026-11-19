@@ -516,6 +516,63 @@ export const adminRouter = router({
    * Devuelve también ventas de los últimos 30 días para que el dueño vea qué se
    * mueve, no sólo qué existe.
    */
+  /**
+   * ── Comisión de plataforma: resumen ──
+   * Suma lo congelado en las órdenes (no recalcula con la tarifa de hoy). Es el
+   * número que se liquida al comercio y el que ve el hub de Dinero.
+   */
+  getCommissionSummary: adminOnlyProcedure.query(async ({ ctx }) => {
+    const branchId = await resolveBranchId(ctx, undefined);
+    const empty = { last30d: 0, last30dBase: 0, last30dOrders: 0, monthToDate: 0, enabled: false, pct: 0 };
+    if (!branchId) return empty;
+
+    const [cfg] = await ctx.restaurantDb
+      .select({ platformCommission: restaurants.platformCommission })
+      .from(branches)
+      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+      .where(eq(branches.id, branchId))
+      .limit(1);
+    const config = cfg?.platformCommission as { enabled?: boolean; pct?: number } | null;
+
+    type Row = { total: string | number | null; base: string | number | null; orders: string | number | null };
+    const read = (res: unknown): Row =>
+      ((Array.isArray(res) ? res : (res as { rows?: Row[] })?.rows ?? [])[0] ?? {
+        total: 0,
+        base: 0,
+        orders: 0,
+      });
+
+    const last30 = read(
+      await ctx.restaurantDb.execute(sql`
+        SELECT COALESCE(SUM("commissionCents"), 0) AS total,
+               COALESCE(SUM("commissionBaseCents"), 0) AS base,
+               COUNT(*) AS orders
+        FROM "orders"
+        WHERE "branchId" = ${branchId}
+          AND "commissionCents" > 0
+          AND "createdAt" >= now() - interval '30 days'
+      `),
+    );
+    const month = read(
+      await ctx.restaurantDb.execute(sql`
+        SELECT COALESCE(SUM("commissionCents"), 0) AS total, 0 AS base, 0 AS orders
+        FROM "orders"
+        WHERE "branchId" = ${branchId}
+          AND "commissionCents" > 0
+          AND "createdAt" >= date_trunc('month', now())
+      `),
+    );
+
+    return {
+      last30d: Number(last30.total ?? 0),
+      last30dBase: Number(last30.base ?? 0),
+      last30dOrders: Number(last30.orders ?? 0),
+      monthToDate: Number(month.total ?? 0),
+      enabled: config?.enabled === true,
+      pct: typeof config?.pct === "number" ? config.pct : 0,
+    };
+  }),
+
   getStoreProducts: adminOnlyProcedure.query(async ({ ctx }) => {
     const branchId = await resolveBranchId(ctx, undefined);
     type StoreProductRow = {
@@ -759,6 +816,26 @@ export const adminRouter = router({
             baseFee: z.number().min(0).max(2000).optional(),
             freeOver: z.number().min(0).max(100000).optional(),
             etaMinutes: z.number().int().min(0).max(240).optional(),
+            notes: z.string().max(200).optional(),
+            zones: z
+              .array(
+                z.object({
+                  maxKm: z.number().min(0).max(200),
+                  fee: z.number().min(0).max(2000),
+                }),
+              )
+              .max(8)
+              .optional(),
+          })
+          .nullable()
+          .optional(),
+        // ── Comisión de plataforma (marketplace, NO el excedente del riel) ──
+        platformCommission: z
+          .object({
+            enabled: z.boolean().optional(),
+            pct: z.number().min(0).max(0.3).optional(),
+            appliesTo: z.enum(["APP_ORDERS", "ALL"]).optional(),
+            minFeeMxn: z.number().min(0).max(500).optional(),
             notes: z.string().max(200).optional(),
           })
           .nullable()

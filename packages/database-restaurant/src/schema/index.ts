@@ -69,6 +69,14 @@ export const restaurants = pgTable("restaurants", {
    * El POS ya suma `orders.deliveryFee` al asignar repartidor si nadie lo cobró.
    */
   deliveryConfig: jsonb("deliveryConfig"),
+  /**
+   * Comisión de plataforma (marketplace), **distinta** del excedente por uso del
+   * riel (`payment_intents.platformFeeCents`).
+   * `{ enabled, pct, appliesTo: 'APP_ORDERS' | 'ALL', minFeeMxn, notes }`.
+   * Sólo aplica a la parte pagada en dinero: Bunz nunca paga comisión.
+   * Apagada por defecto (`enabled` ausente/false).
+   */
+  platformCommission: jsonb("platformCommission"),
   legalName: text("legalName"),
   rfc: text("rfc"),
   taxRegime: text("taxRegime"),
@@ -268,6 +276,12 @@ export const orders = pgTable("orders", {
   deliveryAddressData: jsonb("deliveryAddressData"),
   /** Costo de entrega cobrado al cliente (0 si lo absorbe el negocio). */
   deliveryFee: real("deliveryFee").default(0).notNull(),
+  /** Base comisionable (centavos): total menos lo pagado con Bunz. */
+  commissionBaseCents: integer("commissionBaseCents").default(0).notNull(),
+  /** Tarifa congelada al vender (0.02 = 2 %). */
+  commissionPct: real("commissionPct").default(0).notNull(),
+  /** Comisión de plataforma en centavos (0 si está apagada o fue 100 % Bunz). */
+  commissionCents: integer("commissionCents").default(0).notNull(),
   /** Origen externo: RABBITTY | UBER_EATS | UBER_DIRECT | RABBITTY_RIDE… */
   externalProvider: text("externalProvider"),
   /** Id de la orden/entrega en el proveedor externo. */

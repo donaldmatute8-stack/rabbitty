@@ -4,6 +4,7 @@ import { orders, orderItems, tables, tableSessions, payments, branches, restaura
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { checkStockForItems, deductOrderInventory } from '@rabbitty/api/services/inventoryDeduction';
 import { quoteDelivery } from '@rabbitty/api/services/deliveryQuote';
+import { computePlatformCommission } from '@rabbitty/api/services/platformCommission';
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -292,6 +293,17 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "El pedido no tiene monto. Agrega productos con precio." }, { status: 400 });
       }
 
+      // Config del restaurante que se necesita en el pedido: envío y comisión.
+      const [restCfg] = await restaurantDb
+        .select({
+          deliveryConfig: restaurants.deliveryConfig,
+          platformCommission: restaurants.platformCommission,
+        })
+        .from(branches)
+        .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+        .where(eq(branches.id, orderBranchId))
+        .limit(1);
+
       // ── Envío: se cotiza en el servidor, nunca se confía en el cliente ──
       // Sólo para pedidos a domicilio. La misma función alimenta la cotización
       // que ve el cliente en el carrito, así que el monto no cambia al confirmar.
@@ -430,6 +442,27 @@ export async function POST(req: Request) {
         tip: totalTip,
         deliveryFee,
         total: r2(grandTotal + totalTip + deliveryFee),
+        // Comisión de plataforma congelada al vender. `fromApp` es true aquí por
+        // definición (este endpoint es la app del cliente); el POS solo cobra
+        // comisión en pedidos que también nacieron en la app.
+        ...(() => {
+          const commission = computePlatformCommission({
+            grossCents: Math.round(r2(grandTotal + totalTip + deliveryFee) * 100),
+            // Un pago con Bunz cubre el pedido completo al crearse; el resto de
+            // métodos deja la base completa (se ajusta al cobrar en el POS).
+            bunzCents:
+              paymentMethod === 'BUNZ'
+                ? Math.round(r2(grandTotal + totalTip + deliveryFee) * 100)
+                : 0,
+            fromApp: true,
+            config: restCfg?.platformCommission as Parameters<typeof computePlatformCommission>[0]['config'],
+          });
+          return {
+            commissionBaseCents: commission.baseCents,
+            commissionPct: commission.pct,
+            commissionCents: commission.cents,
+          };
+        })(),
         // P0-5: BUNZ se marca PAID solo después del débito verificado
         status: 'PENDING_PAYMENT',
         orderType: resolvedOrderType,
