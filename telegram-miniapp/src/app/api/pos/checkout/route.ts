@@ -513,9 +513,11 @@ export async function POST(req: Request) {
                   : '🛍️ Pedido pendiente de pago — Para Llevar / Domicilio',
                 message: table
                   ? `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN).`
-                  : `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN). Cocina se activa al confirmar el pago.`,
+                  : `${customerName} ordenó ${typedItems.length} platillo(s) ($${grandTotal} MXN). Está en el POS → pestaña APP como "Por cobrar"; la cocina arranca al cobrar.`,
                 type: 'SYSTEM',
-                route: '/business-dashboard',
+                // El operador vive en el POS: la notificación debe abrirlo, no el
+                // dashboard (antes caía en /business-dashboard y se perdía).
+                route: '/pos',
                 threadId: 'table_orders',
               });
             }
