@@ -8,7 +8,12 @@
  * `published: false` = documento todavía no vigente para el afiliado
  * (hoy: equipos, porque aún no entregamos lectores ni impresoras).
  */
-export const LEGAL_VERSION = "2026-11-19";
+// ── Una sola versión en todo el sistema ──
+// El texto canónico vive en `@rabbitty/legal` (lo renderizan la app y la landing).
+// Aquí se re-exporta: al cambiar un documento se sube UNA constante y con eso se
+// dispara la re-aceptación del afiliado (este archivo) y del consumidor (app).
+export { LEGAL_VERSION } from "@rabbitty/legal";
+import { LEGAL_VERSION } from "@rabbitty/legal";
 
 export type BusinessDoc = "TERMS" | "PAYMENTS" | "PRIVACY" | "BUNZ" | "EQUIPMENT";
 

@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { PlatformBridge } from "@/lib/platform";
 
-const CONSENT_VERSION = "2026-11-08";
+// Versión única (antes este gate usaba 2026-11-08 y el onboarding 2026-11-18:
+// dos consumidores aceptando textos distintos).
+import { LEGAL_VERSION as CONSENT_VERSION } from '@/lib/legal-docs';
 const SKIP_PREFIXES = ["/onboarding", "/login", "/signup", "/welcome", "/privacy", "/magic-link"];
 
 /**

@@ -67,7 +67,9 @@ const STEPS: Array<{
   },
 ];
 
-const CONSENT_VERSION = '2026-11-18';
+// La versión sale de la fuente única: si cambia un documento legal, se sube una
+// sola constante y el consumidor vuelve a aceptar (quedaba en 2026-11-18 fija).
+import { LEGAL_VERSION as CONSENT_VERSION } from '@/lib/legal-docs';
 
 const COUNTRIES = [
   { code: 'MX', dialCode: '+52', flag: '🇲🇽', name: 'México' },
