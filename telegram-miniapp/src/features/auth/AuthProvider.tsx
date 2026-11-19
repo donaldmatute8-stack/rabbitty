@@ -53,6 +53,11 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 const PUBLIC_ROUTES = ['/onboarding', '/signup', '/login', '/welcome', '/privacy', '/magic-link'];
+// Rutas públicas por prefijo: los legales deben abrirse sin sesión para poder
+// compartirse por enlace (antes /legal rebotaba a /onboarding en el navegador).
+const PUBLIC_ROUTE_PREFIXES = ['/legal'];
+const isPublicRoute = (path: string) =>
+  PUBLIC_ROUTES.includes(path) || PUBLIC_ROUTE_PREFIXES.some((prefix) => path.startsWith(prefix));
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -169,13 +174,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
       // 3. UNAUTHENTICATED
       setUser(null);
-      if (!PUBLIC_ROUTES.includes(pathname)) {
+      if (!isPublicRoute(pathname)) {
         router.replace('/onboarding');
       }
     } catch (e) {
       console.error('[AuthProvider] Auth check failed:', e);
       setUser(null);
-      if (!PUBLIC_ROUTES.includes(pathname)) {
+      if (!isPublicRoute(pathname)) {
         router.replace('/onboarding');
       }
     } finally {
@@ -336,7 +341,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const needsIdentity = !!user && !user.firstName && pathname !== '/signup';
 
-  if (loading || (!user && !PUBLIC_ROUTES.includes(pathname)) || needsIdentity) {
+  if (loading || (!user && !isPublicRoute(pathname)) || needsIdentity) {
     return (
       <div style={{ display: 'flex', height: '100vh', width: '100%', alignItems: 'center', justifyContent: 'center', background: '#0A0A0A' }}>
         <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #333', borderTopColor: '#E91E63', animation: 'spin 1s linear infinite' }} />
