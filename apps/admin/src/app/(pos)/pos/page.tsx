@@ -5512,6 +5512,16 @@ export default function PosPage() {
                     </div>
                   </div>
 
+                  {/* Pendiente de pago: el POS lo ve para cobrarlo, pero no se
+                      manda a cocina hasta que se cobre. */}
+                  {tab.awaitingPayment && (
+                    <div className="pt-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-300">
+                        💳 Por cobrar · no enviar a cocina
+                      </span>
+                    </div>
+                  )}
+
                   {/* Tipo de pedido: en local / recoger / domicilio */}
                   {tab.fromApp && (
                     <div className="flex flex-wrap items-center gap-2 pt-2">

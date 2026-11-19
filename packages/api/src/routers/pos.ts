@@ -3514,8 +3514,17 @@ export const posRouter = router({
         or(
           inArray(orders.status, [ORDER_STATUS.PENDING, ORDER_STATUS.PAID, ORDER_STATUS.CASH_REQUESTED]),
           // PENDING_PAYMENT de local (con mesa) se prepara y se cobra al final.
-          // Los pedidos desde casa (sin mesa) NO entran hasta estar pagados.
-          and(eq(orders.status, ORDER_STATUS.PENDING_PAYMENT), isNotNull(orders.tableId))
+          and(eq(orders.status, ORDER_STATUS.PENDING_PAYMENT), isNotNull(orders.tableId)),
+          // Pedidos de la app SIN mesa y aún sin pagar: la cocina no los cocina
+          // (el KDS sigue exigiendo mesa o pago), pero el POS **debe verlos** para
+          // cobrarlos. Antes quedaban invisibles: el cliente los veía "en curso"
+          // y en el local no aparecían por ningún lado. Solo con cliente
+          // identificado: un pedido anónimo de QR no llena esta cola.
+          and(
+            eq(orders.status, ORDER_STATUS.PENDING_PAYMENT),
+            isNull(orders.tableId),
+            isNotNull(orders.customerId)
+          )
         )
       ))
       .orderBy(desc(orders.createdAt));
@@ -3623,6 +3632,10 @@ export const posRouter = router({
       // de la app también debe entrar a la cola/alert del POS.
       const fromApp = Boolean(resolvedCustomerId) &&
         (ord.status === ORDER_STATUS.PENDING_PAYMENT || !ord.tableId);
+      // Pendiente de pago y sin mesa: existe en el POS para cobrarse, pero no se
+      // envía a cocina hasta que se cobre.
+      const awaitingPayment =
+        ord.status === ORDER_STATUS.PENDING_PAYMENT && !ord.tableId;
 
       return {
         orderId: ord.id,
@@ -3645,6 +3658,7 @@ export const posRouter = router({
         prepEtaAt: ord.prepEtaAt ?? null,
         deliveryAddress: ord.deliveryAddress ?? null,
         fromApp,
+        awaitingPayment,
         customer: user
           ? {
               id: user.id,
