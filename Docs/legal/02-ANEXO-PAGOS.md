@@ -1,5 +1,9 @@
 # 02 · Anexo de Pagos — Rabbitty Pay, Stripe y comisiones
 
+> **Vigente desde 2026-11-19** (versión de aceptación `2026-11-19`). Publicado en
+> `/legal/payments`; el afiliado debe aceptarlo y el panel lo exige antes de operar.
+> La comisión de plataforma del §2.3 es la que habilita el cobro del take rate.
+
 **Versión:** 2026-11-18 · **Anexo inseparable** de los Términos (documento 01)
 
 ---
@@ -31,10 +35,27 @@ referencia del sistema:
 |---|---|---|
 | **Comisión de plataforma** | **1.0 %** del monto cobrado | el neto al Afiliado |
 | **Comisión del procesador** (Stripe/Mercado Pago) | según tarifa del proveedor | el neto al Afiliado |
+| **Comisión de plataforma (take rate)** | **3.8 %** del monto pagado en dinero (Bunz exento), solo pedidos de la app | se descuenta en la liquidación o se acumula por cobrar |
 | **Cuota de equipo** (lector/impresora, si aplica) | según acta | liquidación o cargo aparte |
 | **Cargo por contracargo** | según documento 04 | liquidación |
 
 2.1 Las comisiones se expresan **sin IVA**; el IVA se suma conforme a la ley.
+
+2.3 **Comisión de plataforma (take rate).** Es el ingreso de Rabbitty por traer
+clientes; **no** es el costo del riel. Se cobra **3.8 %** sobre el monto pagado
+en dinero del pedido:
+
+- **Base**: total del pedido − parte pagada con Bunz. **Los Bunz nunca pagan
+  comisión.**
+- **Alcance**: pedidos que llegan por la app (`APP_ORDERS`). La venta de
+  mostrador cobrada en caja no genera comisión, salvo pacto escrito distinto en
+  el anexo del afiliado.
+- **Congelada por venta**: la tarifa y el importe se guardan en la orden; un
+  cambio posterior no reescribe operaciones ya realizadas.
+- **Ejemplos**: $280 en efectivo por la app → $10.64; $280 con 40 % Bunz →
+  $6.38 (base $168); $280 al 100 % Bunz → $0.
+- **Habilitación**: sólo se activa cuando el negocio aceptó este anexo en su
+  versión vigente; el sistema lo verifica antes de encenderla.
 
 2.2 Rabbitty puede ajustar comisiones con **30 días** de aviso (documento 01 §5).
 

@@ -8,7 +8,7 @@
  * `published: false` = documento todavía no vigente para el afiliado
  * (hoy: equipos, porque aún no entregamos lectores ni impresoras).
  */
-export const LEGAL_VERSION = "2026-11-18";
+export const LEGAL_VERSION = "2026-11-19";
 
 export type BusinessDoc = "TERMS" | "PAYMENTS" | "PRIVACY" | "BUNZ" | "EQUIPMENT";
 

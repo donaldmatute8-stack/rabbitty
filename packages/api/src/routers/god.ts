@@ -3,6 +3,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { and, eq, sql, desc, gte, inArray, lt, asc } from "drizzle-orm";
 import { router, godAdminProcedure } from "../trpc";
+import { LEGAL_VERSION } from "../services/legalVersions";
 import {
   users,
   ownedBusinesses,
@@ -224,6 +225,36 @@ export const godRouter = router({
         .from(restaurants)
         .where(eq(restaurants.id, input.restaurantId))
         .limit(1);
+
+      // ── No se puede encender sin contrato aceptado ──
+      // La comisión es un cobro: exige que el negocio haya aceptado el Anexo de
+      // Pagos en su versión vigente. Apagarla siempre se permite.
+      if (input.enabled) {
+        if (!before?.businessId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "El restaurante no tiene negocio asociado; no se puede activar la comisión.",
+          });
+        }
+        const rows = (await ctx.coreDb
+          .execute(
+            sql`SELECT "version" FROM "business_consents"
+                WHERE "businessId" = ${before.businessId} AND "doc" = 'PAYMENTS'
+                ORDER BY "acceptedAt" DESC LIMIT 1`,
+          )
+          .catch(() => ({ rows: [] as Array<{ version: string }> }))) as
+          | { rows?: Array<{ version: string }> }
+          | Array<{ version: string }>;
+        const list = Array.isArray(rows) ? rows : rows.rows ?? [];
+        const acceptedVersion = list[0]?.version ?? null;
+
+        if (acceptedVersion !== LEGAL_VERSION) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `El negocio debe aceptar el Anexo de Pagos versión ${LEGAL_VERSION} antes de activar la comisión (aceptó: ${acceptedVersion ?? "ninguna"}).`,
+          });
+        }
+      }
 
       const actorId = ctx.userId ?? null;
       const actorEmail = ctx.user?.email ?? null;

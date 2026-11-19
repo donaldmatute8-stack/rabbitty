@@ -61,9 +61,13 @@ encima del POS puro (0 %).
 
 ## Lo que falta para cobrarla de verdad
 
-1. **Activarla por negocio** en Admin → Tienda & Envíos (hoy queda apagada).
-2. **Contrato**: la comisión debe estar en el anexo económico que firma el afiliado
-   antes de encenderla (MCCE). Sin eso, es un cobro sin respaldo.
+1. **Activarla por negocio** en **God → Comisión de plataforma** (hoy apagada).
+   El sistema **exige** que el negocio haya aceptado el Anexo de Pagos en la
+   versión vigente (`/legal/payments`): sin aceptación, la activación falla.
+2. **Contrato**: publicado el **Anexo de Pagos** (3.8 %, Bunz exento, solo pedidos
+   de la app) en `/legal/payments` y en `Docs/LEGAL/02-ANEXO-PAGOS.md`, con
+   versión de aceptación `2026-11-19`. Falta la revisión del abogado sobre el
+   texto (puntos `[REVISAR]` del corpus) antes de darlo por definitivo.
 3. **Tarjeta**: sumar la comisión al `application_fee_amount` de Stripe Connect
    (hoy ese monto solo lleva el 1 % del riel) para retenerla en el split.
 4. **Efectivo**: acumularla como cuenta por cobrar y liquidarla en el corte mensual

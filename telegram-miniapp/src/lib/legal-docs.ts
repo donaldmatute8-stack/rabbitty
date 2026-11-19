@@ -31,7 +31,7 @@ export type LegalDoc = {
   published?: boolean;
 };
 
-export const LEGAL_VERSION = "2026-11-18";
+export const LEGAL_VERSION = "2026-11-19";
 
 export const LEGAL_DOCS: LegalDoc[] = [
   {
@@ -111,6 +111,74 @@ export const LEGAL_DOCS: LegalDoc[] = [
         heading: "10. Ley aplicable",
         body: [
           "Estos Términos se rigen por las leyes de los Estados Unidos Mexicanos. Antes de demandar, las partes intentarán resolver la controversia de buena fe por escrito en 30 días.",
+        ],
+      },
+    ],
+  },
+  {
+    slug: "payments",
+    title: "Anexo de Pagos — comisiones y liquidaciones",
+    audience: "Afiliados (negocios)",
+    version: LEGAL_VERSION,
+    updated: "19 de noviembre de 2026",
+    summary:
+      "Cuánto cuesta cobrar con un método de pago, cuánto cobra Rabbitty por traerte clientes y cómo se liquida. Los Bunz nunca pagan comisión.",
+    sections: [
+      {
+        heading: "1. Dos conceptos distintos",
+        body: [
+          "Costo por uso del riel de cobro: lo que cuesta procesar un pago (terminal, adquirente o pasarela). Se cobra por operación y no es ingreso de Rabbitty.",
+          "Comisión de plataforma: lo que Rabbitty cobra por traerte clientes. Se describe en el punto 3 y es independiente del riel.",
+        ],
+      },
+      {
+        heading: "2. Riel de cobro",
+        body: [
+          "El cobro con tarjeta se procesa con terminales certificadas o con la pasarela habilitada. El costo del riel se informa en el panel y en la conciliación de cada liquidación.",
+          "Efectivo: se registra en caja y no genera costo de riel. La terminal y su costo se detallan en el acta o en la cotización vigente.",
+        ],
+      },
+      {
+        heading: "3. Comisión de plataforma",
+        body: [
+          "La comisión vigente es de 3.8 % sobre el monto pagado en dinero del pedido.",
+          "Base de cálculo: total del pedido menos la parte pagada con Bunz. Los Bunz nunca pagan comisión.",
+          "Alcance: pedidos que llegan por la aplicación de Rabbitty. La venta de mostrador cobrada directamente en caja no genera comisión, salvo que se acuerde por escrito un alcance distinto en tu anexo.",
+          "La comisión se calcula y se congela al momento de la venta. Un cambio posterior de tarifa no modifica operaciones ya realizadas.",
+        ],
+      },
+      {
+        heading: "4. Ejemplo",
+        body: [
+          "Pedido de $280 pagado en efectivo, hecho por la app: comisión de $10.64 (3.8 %).",
+          "El mismo pedido con 40 % pagado en Bunz: la base son $168 y la comisión $6.38.",
+          "Pedido pagado 100 % con Bunz: comisión de $0.",
+        ],
+      },
+      {
+        heading: "5. IVA",
+        body: [
+          "Los importes de comisión se expresan sin IVA. El IVA se suma y se factura conforme a la ley aplicable, salvo que tu comprobante se emita de otra forma acordada por escrito.",
+        ],
+      },
+      {
+        heading: "6. Liquidación y retención",
+        body: [
+          "La comisión se descuenta del importe que se te liquida o se acumula como saldo por cobrar, según el riel utilizado. El detalle por operación está disponible en tu panel (historial de ventas y conciliación).",
+          "Rabbitty puede retener de una liquidación contracargos en proceso, montos en disputa y comisiones devengadas impagas, informando el motivo.",
+        ],
+      },
+      {
+        heading: "7. Cambios",
+        body: [
+          "Rabbitty puede ajustar la comisión de plataforma con 30 días naturales de aviso. Si no estás de acuerdo, puedes dar de baja sin penalidad antes de que entre en vigor.",
+          "La aceptación de este anexo queda registrada con la fecha, la versión y el usuario que la otorgó.",
+        ],
+      },
+      {
+        heading: "8. Contracargos y reembolsos",
+        body: [
+          "Los contracargos se rigen por el documento de chargebacks y reembolsos. Un pedido cancelado o anulado antes de cobrarse no genera comisión.",
         ],
       },
     ],
