@@ -26,7 +26,7 @@ import {
   mapUberStatus,
   type UberAddress,
 } from "../services/uberDirect";
-import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages, userPreferences as coreUserPreferences, wishlistGifts as coreWishlistGifts, wishlistItems as coreWishlistItems } from "@rabbitty/database-core/schema";
+import { users as coreUsers, systemSettings, ownedBusinesses as coreBusinesses, membershipSubscriptions as coreMembershipSubs, membershipEntitlements as coreMembershipEnts, entitlementUsages as coreEntUsages, userPreferences as coreUserPreferences, wishlistGifts as coreWishlistGifts, wishlistItems as coreWishlistItems, notifications as coreNotifications } from "@rabbitty/database-core/schema";
 /** Split DIVIDIDA activo? */
 function pendingSplit(input: { splitBunz?: number; splitCash?: number }): boolean {
   return typeof input.splitBunz === "number" && input.splitBunz > 0;
@@ -1992,6 +1992,286 @@ export const posRouter = router({
       await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, input.orderId, "ORDER_VOIDED");
       bus.emit(EventTypes.ORDER_VOIDED, { orderId: input.orderId });
       return { success: true };
+    }),
+
+  /**
+   * ── rejectAppOrder ── el local rechaza un pedido de la app ────────────────
+   *
+   * Por qué existe: un pedido que no se puede cumplir (agotado, cerrado, sin
+   * reparto, duplicado) se quedaba en la cola del POS para siempre — el aviso
+   * sonaba en cada carga y no había forma de sacarlo sin anular a ciegas.
+   *
+   * Reglas:
+   * - Solo pedidos **sin cobrar**. Si ya hay un pago COMPLETED, primero se
+   *   reembolsa (mismo criterio que `voidOrder`): no se cancela dinero en silencio.
+   * - La cancelación **no confisca nada**: no hay stock descontado porque la
+   *   deducción solo ocurre al cobrar (Bunz) y aquí se exige que no haya cobro.
+   * - El Rabbitter recibe el motivo en su campana y un enlace para volver a
+   *   elegir en el mismo negocio.
+   * - Queda bitácora (`withOrderMutation`) con quién lo rechazó.
+   */
+  rejectAppOrder: posProcedure
+    .input(z.object({
+      orderId: z.string(),
+      reasonCode: z.enum([
+        "OUT_OF_STOCK",
+        "CLOSED",
+        "CANT_DELIVER",
+        "DUPLICATE",
+        "CUSTOMER_REQUEST",
+        "OTHER",
+      ]),
+      note: z.string().trim().max(280).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const reasonLabel: Record<string, string> = {
+        OUT_OF_STOCK: "Se agotó uno de los productos de tu pedido",
+        CLOSED: "El negocio ya no está recibiendo pedidos",
+        CANT_DELIVER: "No podemos entregar a esa dirección",
+        DUPLICATE: "El pedido se registró por duplicado",
+        CUSTOMER_REQUEST: "Cancelado a solicitud del cliente",
+        OTHER: "El negocio no pudo aceptar el pedido",
+      };
+
+      const [order] = await ctx.restaurantDb
+        .select({
+          id: orders.id,
+          branchId: orders.branchId,
+          status: orders.status,
+          customerId: orders.customerId,
+          customerName: orders.customerName,
+          total: orders.total,
+          orderType: orders.orderType,
+          tableId: orders.tableId,
+        })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
+      }
+      if (![ORDER_STATUS.PENDING, ORDER_STATUS.PENDING_PAYMENT].includes(order.status as never)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            order.status === ORDER_STATUS.PAID || order.status === ORDER_STATUS.COMPLETED
+              ? "Esta orden ya está cobrada: usa Reembolsos para devolver el dinero antes de rechazarla."
+              : "Solo se pueden rechazar pedidos que aún no se cobran.",
+        });
+      }
+
+      // Mismo candado que la anulación: si hay dinero cobrado, no se rechaza.
+      const [charged] = await ctx.restaurantDb
+        .select({ net: sql<number>`COALESCE(SUM(${payments.amount}), 0)` })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.orderId, input.orderId),
+            inArray(payments.status, ["COMPLETED", "PARTIALLY_REFUNDED", "REFUNDED"]),
+          ),
+        );
+      if (Number(charged?.net ?? 0) > 0.005) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Esta orden tiene un cobro registrado: reembólsalo antes de rechazarla.",
+        });
+      }
+
+      const note = input.note?.trim();
+      const humanReason = `${reasonLabel[input.reasonCode]}${note ? ` · ${note}` : ""}`;
+
+      await ctx.restaurantDb.transaction(async (tx: any) => {
+        await withOrderMutation(
+          tx,
+          { orderId: input.orderId, type: "ORDER_REJECTED", actor: posActor(ctx) },
+          async () => {
+            await tx.update(orders).set({
+              status: ORDER_STATUS.CANCELLED,
+              voidReason: humanReason.slice(0, 500),
+              commissionCents: 0,
+            }).where(eq(orders.id, input.orderId));
+          },
+        );
+      });
+
+      // El Rabbitter se entera y puede volver a pedir en el mismo negocio.
+      if (order.customerId) {
+        try {
+          const businessId = await resolveBusinessIdFromBranch(ctx.restaurantDb, order.branchId);
+          await ctx.coreDb.insert(coreNotifications).values({
+            id: crypto.randomUUID(),
+            userId: order.customerId,
+            title: "Pedido no aceptado",
+            message: `${humanReason}. Tu pedido de $${Number(order.total || 0).toFixed(2)} no se cobró; puedes volver a elegir algo más.`,
+            type: "SYSTEM",
+            route: businessId ? `/affiliate/${businessId}` : null,
+            createdAt: new Date(),
+          });
+        } catch (notifyErr) {
+          // El rechazo ya está guardado: un fallo del aviso no lo revierte.
+          console.warn("[POS_REJECT] aviso al cliente falló:", notifyErr);
+        }
+      }
+
+      await (await import("./ratings")).invalidateOrderRating(ctx.restaurantDb, input.orderId, "ORDER_REJECTED");
+      bus.emit(EventTypes.ORDER_VOIDED, { orderId: input.orderId });
+      return { success: true, reason: humanReason };
+    }),
+
+  /**
+   * ── applyMembershipToTab ── usar la membresía del Rabbitter en una cuenta ──
+   *
+   * El POS ya sabía detectar membresías por QR o al vincular un Rabbitter, pero
+   * al cobrar una cuenta abierta (pedido de la app / mesa) no había forma de
+   * leerla ni de decidir si se usa. Este endpoint aplica los beneficios sobre la
+   * orden existente y deja el total listo para cobrarse; si la membresía cubre
+   * todo, la cuenta se cierra sin movimiento de dinero.
+   *
+   * Idempotencia: si la orden ya tiene consumos de membresía, se rechaza (evita
+   * consumir dos veces la cuota del socio).
+   */
+  applyMembershipToTab: posPermission("POS_CHARGE")
+    .input(z.object({
+      orderId: z.string().uuid(),
+      entitlementIds: z.array(z.string().uuid()).min(1).max(5),
+      memberMenuItemIds: z.array(z.string()).max(50).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const [order] = await ctx.restaurantDb
+        .select({
+          id: orders.id,
+          branchId: orders.branchId,
+          status: orders.status,
+          customerId: orders.customerId,
+          total: orders.total,
+          tableId: orders.tableId,
+        })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Orden no encontrada" });
+      if (order.branchId !== ctx.branchId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
+      }
+      if (![ORDER_STATUS.PENDING, ORDER_STATUS.PENDING_PAYMENT].includes(order.status as never)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Solo se aplica membresía a cuentas abiertas y sin cobrar.",
+        });
+      }
+      if (!order.customerId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Vincula al Rabbitter a esta cuenta antes de usar su membresía.",
+        });
+      }
+
+      const [already] = await ctx.coreDb
+        .select({ id: coreEntUsages.id })
+        .from(coreEntUsages)
+        .where(eq(coreEntUsages.orderId, input.orderId))
+        .limit(1);
+      if (already) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Esta cuenta ya tiene una membresía aplicada. Ciérrala o crea una nueva.",
+        });
+      }
+
+      const items = await ctx.restaurantDb
+        .select({
+          menuItemId: orderItems.menuItemId,
+          quantity: orderItems.quantity,
+          unitPrice: orderItems.unitPrice,
+        })
+        .from(orderItems)
+        .where(and(eq(orderItems.orderId, input.orderId), isNull(orderItems.voidedAt)));
+      if (items.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "La cuenta no tiene productos." });
+      }
+      const baseAmount = items.reduce(
+        (sum, it) => sum + Number(it.unitPrice || 0) * Number(it.quantity || 0),
+        0,
+      );
+
+      const { applyMembershipBenefitsToOrder } = await import("../services/membershipBenefits");
+      const applied = await applyMembershipBenefitsToOrder({
+        coreDb: ctx.coreDb,
+        restaurantDb: ctx.restaurantDb,
+        branchId: ctx.branchId,
+        staffId: ctx.userId ?? null,
+        orderId: input.orderId,
+        items: items.map((it) => ({
+          menuItemId: it.menuItemId as string,
+          quantity: Number(it.quantity || 0),
+          unitPrice: Number(it.unitPrice || 0),
+        })),
+        customerId: order.customerId,
+        entitlementIds: input.entitlementIds,
+        memberMenuItemIds: input.memberMenuItemIds,
+        baseAmount,
+      });
+
+      const finalAmount = Math.max(0, Math.round(Number(applied.finalAmount || 0) * 100) / 100);
+      const { total: calcTotal, subtotal: calcSubtotal, tax: calcTaxAmt } = calcTax(finalAmount);
+      const covered = calcTotal <= 0.005;
+
+      try {
+        await ctx.restaurantDb.transaction(async (tx: any) => {
+          await withOrderMutation(
+            tx,
+            { orderId: input.orderId, type: "MEMBERSHIP_APPLIED", actor: posActor(ctx) },
+            async () => {
+              await tx.update(orders).set({
+                subtotal: calcSubtotal,
+                tax: calcTaxAmt,
+                discount: Math.round(Number(applied.discount || 0) * 100) / 100,
+                total: calcTotal,
+              }).where(eq(orders.id, input.orderId));
+
+              // El crédito del socio sí es dinero: se registra como pata pagada.
+              if (Number(applied.creditApplied || 0) > 0) {
+                await tx.insert(payments).values({
+                  orderId: input.orderId,
+                  method: "MEMBERSHIP_CREDIT",
+                  amount: Math.round(Number(applied.creditApplied) * 100) / 100,
+                  status: "COMPLETED",
+                  verificationMethod: "MEMBERSHIP_PASS",
+                });
+              }
+
+              if (covered) {
+                // Nada que cobrar: se cierra (o pasa a cocina si vino de la app).
+                await tx.insert(payments).values({
+                  orderId: input.orderId,
+                  method: "MEMBERSHIP",
+                  amount: 0,
+                  status: "COMPLETED",
+                  verificationMethod: "MEMBERSHIP_PASS",
+                });
+                await tx.update(orders).set({
+                  status: order.tableId ? ORDER_STATUS.COMPLETED : ORDER_STATUS.PAID,
+                }).where(eq(orders.id, input.orderId));
+              }
+            },
+          );
+        });
+      } catch (err) {
+        // La cuota ya se consumió fuera de esta tx (DB core): se devuelve.
+        for (const compensate of applied.compensations) {
+          try { await compensate(); } catch (compErr) { console.error("[membership] compensación falló:", compErr); }
+        }
+        throw err;
+      }
+
+      return {
+        success: true,
+        finalAmount: calcTotal,
+        discount: Math.round(Number(applied.discount || 0) * 100) / 100,
+        creditApplied: Math.round(Number(applied.creditApplied || 0) * 100) / 100,
+        covered,
+      };
     }),
 
   generateQR: posProcedure

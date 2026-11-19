@@ -12,7 +12,7 @@
 
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Smartphone, Volume2, ArrowRight, X } from 'lucide-react';
+import { Smartphone, Volume2, ArrowRight, X, Ban } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -21,9 +21,14 @@ interface Props {
   soundEnabled?: boolean;
   onOpen: () => void;
   onDismiss: () => void;
+  /**
+   * Rechazo directo desde la alerta (solo cuando hay UN pedido). Sin esto, un
+   * pedido que el local no puede cumplir dejaba la alerta sonando para siempre.
+   */
+  onReject?: () => void;
 }
 
-export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDismiss }: Props) {
+export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDismiss, onReject }: Props) {
   const ctxRef = useRef<AudioContext | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -186,8 +191,20 @@ export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDism
               <ArrowRight className="h-7 w-7" />
             </button>
 
+            {count === 1 && onReject && (
+              <button
+                type="button"
+                onClick={onReject}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/15 text-white/80 text-sm font-black cursor-pointer active:scale-[0.99] transition-transform"
+              >
+                <Ban className="h-4 w-4" />
+                No podemos aceptarlo · rechazar con motivo
+              </button>
+            )}
+
             <p className="text-[13px] text-white/45 m-0 mt-4">
-              El sonido se detiene al abrir o silenciar.
+              El sonido se detiene al abrir o silenciar. La alerta no se repite
+              por el mismo pedido en este dispositivo.
             </p>
           </motion.div>
         </motion.div>

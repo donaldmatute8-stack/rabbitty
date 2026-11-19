@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock, MembershipCard } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -242,6 +242,10 @@ export default function PosPage() {
   // Alerta gigante + sonido cuando entra un pedido nuevo desde la app
   const [orderAlertOpen, setOrderAlertOpen] = useState(false);
   const alertedOrderIdsRef = useRef<Set<string>>(new Set());
+  // Persistimos los pedidos ya alertados: antes el ref se reiniciaba en cada
+  // carga y la alerta gigante volvía a saltar por el MISMO pedido viejo, una y
+  // otra vez (estorba al entrar al panel). Se alerta una vez por dispositivo.
+  const ALERT_SEEN_KEY = "rabbitty_pos_alerted_orders_v1";
   // B1: una sola superficie "Operación" con dos vistas dentro (comandas / app)
   const [tabsView, setTabsView] = useState<"ALL" | "APP">("ALL");
   /** Pedido al que se le está prometiendo un tiempo de preparación. */
@@ -451,10 +455,28 @@ export default function PosPage() {
   // Antes se ignoraba el primer render, así que un pedido que ya existía al
   // abrir/recargar el POS no sonaba. Ahora se alerta una vez por orderId.
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ALERT_SEEN_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) alertedOrderIdsRef.current = new Set(arr.filter((x) => typeof x === "string"));
+      }
+    } catch {
+      /* modo privado o JSON viejo: se comporta como antes */
+    }
+  }, []);
+  useEffect(() => {
     if (appPendingOrders.length === 0) return;
     const nuevos = appPendingOrders.filter((o) => !alertedOrderIdsRef.current.has(o.orderId));
     if (nuevos.length === 0) return;
     for (const o of nuevos) alertedOrderIdsRef.current.add(o.orderId);
+    try {
+      // Cap: los últimos 200 pedidos bastan para no crecer sin límite.
+      const ids = Array.from(alertedOrderIdsRef.current).slice(-200);
+      localStorage.setItem(ALERT_SEEN_KEY, JSON.stringify(ids));
+    } catch {
+      /* sin storage: la alerta sigue funcionando en esta sesión */
+    }
     setOrderAlertOpen(true);
   }, [appPendingOrders]);
   const appTabsCount = useMemo(
@@ -1110,6 +1132,105 @@ export default function PosPage() {
   // El polling de stripePayModal detecta SUCCEEDED y liquida: la sesión de mesa
   // se cierra sola vía confirmPaymentIntentSettled.
   const tabChargeMutation = trpc.payments.createPaymentIntent.useMutation();
+
+  // ── Rechazo de un pedido de la app ────────────────────────────────────────
+  // Sin esto, un pedido que el local no puede cumplir se quedaba en la cola
+  // para siempre (y la alerta volvía a saltar). Rechazarlo cancela la orden con
+  // motivo y avisa al Rabbitter, que puede volver a elegir.
+  const [rejectTarget, setRejectTarget] = useState<{
+    orderId: string;
+    label: string;
+    total: number;
+  } | null>(null);
+  const [rejectCode, setRejectCode] = useState<
+    "OUT_OF_STOCK" | "CLOSED" | "CANT_DELIVER" | "DUPLICATE" | "CUSTOMER_REQUEST" | "OTHER"
+  >("OUT_OF_STOCK");
+  const [rejectNote, setRejectNote] = useState("");
+  const rejectOrderMutation = trpc.pos.rejectAppOrder.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Pedido rechazado · ${r.reason}`);
+      setRejectTarget(null);
+      setRejectNote("");
+      setOrderAlertOpen(false);
+      void refetchActiveTabs();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // ── Membresía sobre una cuenta abierta ────────────────────────────────────
+  // El POS ya detecta membresías por QR, pero al cobrar un pedido de la app no
+  // había forma de leer la del Rabbitter ni de decidir si se usa. Aquí se leen
+  // sus beneficios y el cajero elige: usar o no usar.
+  const [tabMember, setTabMember] = useState<{
+    orderId: string;
+    customerName: string;
+    rows: any[];
+    selected: string[];
+  } | null>(null);
+  const [tabMemberBusy, setTabMemberBusy] = useState(false);
+  const applyTabMembership = trpc.pos.applyMembershipToTab.useMutation();
+
+  const openTabMembership = async (tab: {
+    orderId: string;
+    customer?: { id?: string | null; name?: string | null } | null;
+  }) => {
+    const customerId = tab.customer?.id;
+    const businessId = posBizCtx.data?.businessId;
+    if (!customerId || !businessId) {
+      toast.error("Ese pedido no tiene un Rabbitter vinculado.");
+      return;
+    }
+    try {
+      const rows = await utils.memberships.getMembershipBenefits.fetch({
+        businessId,
+        customerId,
+      });
+      if (!rows || rows.length === 0) {
+        toast.info("Ese Rabbitter no tiene membresía activa en este negocio.");
+        return;
+      }
+      // Por defecto se proponen los beneficios de producto/descuento. El saldo
+      // de crédito es dinero del socio: se muestra, pero NO se marca solo.
+      const selected = rows
+        .filter((r: any) => r.benefitType !== "CREDIT_BALANCE" && (r.remaining ?? 1) > 0)
+        .map((r: any) => r.entitlementId);
+      setTabMember({
+        orderId: tab.orderId,
+        customerName: tab.customer?.name || "Rabbitter",
+        rows,
+        selected,
+      });
+    } catch (e: any) {
+      toast.error(e?.message || "No se pudo leer la membresía.");
+    }
+  };
+
+  const confirmTabMembership = async () => {
+    if (!tabMember) return;
+    if (tabMember.selected.length === 0) {
+      setTabMember(null);
+      toast.info("No se usó la membresía en esta cuenta.");
+      return;
+    }
+    setTabMemberBusy(true);
+    try {
+      const r = await applyTabMembership.mutateAsync({
+        orderId: tabMember.orderId,
+        entitlementIds: tabMember.selected,
+      });
+      toast.success(
+        r.covered
+          ? "Membresía aplicada · la cuenta quedó cubierta sin cobro"
+          : `Membresía aplicada · descuento $${Number(r.discount || 0).toFixed(2)}`,
+      );
+      setTabMember(null);
+      void refetchActiveTabs();
+    } catch (e: any) {
+      toast.error(e?.message || "No se pudo aplicar la membresía.");
+    } finally {
+      setTabMemberBusy(false);
+    }
+  };
   // ── H-TRACK: botones de etapa (Recibido → Preparando → Listo → Entregado)
   // para pedidos desde la app (fromApp): el tracking bidireccional
   // mobile ↔ POS vive aquí — el Rabbitter ve la etapa en su tarjeta.
@@ -5334,7 +5455,201 @@ export default function PosPage() {
           setActiveTabsModal(true);
         }}
         onDismiss={() => setOrderAlertOpen(false)}
+        onReject={
+          appPendingOrders[0]
+            ? () => {
+                const t = appPendingOrders[0];
+                setOrderAlertOpen(false);
+                setRejectCode("OUT_OF_STOCK");
+                setRejectNote("");
+                setRejectTarget({
+                  orderId: t.orderId,
+                  label: t.tableNumber
+                    ? `Mesa #${t.tableNumber}`
+                    : t.orderType === "TO_GO"
+                    ? "Para Llevar"
+                    : t.orderType,
+                  total: Number(t.total ?? 0),
+                });
+              }
+            : undefined
+        }
       />
+
+      {/* ── Rechazar pedido de la app (con motivo) ── */}
+      <Dialog
+        open={Boolean(rejectTarget)}
+        onClose={() => setRejectTarget(null)}
+        title="Rechazar pedido"
+        className="max-w-md w-full"
+      >
+        <div className="space-y-4 p-1">
+          <div className="rounded-2xl bg-red-500/10 border border-red-500/30 px-3 py-2.5">
+            <p className="text-[11px] font-black text-red-300 m-0 uppercase tracking-wide">
+              {rejectTarget?.label} · ${Number(rejectTarget?.total ?? 0).toFixed(2)}
+            </p>
+            <p className="text-[11px] text-red-200/75 m-0 mt-1 leading-snug">
+              Se cancela en la app del Rabbitter y se le avisa con el motivo.
+              Solo aplica a pedidos <b>sin cobrar</b>: si ya se cobró, primero se
+              reembolsa.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-black uppercase tracking-wider text-white/45 m-0">
+              ¿Por qué no se puede aceptar?
+            </p>
+            <div className="grid gap-1.5">
+              {([
+                ["OUT_OF_STOCK", "Se agotó un producto"],
+                ["CLOSED", "El negocio ya cerró"],
+                ["CANT_DELIVER", "No llegamos a esa dirección"],
+                ["DUPLICATE", "Pedido duplicado"],
+                ["CUSTOMER_REQUEST", "Lo pidió el cliente"],
+                ["OTHER", "Otro motivo"],
+              ] as const).map(([code, label]) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setRejectCode(code)}
+                  className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors cursor-pointer ${
+                    rejectCode === code
+                      ? "border-red-500/60 bg-red-500/10 text-white"
+                      : "border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {label}
+                  <span
+                    className={`h-3 w-3 rounded-full border ${
+                      rejectCode === code ? "border-red-400 bg-red-400" : "border-white/25"
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <input
+            className="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-red-500/60"
+            placeholder="Detalle para el cliente (opcional)"
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            maxLength={280}
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => setRejectTarget(null)} className="rounded-xl">
+              No rechazar
+            </Button>
+            <Button
+              variant="primary"
+              disabled={rejectOrderMutation.isPending}
+              onClick={() => {
+                if (!rejectTarget) return;
+                rejectOrderMutation.mutate({
+                  orderId: rejectTarget.orderId,
+                  reasonCode: rejectCode,
+                  note: rejectNote.trim() || undefined,
+                });
+              }}
+              className="rounded-xl bg-red-500 hover:bg-red-400 text-white"
+            >
+              {rejectOrderMutation.isPending ? "Rechazando…" : "Rechazar y avisar"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Membresía del Rabbitter en una cuenta abierta ── */}
+      <Dialog
+        open={Boolean(tabMember)}
+        onClose={() => setTabMember(null)}
+        title={`Membresía · ${tabMember?.customerName ?? ""}`}
+        className="max-w-md w-full"
+      >
+        <div className="space-y-3 p-1">
+          <p className="text-xs text-gray-400 m-0">
+            Esta cuenta es de un Rabbitter con membresía activa. Elige si se usa
+            en este cobro; si no, se cobra normal y no se consume su cuota.
+          </p>
+
+          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {(tabMember?.rows ?? []).map((row: any) => {
+              const isCredit = row.benefitType === "CREDIT_BALANCE";
+              const label =
+                row.benefitType === "INCLUDED_PRODUCT"
+                  ? "Producto incluido en su plan"
+                  : row.benefitType === "DISCOUNT_PCT"
+                  ? `Descuento ${row.discountPct ?? 0}%`
+                  : isCredit
+                  ? `Saldo a favor $${Number(row.creditBalance ?? 0).toFixed(2)}`
+                  : row.benefitType === "MEMBER_CONSUMPTION"
+                  ? "Consumo del socio"
+                  : String(row.benefitType);
+              const checked = tabMember?.selected.includes(row.entitlementId) ?? false;
+              const noQuota = !isCredit && (row.remaining ?? 1) <= 0;
+              return (
+                <button
+                  key={row.entitlementId}
+                  type="button"
+                  disabled={noQuota}
+                  onClick={() => {
+                    setTabMember((prev) => {
+                      if (!prev) return prev;
+                      const has = prev.selected.includes(row.entitlementId);
+                      return {
+                        ...prev,
+                        selected: has
+                          ? prev.selected.filter((id) => id !== row.entitlementId)
+                          : [...prev.selected, row.entitlementId],
+                      };
+                    });
+                  }}
+                  className={`w-full flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left transition-colors ${
+                    checked
+                      ? "border-fuchsia-500/60 bg-fuchsia-500/10"
+                      : "border-white/10 bg-white/[0.03]"
+                  } ${noQuota ? "opacity-45 cursor-not-allowed" : "cursor-pointer hover:bg-white/[0.06]"}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[11px] font-black text-white truncate">
+                      {row.planName} · {label}
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      {isCredit
+                        ? "Es dinero del socio: no se usa si no lo marcas"
+                        : noQuota
+                        ? "Sin usos disponibles en este ciclo"
+                        : row.remaining != null
+                        ? `Quedan ${row.remaining} en el ciclo`
+                        : "Sin límite de uso"}
+                    </span>
+                  </span>
+                  <span
+                    className={`h-4 w-4 shrink-0 rounded border ${
+                      checked ? "border-fuchsia-400 bg-fuchsia-400" : "border-white/25"
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => setTabMember(null)} className="rounded-xl">
+              No usar
+            </Button>
+            <Button
+              variant="primary"
+              disabled={tabMemberBusy || (tabMember?.selected.length ?? 0) === 0}
+              onClick={() => void confirmTabMembership()}
+              className="rounded-xl bg-fuchsia-500 hover:bg-fuchsia-400 text-white"
+            >
+              {tabMemberBusy ? "Aplicando…" : "Usar membresía"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* ── Modal de Rabbitty Tabs / Comandas Activas en Tienda ── */}
       <Dialog
@@ -5861,6 +6176,42 @@ export default function PosPage() {
                           >
                             <Plus className="h-4 w-4" />
                             Agregar más
+                          </button>
+                        </div>
+
+                        {/* Membresía + rechazo: dos acciones que antes no existían
+                            para cuentas abiertas de la app. */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void openTabMembership(tab)}
+                            disabled={!tab.customer?.id}
+                            className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-fuchsia-500/15 hover:bg-fuchsia-500/25 text-fuchsia-200 border border-fuchsia-500/30 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
+                            title="Leer la membresía del Rabbitter y decidir si se usa"
+                          >
+                            <Ticket className="h-4 w-4" />
+                            Membresía
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRejectCode("OUT_OF_STOCK");
+                              setRejectNote("");
+                              setRejectTarget({
+                                orderId: tab.orderId,
+                                label: tab.tableNumber
+                                  ? `Mesa #${tab.tableNumber}`
+                                  : tab.orderType === "TO_GO"
+                                  ? "Para Llevar"
+                                  : tab.orderType,
+                                total: Number(tab.total ?? 0),
+                              });
+                            }}
+                            disabled={rejectOrderMutation.isPending}
+                            className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-black cursor-pointer active:scale-95 transition-transform disabled:opacity-40"
+                          >
+                            <Ban className="h-4 w-4" />
+                            Rechazar
                           </button>
                         </div>
                       </div>
