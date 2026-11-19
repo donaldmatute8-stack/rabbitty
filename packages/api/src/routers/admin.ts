@@ -534,6 +534,12 @@ export const adminRouter = router({
       stock: number | null;
       /** Alguno de sus insumos está por debajo del mínimo. */
       lowStock: boolean;
+      /**
+       * Insumo directo de la receta cuando es 1:1 (un solo insumo, cantidad 1).
+       * Permite ajustar existencias desde Tienda sin ir a Inventario. Con recetas
+       * compuestas queda null: ahí se administra en Inventario, que es la fuente.
+       */
+      inventoryItemId: string | null;
       sold30d: number;
       revenue30d: number;
     };
@@ -602,6 +608,7 @@ export const adminRouter = router({
         /** null = el producto no controla existencias (sin receta) */
         stock,
         lowStock: stockInfo?.lowStock ?? false,
+        inventoryItemId: stockInfo?.itemId ?? null,
         sold30d: Number(sales?.sold ?? 0),
         revenue30d: Number(sales?.revenue ?? 0),
       };

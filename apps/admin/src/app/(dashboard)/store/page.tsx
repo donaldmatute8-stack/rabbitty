@@ -60,7 +60,12 @@ export default function StorePage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  const [stockDialog, setStockDialog] = useState<{ id: string; name: string } | null>(null);
+  const [stockDialog, setStockDialog] = useState<{
+    id: string;
+    name: string;
+    inventoryItemId?: string | null;
+    currentStock?: number | null;
+  } | null>(null);
   const [stockForm, setStockForm] = useState({ stock: 0, minStock: 2, unit: "pieza" });
 
   const [delivery, setDelivery] = useState<DeliveryConfig>({
@@ -97,6 +102,7 @@ export default function StorePage() {
 
   const createInventoryItem = trpc.inventory.createItem.useMutation();
   const addRecipeIngredient = trpc.inventory.addRecipeIngredient.useMutation();
+  const updateStock = trpc.inventory.updateStock.useMutation();
 
   const updateItem = trpc.admin.updateMenuItem.useMutation({
     onSuccess: () => {
@@ -157,6 +163,25 @@ export default function StorePage() {
         },
       },
     );
+  };
+
+  /** Ajuste rápido: fija el stock absoluto del insumo 1:1 del producto. */
+  const adjustStock = async () => {
+    if (!stockDialog?.inventoryItemId) return;
+    try {
+      await updateStock.mutateAsync({
+        itemId: stockDialog.inventoryItemId,
+        quantity: Number(stockForm.stock) || 0,
+        type: "ADJUST",
+        notes: `Ajuste desde Tienda · ${stockDialog.name}`,
+      });
+      utils.admin.getStoreProducts.invalidate();
+      utils.inventory.getItems.invalidate();
+      toast.success("Existencias actualizadas");
+      setStockDialog(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo ajustar el stock");
+    }
   };
 
   const linkStock = async () => {
@@ -419,7 +444,31 @@ export default function StorePage() {
                     >
                       Editar
                     </button>
-                    {product.stock === null && (
+                    {product.inventoryItemId ? (
+                      <button
+                        onClick={() => {
+                          setStockForm({
+                            stock: product.stock ?? 0,
+                            minStock: 2,
+                            unit: "pieza",
+                          });
+                          setStockDialog({
+                            id: product.id,
+                            name: product.name,
+                            inventoryItemId: product.inventoryItemId,
+                            currentStock: product.stock,
+                          });
+                        }}
+                        className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-bold ${
+                          outOfStock
+                            ? 'border-amber-500/25 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                            : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                        title="Ajustar existencias"
+                      >
+                        Stock: {product.stock ?? 0}
+                      </button>
+                    ) : product.stock === null ? (
                       <button
                         onClick={() => {
                           setStockForm({ stock: 0, minStock: 2, unit: "pieza" });
@@ -429,7 +478,7 @@ export default function StorePage() {
                       >
                         Controlar existencias
                       </button>
-                    )}
+                    ) : null}
                     <button
                       onClick={() => move(product.id, product.sortOrder, -1)}
                       className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-gray-400 hover:text-white"
@@ -581,13 +630,14 @@ export default function StorePage() {
       <Dialog
         open={Boolean(stockDialog)}
         onClose={() => setStockDialog(null)}
-        title="Controlar existencias"
+        title={stockDialog?.inventoryItemId ? "Ajustar existencias" : "Controlar existencias"}
         kicker="Inventario"
       >
         <div className="space-y-3">
           <p className="text-xs leading-relaxed text-gray-400">
-            Se crea un insumo con el nombre del producto y una receta 1:1. Desde ahí, cada venta
-            descuenta una unidad del inventario (POS y app usan el mismo motor).
+            {stockDialog?.inventoryItemId
+              ? 'Escribe cuántas unidades hay hoy. Queda registrado como ajuste en Inventario, con su movimiento.'
+              : 'Se crea un insumo con el nombre del producto y una receta 1:1. Desde ahí, cada venta descuenta una unidad del inventario (POS y app usan el mismo motor).'}
           </p>
           <div className="grid grid-cols-3 gap-3">
             <Input
@@ -615,10 +665,14 @@ export default function StorePage() {
               Cancelar
             </Button>
             <Button
-              onClick={() => void linkStock()}
-              disabled={createInventoryItem.isPending || addRecipeIngredient.isPending}
+              onClick={() => void (stockDialog?.inventoryItemId ? adjustStock() : linkStock())}
+              disabled={createInventoryItem.isPending || addRecipeIngredient.isPending || updateStock.isPending}
             >
-              {createInventoryItem.isPending || addRecipeIngredient.isPending ? "Ligando…" : "Ligar inventario"}
+              {createInventoryItem.isPending || addRecipeIngredient.isPending || updateStock.isPending
+                ? "Guardando…"
+                : stockDialog?.inventoryItemId
+                  ? "Guardar existencias"
+                  : "Ligar inventario"}
             </Button>
           </div>
         </div>

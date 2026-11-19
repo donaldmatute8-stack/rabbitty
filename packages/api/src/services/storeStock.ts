@@ -22,6 +22,11 @@ export interface ProductStock {
   stock: number;
   /** ¿Está por debajo del mínimo del insumo? */
   lowStock: boolean;
+  /**
+   * Insumo único de la receta resuelta (receta 1:1). Permite ajustar existencias
+   * desde la tienda; con recetas compuestas es null y se administra en Inventario.
+   */
+  itemId: string | null;
 }
 
 function rowsOf(result: unknown): Array<Record<string, unknown>> {
@@ -63,7 +68,8 @@ export async function getProductStockMap(
     )
     SELECT r.root_id AS id,
            MIN(FLOOR(ii.stock / NULLIF(r.qty, 0)))::int AS stock,
-           BOOL_OR(ii.stock <= ii."minStock") AS low
+           BOOL_OR(ii.stock <= ii."minStock") AS low,
+           CASE WHEN COUNT(DISTINCT r.inv_id) = 1 THEN MIN(r.inv_id) END AS item_id
     FROM req r
     JOIN "inventory_items" ii ON ii.id = r.inv_id
     WHERE r.inv_id IS NOT NULL AND r.qty > 0
@@ -74,7 +80,11 @@ export async function getProductStockMap(
     const id = String(row.id ?? "");
     if (!id) continue;
     const stock = Number(row.stock ?? 0);
-    out.set(id, { stock: Number.isFinite(stock) ? stock : 0, lowStock: Boolean(row.low) });
+    out.set(id, {
+      stock: Number.isFinite(stock) ? stock : 0,
+      lowStock: Boolean(row.low),
+      itemId: row.item_id ? String(row.item_id) : null,
+    });
   }
 
   return out;
