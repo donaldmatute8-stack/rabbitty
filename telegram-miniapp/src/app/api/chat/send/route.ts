@@ -150,7 +150,7 @@ export async function POST(req: Request) {
 
     // userId REAL del destinatario para el outbox (el worker NOTIFICA a users).
     // El par puede ser businessId ⇒ el userId es el ownerId.
-    const recipientForOutbox = otherId === 'bot' || otherId === 'bunzy'
+    const recipientForOutbox = otherId === 'bot' || otherId === 'bunzy' || otherId === 'support'
       ? null
       : await resolveTelegramRecipient(otherId).catch(() => null);
 

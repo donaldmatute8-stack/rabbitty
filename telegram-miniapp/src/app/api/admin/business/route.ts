@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
           <div style="background: linear-gradient(135deg, rgba(234,179,8,0.12), rgba(244,63,94,0.12)); border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.25);">
             <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 15px; font-weight: 800;">💬 ¿Necesitas agilizar tu verificación?</h3>
             <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px;">Escríbenos directamente en nuestro canal de atención a afiliados.</p>
-            <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: rgba(255,255,255,0.1); color: #FFF; font-weight: 800; font-size: 13px; padding: 12px 24px; border-radius: 12px; text-decoration: none; border: 1px solid rgba(255,255,255,0.2);">Hablar con Soporte 📲</a>
+            <a href="https://app.rabbitty.me/support" style="display: inline-block; background: rgba(255,255,255,0.1); color: #FFF; font-weight: 800; font-size: 13px; padding: 12px 24px; border-radius: 12px; text-decoration: none; border: 1px solid rgba(255,255,255,0.2);">Hablar con Soporte 🛟</a>
           </div>
         `;
         const emailHtml = wrapInRabbittyEmailLayout(`Solicitud En Revisión 🔍`, updated.name, content);
@@ -373,7 +373,7 @@ export async function POST(req: NextRequest) {
           <div style="background: linear-gradient(135deg, rgba(234,179,8,0.12), rgba(244,63,94,0.12)); border-radius: 18px; padding: 20px; text-align: center; margin-bottom: 24px; border: 1px solid rgba(234,179,8,0.25);">
             <h3 style="margin: 0 0 8px 0; color: #FFF; font-size: 15px; font-weight: 800;">💬 ¿Crees que es un error?</h3>
             <p style="margin: 0 0 16px 0; color: #E2E8F0; font-size: 13px;">Comunícate con soporte para apelar esta decisión.</p>
-            <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: #EAB308; color: #000; font-weight: 900; font-size: 13px; padding: 12px 26px; border-radius: 12px; text-decoration: none;">Hablar con Soporte 📲</a>
+            <a href="https://app.rabbitty.me/support" style="display: inline-block; background: #EAB308; color: #000; font-weight: 900; font-size: 13px; padding: 12px 26px; border-radius: 12px; text-decoration: none;">Hablar con Soporte 🛟</a>
           </div>
         `;
         const emailHtml = wrapInRabbittyEmailLayout(`Solicitud Rechazada ❌`, updated.name, content);

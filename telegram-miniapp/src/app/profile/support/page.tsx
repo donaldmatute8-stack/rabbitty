@@ -7,8 +7,8 @@ const OPTIONS = [
   {
     icon: '💬', bg: '#FFF0F5', btnBg: '#FFF0F5', btnHover: '#FCE4EC', btnColor: '#E91E63',
     title: 'Chat de Soporte',
-    desc: 'Habla con Rabbitty Bot (nuevo asistente IA de Rabbitty) para ayuda inmediata.',
-    cta: 'Abrir Chat →', link: 'https://t.me/rabbittybot_bot?start=help',
+    desc: 'Habla directo con el equipo de Rabbitty dentro de la app.',
+    cta: 'Abrir chat →', link: '/chat/support',
   },
   {
     icon: '❓', bg: '#EEF2FF', btnBg: '#EEF2FF', btnHover: '#E0E7FF', btnColor: '#4F46E5',
@@ -19,7 +19,7 @@ const OPTIONS = [
   {
     icon: '📖', bg: '#F0FDF4', btnBg: '#F0FDF4', btnHover: '#DCFCE7', btnColor: '#16A34A',
     title: 'Documentación',
-    desc: 'Aprende todo sobre cómo ganar, canjear y transferir tus Bunz.',
+    desc: 'POS, membresías, pagos y todo sobre tus Bunz.',
     cta: 'Ver Docs →', link: '/support/docs',
   },
 ];
@@ -37,10 +37,10 @@ export default function SupportPage() {
           <div className="relative z-10">
             <div className="w-16 h-16 rounded-[20px] bg-white/20 border border-white/20 flex items-center justify-center text-[28px] mb-5">🤝</div>
             <h2 className="text-[22px] font-black text-white m-0 mb-2 tracking-[-0.5px] leading-[1.2]">
-              ¿Cómo te puede ayudar Rabbitty Bot?
+              ¿Cómo te puede ayudar el equipo de Rabbitty?
             </h2>
             <p className="text-white/85 text-[13px] leading-[1.6] m-0 mb-5">
-              Tu nuevo asistente IA de Rabbitty está aquí para resolver dudas sobre recompensas, Bunz, tu billetera y más.
+              Soporte humano dentro de la app para tu cuenta, tu negocio y el POS. Sin grupos externos.
             </p>
             <div className="inline-flex items-center gap-2 bg-white/15 rounded-[16px] px-4 py-[10px]">
               <div className="w-2 h-2 rounded-full bg-white" style={{ animation: 'pulse 2s infinite' }} />
@@ -74,15 +74,15 @@ export default function SupportPage() {
 
         {/* Community card */}
         <div className="bg-gradient-to-tr from-[#1A1A2E] to-[#2D1060] rounded-3xl p-5 flex items-center gap-4 border border-white/5">
-          <div className="text-[36px] shrink-0">✈️</div>
+          <div className="text-[36px] shrink-0">🛟</div>
           <div className="flex-1">
-            <p className="font-black text-white text-[15px] m-0 mb-1">Soporte y Comunidad</p>
+            <p className="font-black text-white text-[15px] m-0 mb-1">Soporte Rabbitty</p>
             <p className="text-white/50 text-xs leading-[1.4] m-0 mb-3">
-              Rabbitty Bot es tu asistente IA 24/7 para toda ayuda y consultas.
+              Chat directo con el equipo dentro de la app. Te responde una persona.
             </p>
-            <a href="https://t.me/rabbittybot_bot?start=help" className="bg-[#E91E63] text-white text-xs font-black px-4 py-2 rounded-full border-none cursor-pointer no-underline inline-block">
-              Hablar con Rabbitty Bot
-            </a>
+            <Link href="/chat/support" className="bg-[#E91E63] text-white text-xs font-black px-4 py-2 rounded-full border-none cursor-pointer no-underline inline-block">
+              Abrir chat de soporte
+            </Link>
           </div>
         </div>
 

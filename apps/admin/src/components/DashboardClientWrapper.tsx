@@ -10,7 +10,7 @@ import { SandboxBanner } from "./SandboxBanner";
 import { trpc } from "../lib/trpc-client";
 import { toast } from "@rabbitty/ui";
 import Link from "next/link";
-import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Sparkles, RotateCw, CreditCard, Eye, Megaphone } from "lucide-react";
+import { TerminalSquare, TabletSmartphone, Smartphone, MessageSquare, X, Sparkles, RotateCw, CreditCard, Eye, Megaphone, LifeBuoy } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { ScannerPairModal } from "./ScannerPairModal";
 import ReadinessBar from "./ReadinessBar";
@@ -59,7 +59,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   });
 
   const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
-  const [drawerTab, setDrawerTab] = useState<"bunzy" | "official" | "customers">("bunzy");
+  const [drawerTab, setDrawerTab] = useState<"bunzy" | "official" | "customers" | "support">("bunzy");
   // H-CHAT-TRUTH: la apertura ya NO escribe en localStorage — el visto bueno
   // vive en la DB (mutation markRead del server).
   const [activeCustomerChat, setActiveCustomerChat] = useState<string | null>(null);
@@ -73,6 +73,20 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
       text: "¡Hola! 🐰 Soy Bunzy Co-Pilot. Estoy conectado a los datos en vivo de tu sucursal (caja, ventas y lealtad). ¿En qué te puedo asesorar hoy?",
     },
   ]);
+
+  // Acceso directo desde el POS o el menú: /?chat=support abre este drawer
+  // en la pestaña de soporte (sin redirigir a otra app ni a Telegram).
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("chat") === "support") {
+        setChatDrawerOpen(true);
+        setDrawerTab("support");
+      }
+    } catch {
+      /* sin window (SSR) */
+    }
+  }, []);
 
   const [branchId, setBranchId] = useState("b1");
   const [twoFaChecked, setTwoFaChecked] = useState(false);
@@ -163,8 +177,11 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   const officialConversations = (conversations || []).filter(
     (c: { isOfficial?: boolean }) => c.isOfficial === true,
   );
+  const supportConversations = (conversations || []).filter(
+    (c: { isSupport?: boolean }) => c.isSupport === true,
+  );
   const customerConversations = (conversations || []).filter(
-    (c: { isOfficial?: boolean }) => c.isOfficial !== true,
+    (c: { isOfficial?: boolean; isSupport?: boolean }) => c.isOfficial !== true && c.isSupport !== true,
   );
   const officialUnread = officialConversations.reduce(
     (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
@@ -174,7 +191,12 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
     (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
     0,
   );
+  const supportUnread = supportConversations.reduce(
+    (acc: number, c: { unread?: number | null }) => acc + Number(c.unread || 0),
+    0,
+  );
   const activeIsOfficial = officialConversations.some((c) => c.id === activeCustomerChat);
+  const activeIsSupport = supportConversations.some((c) => c.id === activeCustomerChat);
 
   // ── Aviso de mensaje NUEVO de cliente ──
   // El panel tenía badge pero sin aviso: si no lo mirabas, no te enterabas.
@@ -248,10 +270,23 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   // (readAt en DB) — el cliente móvil ve el ✓✓ del negocio al momento.
   useEffect(() => {
     if (!activeCustomerChat || !thread?.messages?.length) return;
+    const viewerId = (thread as { viewerSenderId?: string }).viewerSenderId ?? thread.businessId;
     const unseen = (thread.messages as Array<{ senderId?: string; readAt?: string | null }>)
-      .filter((m) => m.senderId !== thread.businessId && !m.readAt).length;
+      .filter((m) => m.senderId !== viewerId && !m.readAt).length;
     if (unseen > 0) markChatRead.mutate({ conversationId: activeCustomerChat });
   }, [thread, activeCustomerChat, markChatRead]);
+
+  // ── Soporte 1:1: el hilo del negocio se crea al abrir la pestaña ──
+  const ensureSupport = trpc.customerChat.ensureSupportConversation.useMutation({
+    onSuccess: () => refetchConversations(),
+  });
+  useEffect(() => {
+    if (drawerTab !== "support") return;
+    if (supportConversations.length > 0) return;
+    if (ensureSupport.isPending) return;
+    ensureSupport.mutate({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerTab, supportConversations.length]);
 
   const sendMessage = trpc.customerChat.sendMessage.useMutation({
     onSuccess: () => {
@@ -512,7 +547,7 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                     </div>
 
                     {/* Sub-tabs Bunzy Co-Pilot vs Chats Clientes */}
-                    <div className="grid grid-cols-3 p-1 bg-black/60 rounded-xl border border-white/10 gap-1">
+                    <div className="grid grid-cols-4 p-1 bg-black/60 rounded-xl border border-white/10 gap-1">
                       <button
                         onClick={() => {
                           setDrawerTab("bunzy");
@@ -559,6 +594,24 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         {customerUnread > 0 && (
                           <span className="absolute -right-0.5 -top-1 rounded-full bg-[#E91E63] px-1.5 py-0.5 text-[8px] font-black text-white">
                             {customerUnread}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDrawerTab("support");
+                          setActiveCustomerChat(null);
+                        }}
+                        className={`relative py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                          drawerTab === "support"
+                            ? "bg-cyan-500 text-white shadow-md shadow-cyan-500/25"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <LifeBuoy size={12} /> Soporte
+                        {supportUnread > 0 && (
+                          <span className="absolute -right-0.5 -top-1 rounded-full bg-cyan-500 px-1.5 py-0.5 text-[8px] font-black text-white">
+                            {supportUnread}
                           </span>
                         )}
                       </button>
@@ -770,6 +823,57 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                       </>
                     )}
 
+                    {drawerTab === "support" && !activeCustomerChat && (
+                      <>
+                        <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-3">
+                          <p className="m-0 text-xs font-black text-cyan-200">🛟 Soporte Rabbitty</p>
+                          <p className="m-0 mt-0.5 text-[11px] leading-relaxed text-gray-300">
+                            Chat directo con el equipo. Un hilo por negocio: aquí ves tu
+                            historial y el contexto de tu cuenta.
+                          </p>
+                        </div>
+
+                        {conversationsLoading && (
+                          <p className="text-xs text-gray-400 text-center py-6">Abriendo soporte…</p>
+                        )}
+
+                        {!conversationsLoading && supportConversations.length === 0 && (
+                          <div className="text-center py-8 px-4">
+                            <p className="text-xs text-gray-400 m-0">
+                              {ensureSupport.isPending ? "Abriendo tu hilo de soporte…" : "Preparando soporte…"}
+                            </p>
+                          </div>
+                        )}
+
+                        {supportConversations.map((conv) => {
+                          const convWithUnread = conv as { id: string; unread?: number | null; lastMessageAt?: string | null; lastMessage?: string | null };
+                          const unreadCount = Number(convWithUnread.unread ?? 0);
+                          return (
+                            <div
+                              key={conv.id}
+                              onClick={() => openChat(conv)}
+                              className="p-3.5 rounded-2xl bg-cyan-500/5 border border-cyan-500/25 hover:border-cyan-400/50 transition-all cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-xs font-bold text-white flex items-center gap-2">
+                                  Soporte Rabbitty
+                                  {unreadCount > 0 && (
+                                    <span className="text-[9px] font-black text-white bg-cyan-500 rounded-full px-1.5 py-0.5 min-w-4 text-center">
+                                      {unreadCount}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="text-[10px] text-gray-500">
+                                  {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleString("es-MX", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-300 m-0 line-clamp-2">{conv.lastMessage || "Escríbenos: te responde una persona."}</p>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+
                     {activeCustomerChat && (
                       <>
                         <button
@@ -781,6 +885,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                         >
                           ← Volver a conversaciones
                         </button>
+
+                        {activeIsSupport && (
+                          <div className="mb-3 rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-3">
+                            <p className="m-0 text-[10px] font-black uppercase tracking-wider text-cyan-300">
+                              Soporte Rabbitty
+                            </p>
+                            <p className="m-0 mt-0.5 text-[11px] leading-relaxed text-gray-300">
+                              Escribes como el equipo. El afiliado recibe la respuesta en
+                              su app y en este mismo hilo.
+                            </p>
+                          </div>
+                        )}
 
                         {activeIsOfficial && (
                           <div className="mb-3 rounded-2xl border border-pink-500/25 bg-pink-500/10 p-3">
@@ -804,7 +920,8 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                           if (msg.type === 'BUNZY_UPDATE') {
                             return <BunzyUpdateCard key={msg.id} message={msg} />;
                           }
-                          const mine = msg.senderId === thread.businessId;
+                          const viewerId = (thread as { viewerSenderId?: string }).viewerSenderId ?? thread.businessId;
+                          const mine = msg.senderId === viewerId;
                           return (
                             <div key={msg.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                               <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? "bg-pink-600 text-white" : "bg-white/6 text-gray-100 border border-white/10"}`}>
@@ -875,12 +992,12 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                   )}
 
                   {/* Quick Reply Bar for Customer Chat */}
-                  {drawerTab === "customers" && activeCustomerChat && (
+                  {(drawerTab === "customers" || drawerTab === "support") && activeCustomerChat && (
                     <div className="p-3 border-t border-white/10 bg-black/40">
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder="Responder al cliente..."
+                          placeholder={drawerTab === "support" ? "Responder como Soporte Rabbitty…" : "Responder al cliente..."}
                           value={chatReply}
                           onChange={(e) => setChatReply(e.target.value)}
                           onKeyDown={(e) => {

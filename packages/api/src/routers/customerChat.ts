@@ -3,11 +3,26 @@ import { eq, ne, and, or, not, inArray, isNull, sql, asc, desc, type SQL } from 
 import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { bunzyDeliveries, bunzyPreferences, conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
+import { isGodAdminIdentity } from "../services/god2fa";
 import type { Context } from "../trpc";
 
 export interface BusinessRef {
   id: string;
   name: string;
+}
+
+/**
+ * ¿Quién responde? El equipo de Rabbitty (God / allowlist) escribe como
+ * 'support'; un afiliado escribe como su negocio (solicitud). Sin esta
+ * distinción, el afiliado podría "responderse" como soporte desde su admin.
+ */
+function isSupportStaff(ctx: Context): boolean {
+  if (isGodAdminIdentity(ctx.user?.email, ctx.user?.name)) return true;
+  const extra = (process.env.SUPPORT_STAFF_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return extra.includes((ctx.user?.email ?? "").trim().toLowerCase());
 }
 
 const TELEGRAM_EMAIL_RE = /^(\d+)@telegram\.rabbitty$/i;
@@ -98,6 +113,7 @@ export const customerChatRouter = router({
   listConversations: protectedProcedure.query(async ({ ctx }) => {
     const biz = await resolveOwnerBusinesses(ctx);
     if (biz.length === 0) return [];
+    const staff = isSupportStaff(ctx);
     const bizIds = biz.map((b) => b.id);
     const nameById = new Map(biz.map((b) => [b.id, b.name]));
 
@@ -119,6 +135,7 @@ export const customerChatRouter = router({
           or(
             eq(conversations.audience, 'BUSINESS'),
             eq(conversations.audience, 'BUNZY'),
+            eq(conversations.audience, 'SUPPORT'),
           ),
           or(
             inArray(conversations.participant1, bizIds),
@@ -144,12 +161,15 @@ export const customerChatRouter = router({
         // H-CHAT-TRUTH: unread del negocio ponderado EN DB (mensajes del cliente
         // con readAt NULL). Antes el contador vivía en localStorage del navegador
         // — cada Mac/iPad veía su propio "visto" y eso no es fuente de verdad.
+        const isSupport = conv.audience === 'SUPPORT';
+        // En soporte el "no leído" del equipo son los mensajes DEL NEGOCIO
+        // (el afiliado pide ayuda). En un chat de cliente es al revés.
         const [unseenRow] = await ctx.coreDb
           .select({ n: sql<number>`COUNT(*)` })
           .from(messages)
           .where(and(
             eq(messages.conversationId, conv.id),
-            eq(messages.senderId, customerId),
+            eq(messages.senderId, isSupport ? (staff ? businessId : 'support') : customerId),
             sql`"readAt" IS NULL`
           ));
 
@@ -183,6 +203,8 @@ export const customerChatRouter = router({
         const lastMeta = (last?.metadata ?? null) as { title?: string } | null;
         const customerName = isBunzy
           ? 'Bunzy'
+          : isSupport
+          ? 'Soporte Rabbitty'
           : customer
             ? `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() ||
               customer.username ||
@@ -200,6 +222,8 @@ export const customerChatRouter = router({
           lastMessageAt: last?.createdAt ?? conv.updatedAt,
           // H-CHAT-TRUTH: la UI deja de depender de localStorage para el badge.
           isOfficial: isBunzy,
+          isSupport,
+          audience: conv.audience,
           unread: Number(unseenRow?.n ?? 0),
           messageTotal: Number(messageTotalRow?.n ?? 0),
         };
@@ -239,7 +263,15 @@ export const customerChatRouter = router({
         .orderBy(asc(messages.createdAt))
         .limit(200);
 
-      return { businessId, messages: rows };
+      return {
+        businessId,
+        audience: conv.audience,
+        // En SUPPORT el equipo escribe como 'support'; el negocio como businessId.
+        viewerSenderId: conv.audience === 'SUPPORT'
+          ? (isSupportStaff(ctx) ? 'support' : businessId)
+          : businessId,
+        messages: rows,
+      };
     }),
 
   /**
@@ -279,7 +311,11 @@ export const customerChatRouter = router({
         .set({ readAt: new Date() })
         .where(and(
           eq(messages.conversationId, input.conversationId),
-          ne(messages.senderId, businessId),
+          // SUPPORT: el equipo marca leídos los mensajes del negocio (la
+          // solicitud). En un chat de cliente, los del cliente.
+          conv.audience === 'SUPPORT'
+            ? (isSupportStaff(ctx) ? eq(messages.senderId, businessId) : ne(messages.senderId, businessId))
+            : ne(messages.senderId, businessId),
           sql`"readAt" IS NULL`
         ))
         .returning({ id: messages.id });
@@ -321,11 +357,19 @@ export const customerChatRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "No tienes acceso a esta conversación" });
       }
 
+      // En SUPPORT el que responde es el EQUIPO (identidad 'support'), no el
+      // negocio: si el negocio escribiera como él mismo, la conversación sería
+      // un monólogo y el afiliado no vería una respuesta de Rabbitty.
+      const staff = isSupportStaff(ctx);
+      const senderId = conv.audience === 'SUPPORT'
+        ? (staff ? 'support' : businessId)
+        : businessId;
+
       const [msg] = await ctx.coreDb
         .insert(messages)
         .values({
           conversationId: conv.id,
-          senderId: businessId,
+          senderId,
           content: input.content.trim(),
         })
         .returning();
@@ -350,7 +394,7 @@ export const customerChatRouter = router({
               payload: {
                 messageId: msg.id,
                 conversationId: conv.id,
-                senderId: businessId,
+                senderId,
                 content: msg.content,
                 type: msg.type,
                 metadata: msg.metadata ?? null,
@@ -380,18 +424,41 @@ export const customerChatRouter = router({
           const url = process.env.RABBITTY_MINIAPP_URL;
           const secret = process.env.RABBITTY_API_SECRET;
           if (url && secret) {
-            // El participante cliente de la conversación
+            // El participante cliente de la conversación. En SUPPORT el otro
+            // extremo es la identidad 'support' (no un usuario): se avisa al
+            // DUEÑO del negocio para que vea la respuesta en su app.
             const customerId = conv.participant1 === businessId ? conv.participant2 : conv.participant1;
-            await fetch(`${url.replace(/\/$/, "")}/api/chat/notify`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-              body: JSON.stringify({
-                conversationId: conv.id,
-                recipientUserId: customerId,
-                preview: input.content.trim(),
-                senderName: "El negocio",
-              }),
-            });
+            let recipientUserId: string | null = customerId;
+            let senderName = "El negocio";
+            if (conv.audience === 'SUPPORT') {
+              if (staff) {
+                // Respuesta del equipo → avisar al dueño del negocio.
+                const [biz] = await ctx.coreDb
+                  .select({ ownerId: ownedBusinesses.ownerId })
+                  .from(ownedBusinesses)
+                  .where(eq(ownedBusinesses.id, businessId))
+                  .limit(1);
+                recipientUserId = biz?.ownerId ?? null;
+                senderName = "Soporte Rabbitty";
+              } else {
+                // Solicitud del afiliado: el equipo la ve en /god/soporte
+                // (con su contador). No se inserta una notificación móvil aquí
+                // porque abriría el hilo propio del staff, no el del afiliado.
+                recipientUserId = null;
+              }
+            }
+            if (recipientUserId) {
+              await fetch(`${url.replace(/\/$/, "")}/api/chat/notify`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+                body: JSON.stringify({
+                  conversationId: conv.id,
+                  recipientUserId,
+                  preview: input.content.trim(),
+                  senderName,
+                }),
+              });
+            }
           }
         } catch (notifyErr) {
           console.error("[customerChat] notify cliente falló:", notifyErr);
@@ -399,6 +466,54 @@ export const customerChatRouter = router({
       }
 
       return msg;
+    }),
+
+  /**
+   * ── ensureSupportConversation ── abre (o crea) el hilo de soporte 1:1.
+   *
+   * Un hilo por negocio, no un grupo: cada afiliado ve solo el suyo y el equipo
+   * conserva el contexto (negocio, sucursal, plan) sin exponer datos de otros.
+   */
+  ensureSupportConversation: protectedProcedure
+    .input(z.object({ businessId: z.string().optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const biz = await resolveOwnerBusinesses(ctx);
+      if (biz.length === 0) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No tienes un negocio para abrir soporte." });
+      }
+      const businessId = input?.businessId && biz.some((b) => b.id === input.businessId)
+        ? input.businessId
+        : biz[0]!.id;
+
+      const [existing] = await ctx.coreDb
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(eq(conversations.audience, 'SUPPORT'), eq(conversations.participant2, businessId)))
+        .limit(1);
+      if (existing) return { conversationId: existing.id, businessId, created: false };
+
+      try {
+        const [created] = await ctx.coreDb
+          .insert(conversations)
+          .values({
+            participant1: 'support',
+            participant2: businessId,
+            audience: 'SUPPORT',
+            kind: 'DIRECT',
+          })
+          .returning({ id: conversations.id });
+        if (created) return { conversationId: created.id, businessId, created: true };
+      } catch (err) {
+        // Carrera (dos pestañas): se relee el hilo que ganó.
+        const [raced] = await ctx.coreDb
+          .select({ id: conversations.id })
+          .from(conversations)
+          .where(and(eq(conversations.audience, 'SUPPORT'), eq(conversations.participant2, businessId)))
+          .limit(1);
+        if (raced) return { conversationId: raced.id, businessId, created: false };
+        throw err;
+      }
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo abrir soporte." });
     }),
 
   // ── Bunzy Connect · preferencias del negocio ──

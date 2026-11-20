@@ -11,7 +11,6 @@ import useSWR from 'swr';
 import { BusinessCardSkeleton } from '@/components/ui/Skeleton';
 import PullToRefresh from '@/components/ui/PullToRefresh';
 import { PlatformBridge } from '@/lib/platform';
-import { CreateGroupSheet } from '@/components/chat/CreateGroupSheet';
 import { NewChatHub } from '@/components/chat/NewChatHub';
 import { useConvPrefs, setPref, setOrder, type ConvPref } from '@/lib/convPrefs';
 import {
@@ -41,8 +40,9 @@ import {
   Smartphone,
   Car,
   HelpCircle,
+  BookOpen,
+  Megaphone,
 } from 'lucide-react';
-import { GROUPS } from '@/components/groups/GroupsStrip';
 import { setStoredAvatar } from '@/lib/avatar';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -738,34 +738,44 @@ export default function ChatInboxPage() {
       isAll: true,
       fullName: 'Todos los chats',
     },
-    ...GROUPS.map((g) => ({
-      id: g.id,
-      label: g.badge || g.name.split(' ')[0],
-      icon: g.iconSvg,
-      color: g.color,
-      gradient: g.gradient,
-      borderGlow: g.borderGlow,
-      fullName: g.name,
-    })),
     {
       id: 'support',
-      label: 'Ayuda',
+      label: 'Soporte',
       icon: <HelpCircle size={18} strokeWidth={1.8} />,
       color: '#00BCD4',
       gradient: 'linear-gradient(135deg, #00BCD4 0%, #008BA3 100%)',
       borderGlow: 'rgba(0, 188, 212, 0.4)',
-      fullName: 'Soporte',
+      fullName: 'Soporte Rabbitty',
+      route: '/chat/support',
+    },
+    {
+      id: 'bunzy',
+      label: 'Avisos',
+      icon: <Megaphone size={18} strokeWidth={1.8} />,
+      color: '#E91E63',
+      gradient: 'linear-gradient(135deg, #E91E63 0%, #AD1457 100%)',
+      borderGlow: 'rgba(233, 30, 99, 0.4)',
+      fullName: 'Avisos oficiales',
+      route: '/chat/bunzy',
+    },
+    {
+      id: 'guides',
+      label: 'Guías',
+      icon: <BookOpen size={18} strokeWidth={1.8} />,
+      color: '#10B981',
+      gradient: 'linear-gradient(135deg, #10B981 0%, #047857 100%)',
+      borderGlow: 'rgba(16, 185, 129, 0.4)',
+      fullName: 'Guías y tutoriales',
+      route: '/support/docs',
     },
   ];
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-(--bg-primary) text-(--text-primary) select-none">
-      <CreateGroupSheet open={groupOpen} onClose={() => setGroupOpen(false)} />
       <NewChatHub
         open={newChatOpen}
         ownerId={user?.id || 'anon'}
         onClose={() => setNewChatOpen(false)}
-        onOpenGroup={() => { setNewChatOpen(false); setGroupOpen(true); }}
       />
 
       {/* 1. Lateral Vertical Docker (Empuja contenido) */}
@@ -847,11 +857,8 @@ export default function ChatInboxPage() {
                       PlatformBridge.hapticFeedback('light');
                       if (item.id === 'chats') {
                         setCommunity('chats');
-                      } else if (item.id === 'support') {
-                        router.push('/support');
-                      } else {
-                        // Comunidades SIEMPRE internas: no crear conversación.
-                        setCommunity(item.id);
+                      } else if ((item as { route?: string }).route) {
+                        router.push((item as { route?: string }).route as string);
                       }
                     }}
                     title={item.fullName || item.label}
@@ -913,9 +920,7 @@ export default function ChatInboxPage() {
             <span className="font-bold text-[16px] tracking-tight text-(--text-primary) truncate max-w-[170px] sm:max-w-xs block text-center">
               {activeTab === 'business'
                 ? 'Mi Negocio'
-                : community === 'chats'
-                ? 'Chats'
-                : GROUPS.find((g) => g.id === community)?.name || 'Chats'}
+                : 'Chats'}
             </span>
           }
           centerTitle
@@ -1069,7 +1074,7 @@ export default function ChatInboxPage() {
             )}
           </AnimatePresence>
 
-          {community === 'chats' ? (
+          {community === 'chats' && (
             <PullToRefresh onRefresh={async () => { await mutateConversations(); }}>
             <div className={`flex flex-col gap-3 pb-28 ${dockPosition === 'top' ? 'pt-16' : ''}`}>
               {/* Telegram Search Bar + acceso directo a Bunzy (esquina cortada) */}
@@ -1223,87 +1228,7 @@ export default function ChatInboxPage() {
               )}
             </div>
             </PullToRefresh>
-          ) : (() => {
-            if (community === 'support') {
-              return (
-                <div className="flex flex-col items-center text-center gap-3 pt-8 pb-28">
-                  <div style={{ width: 88, height: 88, borderRadius: '50%', background: 'linear-gradient(135deg,#00BCD4 0%,#26C6DA 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🛟</div>
-                  <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#fff' }}>Soporte Rabbitty</h2>
-                  <p style={{ margin: 0, fontSize: 13, color: '#8E8E93', maxWidth: 280, lineHeight: 1.5 }}>Centro de tickets, seguimiento y soporte entre usuarios/admins.</p>
-                  <button
-                    type="button"
-                    onClick={() => { PlatformBridge.hapticFeedback('medium'); window.location.href = '/support'; }}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm bg-[#1C1C1E] border border-white/10 text-white cursor-pointer"
-                  >
-                    Ir a Ayuda y Soporte
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-                    className="text-xs font-bold text-[#0088CC] cursor-pointer p-2"
-                  >
-                    ← Volver a mis chats
-                  </button>
-                </div>
-              );
-            }
-            const g = GROUPS.find((x) => x.id === community);
-            if (!g) return null;
-            return (
-              <div className="flex flex-col items-center text-center gap-4 pt-8 pb-28">
-                {/* Brand Avatar */}
-                <div className="relative">
-                  <div
-                    style={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: 24,
-                      background: g.gradient || g.color,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      boxShadow: '0 12px 28px -6px rgba(0,0,0,0.4)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                    }}
-                    className="relative z-10"
-                  >
-                    <div className="w-10 h-10 flex items-center justify-center">
-                      {g.iconSvg}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center gap-1.5 max-w-sm px-4">
-                  <div className="flex items-center gap-2">
-                    <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.3px' }}>
-                      {g.name}
-                    </h2>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white/10 text-white border border-white/15">
-                      {g.badge}
-                    </span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 13, color: '#8E8E93', lineHeight: 1.5 }}>
-                    {g.desc}
-                  </p>
-                </div>
-
-                <div className="w-full max-w-xs flex flex-col gap-2.5 mt-2">
-                  <p className="m-0 text-center text-[11px] leading-relaxed text-white/40 px-4">
-                    Esta comunidad vive dentro de Rabbitty. Aquí verás sus novedades; no se abre un chat
-                    con ella.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { PlatformBridge.hapticFeedback('light'); setCommunity('chats'); }}
-                    className="text-xs font-bold text-white/50 cursor-pointer p-2 hover:text-white transition-colors"
-                  >
-                    ← Volver a mis chats
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+          )}
         </ProfileSubpageLayout>
       </motion.div>
 

@@ -120,10 +120,10 @@ export default function FAQPage() {
           )}
         </div>
 
-        {/* Fallback a Telegram Bot */}
+        {/* Fallback: chat de soporte in-app */}
         <div style={{ marginTop: 32, textAlign: 'center', padding: 20 }}>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>¿Aún no encuentras lo que buscas?</p>
-          <Link href="https://t.me/rabbittybot_bot?start=help" style={{ textDecoration: 'none' }}>
+          <Link href="/chat/support" style={{ textDecoration: 'none' }}>
             <motion.div
               whileTap={{ scale: 0.95 }}
               style={{

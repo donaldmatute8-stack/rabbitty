@@ -212,7 +212,7 @@ export function getApplicationRejectedEmailTemplate(businessName: string, reason
 
     <div style="text-align: center;">
       <p style="font-size: 13px; color: #94A3B8; margin-bottom: 16px;">Si deseas corregir tus datos o solicitar una revisión directa:</p>
-      <a href="https://t.me/Rabbittyme_bot" style="display: inline-block; background: rgba(255,255,255,0.1); color: #FFF; font-weight: 700; font-size: 13px; padding: 10px 24px; border-radius: 10px; text-decoration: none;">Contactar Soporte Rabbitty</a>
+      <a href="https://app.rabbitty.me/support" style="display: inline-block; background: rgba(255,255,255,0.1); color: #FFF; font-weight: 700; font-size: 13px; padding: 10px 24px; border-radius: 10px; text-decoration: none;">Contactar Soporte Rabbitty</a>
     </div>
   `;
   return wrapInRabbittyEmailLayout(`Actualización de Solicitud`, businessName, content);

@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock, MembershipCard } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban, LifeBuoy } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -2421,6 +2421,20 @@ export default function PosPage() {
               )}
             </button>
           </div>
+
+          {/* Ayuda: abre el mismo hilo de soporte del admin (sin Telegram) */}
+          <button
+            type="button"
+            onClick={() => {
+              const win = window.open('/?chat=support', '_blank');
+              if (!win) window.location.assign('/?chat=support');
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/20 text-xs font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95"
+            title="Soporte Rabbitty · chat directo con el equipo"
+          >
+            <LifeBuoy className="h-3.5 w-3.5 text-cyan-300" />
+            <span className="hidden xl:inline">Ayuda</span>
+          </button>
 
           {/* Hardware & History */}
           <div className="flex items-center gap-1">

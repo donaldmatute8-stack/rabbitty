@@ -70,6 +70,43 @@ export async function GET(req: Request) {
     }
 
     let createdNow = false;
+
+    // ── Soporte Rabbitty: hilo 1:1 POR NEGOCIO ─────────────────────────────
+    // No es un grupo ni un chat con otro usuario: participa la identidad
+    // 'support' y el negocio. Así cada afiliado ve solo el suyo y el equipo
+    // conserva el contexto sin exponer datos de otros comercios.
+    if (!conversation && targetId === 'support') {
+      const bizId = businessIds[0];
+      if (!bizId) {
+        return NextResponse.json(
+          { error: 'Necesitas un negocio para abrir soporte' },
+          { status: 400 },
+        );
+      }
+      const [existingSupport] = await db
+        .select()
+        .from(conversations)
+        .where(and(
+          eq(conversations.audience, 'SUPPORT'),
+          eq(conversations.participant2, bizId),
+        ))
+        .limit(1);
+      if (existingSupport) {
+        conversation = existingSupport;
+      } else {
+        const [createdSupport] = await db
+          .insert(conversations)
+          .values({
+            participant1: 'support',
+            participant2: bizId,
+            audience: 'SUPPORT',
+          })
+          .returning();
+        conversation = createdSupport;
+        createdNow = true;
+      }
+    }
+
     if (!conversation) {
       if (!targetId) {
         return NextResponse.json({ error: 'Conversación no encontrada' }, { status: 404 });
@@ -92,13 +129,18 @@ export async function GET(req: Request) {
     let targetName = 'Usuario';
     let targetAvatar: string | null = null;
     let businessOpen: boolean | null = null;
-    let targetRole: 'BOT' | 'AFFILIATE' | 'RABBITTER' = 'RABBITTER';
+    let targetRole: 'BOT' | 'AFFILIATE' | 'RABBITTER' | 'SUPPORT' = 'RABBITTER';
     let targetUsername: string | null = null;
     let targetBio: string | null = null;
     let targetCategory: string | null = null;
     let targetBusinessId: string | null = null;
 
-    if (otherId === 'bot' || otherId === 'bunzy') {
+    if (otherId === 'support') {
+      targetName = 'Soporte Rabbitty';
+      targetRole = 'SUPPORT';
+      targetUsername = 'rabbitty_support';
+      targetBio = 'Equipo de Rabbitty. Escríbenos y te respondemos por aquí: sin grupos ni canales externos.';
+    } else if (otherId === 'bot' || otherId === 'bunzy') {
       targetName = otherId === 'bunzy' ? 'Bunzy · Oficial' : 'Bunzy 🐰';
       targetRole = 'BOT';
       targetUsername = otherId === 'bunzy' ? 'bunzy_oficial' : 'bunzy_concierge_bot';
@@ -326,7 +368,9 @@ export async function GET(req: Request) {
       audience: conversation.audience ?? 'BUSINESS',
       group: groupInfo,
       myParticipantId: access.myParticipantId,
-      isBusinessInbox: access.isBusinessInbox,
+      // Soporte no es la bandeja del negocio: es un chat con Rabbitty. Sin
+      // esto la UI mostraba plantillas de "Mi Negocio" y el botón de afiliado.
+      isBusinessInbox: access.isBusinessInbox && conversation.audience !== 'SUPPORT',
       targetName,
       targetAvatar,
       targetRole,

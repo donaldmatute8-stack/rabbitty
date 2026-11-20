@@ -107,6 +107,8 @@ export async function GET(req: Request) {
           otherName = otherId === 'bunzy' ? 'Bunzy · Oficial' : 'Bunzy 🐰';
           isBot = otherId === 'bot';
           isOfficial = otherId === 'bunzy';
+        } else if (otherId === 'support') {
+          otherName = 'Soporte Rabbitty';
         } else {
           const business = await db.query.ownedBusinesses.findFirst({
             where: or(eq(ownedBusinesses.id, otherId), eq(ownedBusinesses.slug, otherId)),

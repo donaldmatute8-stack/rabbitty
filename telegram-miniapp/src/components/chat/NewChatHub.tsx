@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ChevronRight, MessageCircle, Search, UserPlus, Users, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MessageCircle, Search, UserPlus, X } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
 import {
@@ -25,17 +25,15 @@ interface DirectoryUser {
 interface NewChatHubProps {
   open: boolean;
   onClose: () => void;
-  onOpenGroup: () => void;
   ownerId: string;
 }
 
 /**
  * Hub único de creación de chats:
- *  - nuevo grupo (delega en CreateGroupSheet)
  *  - nuevo contacto (agenda local; si existe en Rabbitty se enlaza)
  *  - lista de contactos con búsqueda por nombre, teléfono o usuario
  */
-export function NewChatHub({ open, onClose, onOpenGroup, ownerId }: NewChatHubProps) {
+export function NewChatHub({ open, onClose, ownerId }: NewChatHubProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const [mode, setMode] = useState<'menu' | 'contact'>('menu');
@@ -206,25 +204,7 @@ export function NewChatHub({ open, onClose, onOpenGroup, ownerId }: NewChatHubPr
 
       {mode === 'menu' ? (
         <>
-          <div className="grid grid-cols-2 gap-2.5 p-4">
-            <button
-              type="button"
-              onClick={() => {
-                PlatformBridge.hapticFeedback('medium');
-                close();
-                onOpenGroup();
-              }}
-              className="flex flex-col items-start gap-2 rounded-2xl border border-pink-500/25 bg-pink-500/10 p-4 text-left active:scale-[0.98]"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-500/20 text-pink-300">
-                <Users size={19} />
-              </div>
-              <div>
-                <p className="m-0 text-sm font-black text-white">Nuevo grupo</p>
-                <p className="m-0 text-[11px] text-white/45">Rabbitters, privado</p>
-              </div>
-            </button>
-
+          <div className="grid grid-cols-1 gap-2.5 p-4">
             <button
               type="button"
               onClick={() => {

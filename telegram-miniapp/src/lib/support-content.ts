@@ -256,13 +256,11 @@ export const SUPPORT_KNOWLEDGE =
   FAQS.map((f) => `· ${f.q}\n  → ${f.a}`).join('\n') +
   '\n\nGUÍA / DOCUMENTACIÓN:\n' +
   DOC_SECTIONS.map((d) => `· ${d.title}: ${d.body}`).join('\n') +
-  '\n\nCOMUNIDADES OFICIALES EN RABBITTY HUB (TELEGRAM & IN-APP):\n' +
-  '· General (#): Comunidad principal y anuncios para todos los usuarios.\n' +
-  '· Soporte Técnico (S): Resolución de incidencias, pagos y dudas técnicas dentro de la app.\n' +
-  '· Soporte Demos (S): Demostraciones guiadas y onboarding para nuevos usuarios y comercios.\n' +
-  '· Affiliates Circle (A): Comunidad de negocios y comercios afiliados.\n' +
-  '· Rabbitters Zone (R): Círculo exclusivo de Rabbitters (Nodos de la red).\n' +
-  'Nota para Bunzy: Cuando un usuario pregunte por grupos, soporte o comunidades, puedes darle asistencia directa in-app y ofrecerle el enlace directo si desea entrar al grupo de Telegram.\n\n' +
+  '\n\nSOPORTE Y COMUNIDADES (TODO DENTRO DE LA APP):\n' +
+  '· Soporte 1:1: chat directo con el equipo de Rabbitty. Un hilo por negocio, con historial; no hay grupos externos.\n' +
+  '· Avisos oficiales: canal Bunzy con novedades, mantenimiento y tips.\n' +
+  '· Guías y FAQ: /support/docs y /support/faq.\n' +
+  'Nota para Bunzy: si preguntan por soporte, grupos o comunidades, dirige SIEMPRE al chat de soporte in-app; no ofrezcas Telegram ni canales externos.\n\n' +
   'RABBITTY CODE (QR NEÓN PROPIETARIO):\n' +
   '· El RabbittyCode es el QR neón propietario de Rabbitty (anillos de onda + esquinas holográficas). NO es un QR estándar: SOLO la App Rabbitty puede escanearlo (el escáner interno decodifica sus barras de onda). La cámara normal del iPhone NO lo lee.\n' +
   '· Cada Rabbitter tiene su RabbittyCode en /scan?tab=my-code ("Mi Código"). Los comercios afiliados tienen el suyo en su portal de negocio. Sirve para identificarse, transferir bunz entre Rabbitters y check-in en locales.\n' +

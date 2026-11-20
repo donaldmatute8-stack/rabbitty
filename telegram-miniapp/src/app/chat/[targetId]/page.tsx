@@ -12,7 +12,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { BunzyUpdateCard } from '@/components/chat/BunzyUpdateCard';
 import { QRCodeSVG } from 'qrcode.react';
 import { useToast } from '@/contexts/ToastContext';
-import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone, Newspaper, Paperclip, FileText } from 'lucide-react';
+import { Bell, BellOff, Search, Ban, MoreHorizontal, Store, Bot, ExternalLink, Zap, Megaphone, Newspaper, Paperclip, FileText, HelpCircle } from 'lucide-react';
 
 import { useRealtimeChat } from '@/lib/realtime/useRealtimeChat';
 import { ensureIdentity, getDeviceId } from '@/lib/e2e/identity';
@@ -117,7 +117,7 @@ interface HistoryResponse {
   isBusinessInbox?: boolean;
   targetName?: string;
   targetAvatar?: string | null;
-  targetRole?: 'BOT' | 'AFFILIATE' | 'RABBITTER';
+  targetRole?: 'BOT' | 'AFFILIATE' | 'RABBITTER' | 'SUPPORT';
   targetUsername?: string | null;
   targetBio?: string | null;
   targetCategory?: string | null;
@@ -740,7 +740,7 @@ export default function ChatRoomPage() {
   const [searchHits, setSearchHits] = useState<Array<{ id: string; content: string; createdAt: string; senderName?: string }>>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const [targetAvatar, setTargetAvatar] = useState<string | null>(null);
-  const [targetRole, setTargetRole] = useState<'BOT' | 'AFFILIATE' | 'RABBITTER'>('RABBITTER');
+  const [targetRole, setTargetRole] = useState<'BOT' | 'AFFILIATE' | 'RABBITTER' | 'SUPPORT'>('RABBITTER');
   const [targetUsername, setTargetUsername] = useState<string | null>(null);
   const [targetBio, setTargetBio] = useState<string | null>(null);
   const [targetCategory, setTargetCategory] = useState<string | null>(null);
@@ -3023,11 +3023,11 @@ export default function ChatRoomPage() {
               fontWeight: 800, 
               padding: '2px 8px', 
               borderRadius: 99, 
-              background: targetRole === 'BOT' ? 'rgba(233,30,99,0.15)' : targetRole === 'AFFILIATE' ? 'rgba(255,138,0,0.15)' : 'var(--bg-elevated)',
-              color: targetRole === 'BOT' ? '#E91E63' : targetRole === 'AFFILIATE' ? '#FF8A00' : 'var(--text-secondary)',
+              background: targetRole === 'BOT' ? 'rgba(233,30,99,0.15)' : targetRole === 'SUPPORT' ? 'rgba(0,188,212,0.15)' : targetRole === 'AFFILIATE' ? 'rgba(255,138,0,0.15)' : 'var(--bg-elevated)',
+              color: targetRole === 'BOT' ? '#E91E63' : targetRole === 'SUPPORT' ? '#00BCD4' : targetRole === 'AFFILIATE' ? '#FF8A00' : 'var(--text-secondary)',
               border: '1px solid var(--border-subtle)'
             }}>
-              {targetRole === 'BOT' ? '🤖 bot' : targetRole === 'AFFILIATE' ? '🏪 Afiliado Oficial' : '🐰 Rabbitter'}
+              {targetRole === 'BOT' ? '🤖 bot' : targetRole === 'SUPPORT' ? '🎧 Soporte' : targetRole === 'AFFILIATE' ? '🏪 Afiliado Oficial' : '🐰 Rabbitter'}
             </span>
           </div>
 
@@ -3264,7 +3264,36 @@ export default function ChatRoomPage() {
           </div>
 
           {/* Role-Specific Action Button (Bot settings, Ir al Negocio, etc.) */}
-          {targetRole === 'BOT' ? (
+          {targetRole === 'SUPPORT' ? (
+            <button
+              type="button"
+              onClick={() => {
+                PlatformBridge.hapticFeedback('medium');
+                setTargetInfoOpen(false);
+                router.push('/support');
+              }}
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                borderRadius: 16,
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,188,212,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <HelpCircle size={18} color="#00BCD4" />
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>Guías, FAQ y ayuda</span>
+              </div>
+              <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>›</span>
+            </button>
+          ) : targetRole === 'BOT' ? (
             <button
               type="button"
               onClick={() => {

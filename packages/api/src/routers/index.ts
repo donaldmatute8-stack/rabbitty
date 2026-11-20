@@ -42,6 +42,7 @@ import { sandboxRouter } from "./sandbox";
 import { cashDropsRouter } from "./cashDrops";
 import { cashShiftsRouter } from "./cashShifts";
 import { customerChatRouter } from "./customerChat";
+import { supportInboxRouter } from "./supportInbox";
 import { moodRouter } from "./mood";
 import { bunzyRouter } from "./bunzy";
 import { bunzyConnectRouter } from "./bunzyConnect";
@@ -94,6 +95,7 @@ export const appRouter = router({
   cashDrops: cashDropsRouter,
   cashShifts: cashShiftsRouter,
   customerChat: customerChatRouter,
+  supportInbox: supportInboxRouter,
   mood: moodRouter,
   bunzy: bunzyRouter,
   bunzyConnect: bunzyConnectRouter,
