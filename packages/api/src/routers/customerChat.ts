@@ -4,6 +4,7 @@ import { router, protectedProcedure } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { bunzyDeliveries, bunzyPreferences, conversations, messages, ownedBusinesses, users, chatEventOutbox } from "@rabbitty/database-core";
 import { isGodAdminIdentity } from "../services/god2fa";
+import { ensureCoreColumnsReady } from "../db";
 import type { Context } from "../trpc";
 
 export interface BusinessRef {
@@ -111,6 +112,7 @@ export const customerChatRouter = router({
   myBusinesses: protectedProcedure.query(async ({ ctx }) => resolveOwnerBusinesses(ctx)),
 
   listConversations: protectedProcedure.query(async ({ ctx }) => {
+    await ensureCoreColumnsReady();
     const biz = await resolveOwnerBusinesses(ctx);
     if (biz.length === 0) return [];
     const staff = isSupportStaff(ctx);
@@ -224,6 +226,8 @@ export const customerChatRouter = router({
           isOfficial: isBunzy,
           isSupport,
           audience: conv.audience,
+          supportStatus: isSupport ? conv.supportStatus : null,
+          supportResolvedAt: isSupport ? conv.supportResolvedAt : null,
           unread: Number(unseenRow?.n ?? 0),
           messageTotal: Number(messageTotalRow?.n ?? 0),
         };
@@ -236,6 +240,7 @@ export const customerChatRouter = router({
   getMessages: protectedProcedure
     .input(z.object({ conversationId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const biz = await resolveOwnerBusinesses(ctx);
       const bizIds = biz.map((b) => b.id);
 
@@ -286,6 +291,7 @@ export const customerChatRouter = router({
   markRead: protectedProcedure
     .input(z.object({ conversationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const biz = await resolveOwnerBusinesses(ctx);
       const bizIds = biz.map((b) => b.id);
 
@@ -337,6 +343,7 @@ export const customerChatRouter = router({
   sendMessage: protectedProcedure
     .input(z.object({ conversationId: z.string(), content: z.string().min(1).max(2000) }))
     .mutation(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const biz = await resolveOwnerBusinesses(ctx);
       const bizIds = biz.map((b) => b.id);
 
@@ -376,7 +383,23 @@ export const customerChatRouter = router({
 
       await ctx.coreDb
         .update(conversations)
-        .set({ updatedAt: new Date() })
+        .set({
+          updatedAt: new Date(),
+          lastMessageAt: new Date(),
+          // Afiliado escribe → el caso se reabre. Equipo responde → PENDING
+          // (esperando al afiliado) y se sella la primera respuesta humana.
+          ...(conv.audience === "SUPPORT"
+            ? staff
+              ? {
+                  supportStatus: "PENDING",
+                  supportFirstResponseAt: conv.supportFirstResponseAt ?? new Date(),
+                }
+              : {
+                  supportStatus: "OPEN",
+                  supportResolvedAt: null,
+                }
+            : {}),
+        })
         .where(eq(conversations.id, conv.id));
 
       // ── Fase 4: evento realtime ──
@@ -466,6 +489,26 @@ export const customerChatRouter = router({
         }
       }
 
+      // Aviso al equipo: push a su app (ruta /god/soporte). Es el único canal:
+      // no hay Telegram ni grupos externos.
+      if (conv.audience === 'SUPPORT' && !staff && msg) {
+        try {
+          const [biz] = await ctx.coreDb
+            .select({ name: ownedBusinesses.name })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, businessId))
+            .limit(1);
+          const { notifySupportStaff } = await import("../services/supportNotify");
+          await notifySupportStaff(ctx.coreDb, {
+            title: `🛟 Soporte · ${biz?.name ?? "Afiliado"}`,
+            message: input.content.trim().slice(0, 180),
+            route: "/god/soporte",
+          });
+        } catch (staffPushErr) {
+          console.warn("[customerChat] push al equipo falló:", staffPushErr);
+        }
+      }
+
       return msg;
     }),
 
@@ -478,6 +521,7 @@ export const customerChatRouter = router({
   ensureSupportConversation: protectedProcedure
     .input(z.object({ businessId: z.string().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const biz = await resolveOwnerBusinesses(ctx);
       if (biz.length === 0) {
         throw new TRPCError({ code: "FORBIDDEN", message: "No tienes un negocio para abrir soporte." });
@@ -486,35 +530,9 @@ export const customerChatRouter = router({
         ? input.businessId
         : biz[0]!.id;
 
-      const [existing] = await ctx.coreDb
-        .select({ id: conversations.id })
-        .from(conversations)
-        .where(and(eq(conversations.audience, 'SUPPORT'), eq(conversations.participant2, businessId)))
-        .limit(1);
-      if (existing) return { conversationId: existing.id, businessId, created: false };
-
-      try {
-        const [created] = await ctx.coreDb
-          .insert(conversations)
-          .values({
-            participant1: 'support',
-            participant2: businessId,
-            audience: 'SUPPORT',
-            kind: 'DIRECT',
-          })
-          .returning({ id: conversations.id });
-        if (created) return { conversationId: created.id, businessId, created: true };
-      } catch (err) {
-        // Carrera (dos pestañas): se relee el hilo que ganó.
-        const [raced] = await ctx.coreDb
-          .select({ id: conversations.id })
-          .from(conversations)
-          .where(and(eq(conversations.audience, 'SUPPORT'), eq(conversations.participant2, businessId)))
-          .limit(1);
-        if (raced) return { conversationId: raced.id, businessId, created: false };
-        throw err;
-      }
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No se pudo abrir soporte." });
+      const { ensureSupportThread } = await import("../services/supportThread");
+      const thread = await ensureSupportThread(ctx.coreDb, businessId);
+      return { conversationId: thread.id, businessId, created: thread.created };
     }),
 
   // ── Bunzy Connect · preferencias del negocio ──

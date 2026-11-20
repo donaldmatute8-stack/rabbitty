@@ -22,6 +22,13 @@ export default function GodSupportPage() {
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [reply, setReply] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "PENDING" | "RESOLVED">("ALL");
+
+  const visibleThreads = useMemo(() => {
+    const rows = threads ?? [];
+    if (statusFilter === "ALL") return rows;
+    return rows.filter((t) => t.supportStatus === statusFilter);
+  }, [threads, statusFilter]);
 
   const active = useMemo(
     () => (threads ?? []).find((t) => t.id === activeId) ?? null,
@@ -32,6 +39,14 @@ export default function GodSupportPage() {
     { conversationId: activeId ?? "" },
     { enabled: Boolean(activeId), refetchInterval: activeId ? 5000 : false, retry: false },
   );
+
+  const setStatus = trpc.supportInbox.setStatus.useMutation({
+    onSuccess: () => {
+      utils.supportInbox.list.invalidate();
+      void refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const markRead = trpc.supportInbox.markRead.useMutation({
     onSuccess: () => utils.supportInbox.list.invalidate(),
@@ -80,6 +95,31 @@ export default function GodSupportPage() {
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[320px_1fr]">
         {/* Lista */}
         <aside className="min-h-0 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-2">
+          <div className="mb-2 flex flex-wrap gap-1">
+            {(["ALL", "OPEN", "PENDING", "RESOLVED"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setStatusFilter(f)}
+                className={`rounded-lg px-2 py-1 text-[9px] font-black uppercase tracking-wide ${
+                  statusFilter === f ? "bg-cyan-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"
+                }`}
+              >
+                {f === "ALL" ? "Todos" : f === "OPEN" ? "Abiertos" : f === "PENDING" ? "Pendientes" : "Resueltos"}
+              </button>
+            ))}
+          </div>
+          <div className="mb-2 rounded-xl border border-white/10 bg-white/[0.03] p-2">
+            <p className="m-0 text-[9px] font-black uppercase tracking-wider text-gray-400">
+              Guías para responder
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1">
+              <a href="/academy" className="rounded-md bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-gray-200 no-underline hover:bg-white/10">Panel</a>
+              <a href="/operations-manual" className="rounded-md bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-gray-200 no-underline hover:bg-white/10">Caja/POS</a>
+              <a href="/settings" className="rounded-md bg-white/5 px-1.5 py-0.5 text-[9px] font-bold text-gray-200 no-underline hover:bg-white/10">Ajustes</a>
+            </div>
+          </div>
+
           {isLoading && (
             <p className="p-4 text-center text-xs text-gray-400">Cargando hilos…</p>
           )}
@@ -91,7 +131,7 @@ export default function GodSupportPage() {
               </p>
             </div>
           )}
-          {(threads ?? []).map((t) => {
+          {visibleThreads.map((t) => {
             const selected = t.id === activeId;
             return (
               <button
@@ -117,6 +157,26 @@ export default function GodSupportPage() {
                 <p className="m-0 mt-0.5 truncate text-[11px] text-gray-400">
                   {t.lastMessage || "Sin mensajes"}
                 </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${
+                    t.supportStatus === "RESOLVED"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : t.supportStatus === "PENDING"
+                      ? "bg-amber-500/15 text-amber-300"
+                      : "bg-cyan-500/15 text-cyan-300"
+                  }`}>
+                    {t.supportStatus === "RESOLVED" ? "Resuelto" : t.supportStatus === "PENDING" ? "Esperando afiliado" : "Abierto"}
+                  </span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${
+                    t.sla.state === "BREACHED"
+                      ? "bg-red-500/15 text-red-300"
+                      : t.sla.state === "RESOLVED"
+                      ? "bg-white/5 text-gray-400"
+                      : "bg-emerald-500/15 text-emerald-300"
+                  }`}>
+                    {t.sla.state === "BREACHED" ? "SLA vencido" : t.sla.state === "RESOLVED" ? "Cerrado" : "En tiempo"}
+                  </span>
+                </div>
               </button>
             );
           })}
@@ -141,7 +201,26 @@ export default function GodSupportPage() {
                     Soporte Rabbitty
                   </p>
                 </div>
-                {markRead.isPending && <Loader2 className="h-4 w-4 animate-spin text-gray-500" />}
+                <div className="flex items-center gap-2">
+                  {markRead.isPending && <Loader2 className="h-4 w-4 animate-spin text-gray-500" />}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!activeId) return;
+                      setStatus.mutate({
+                        conversationId: activeId,
+                        status: active?.supportStatus === "RESOLVED" ? "OPEN" : "RESOLVED",
+                      });
+                    }}
+                    className={`rounded-lg px-2.5 py-1 text-[10px] font-black ${
+                      active?.supportStatus === "RESOLVED"
+                        ? "bg-white/5 text-gray-300 hover:bg-white/10"
+                        : "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                    }`}
+                  >
+                    {active?.supportStatus === "RESOLVED" ? "Reabrir" : "Resolver"}
+                  </button>
+                </div>
               </div>
 
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
@@ -174,6 +253,23 @@ export default function GodSupportPage() {
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 border-t border-white/10 px-3 pt-2">
+                {[
+                  { label: "Pedir captura", text: "¿Me compartes una captura y el mensaje exacto de error, por favor?" },
+                  { label: "Pedir contexto", text: "Para ubicarlo: ¿en qué pantalla pasó, en qué sucursal y a qué hora?" },
+                  { label: "Resuelto", text: "Listo, quedó resuelto. Si vuelve a pasar, respóndeme por aquí mismo y lo reabrimos." },
+                ].map((q) => (
+                  <button
+                    key={q.label}
+                    type="button"
+                    onClick={() => setReply(q.text)}
+                    className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-bold text-gray-300 hover:bg-white/10"
+                  >
+                    {q.label}
+                  </button>
+                ))}
               </div>
 
               <div className="flex items-center gap-2 border-t border-white/10 p-3">

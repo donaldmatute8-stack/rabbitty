@@ -150,6 +150,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
+    // ?all=1 → todos los negocios del dueño (selector de soporte multi-negocio).
+    if (new URL(req.url).searchParams.get('all') === '1') {
+      const businesses = await db.query.ownedBusinesses.findMany({
+        where: eq(ownedBusinesses.ownerId, caller.id),
+      });
+      return NextResponse.json({ success: true, businesses, business: businesses[0] ?? null });
+    }
+
     const business = await db.query.ownedBusinesses.findFirst({
       where: eq(ownedBusinesses.ownerId, caller.id)
     });

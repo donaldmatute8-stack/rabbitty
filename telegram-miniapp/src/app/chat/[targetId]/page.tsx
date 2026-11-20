@@ -1007,9 +1007,14 @@ export default function ChatRoomPage() {
 
     const buildUrl = () => {
       const id = conversationIdRef.current || urlConversationId;
-      return id
-        ? `/api/chat/history?conversationId=${encodeURIComponent(id)}`
-        : `/api/chat/history?targetId=${encodeURIComponent(String(targetId))}`;
+      if (id) return `/api/chat/history?conversationId=${encodeURIComponent(id)}`;
+      // Soporte multi-negocio: el negocio elegido viaja en la URL.
+      let bizParam = '';
+      try {
+        const biz = new URLSearchParams(window.location.search).get('businessId');
+        if (biz) bizParam = `&businessId=${encodeURIComponent(biz)}`;
+      } catch { /* sin window */ }
+      return `/api/chat/history?targetId=${encodeURIComponent(String(targetId))}${bizParam}`;
     };
 
     const apply = (data: HistoryResponse & Partial<{ hasMore: boolean; nextCursor: string | null }>, mode: 'initial' | 'delta' | 'older' = 'initial') => {

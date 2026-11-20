@@ -277,16 +277,28 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
   }, [thread, activeCustomerChat, markChatRead]);
 
   // ── Soporte 1:1: el hilo del negocio se crea al abrir la pestaña ──
+  const { data: myBusinesses } = trpc.customerChat.myBusinesses.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const [supportBusinessId, setSupportBusinessId] = useState<string | null>(null);
+  const supportBizId = supportBusinessId ?? myBusinesses?.[0]?.id ?? null;
+
   const ensureSupport = trpc.customerChat.ensureSupportConversation.useMutation({
     onSuccess: () => refetchConversations(),
   });
   useEffect(() => {
     if (drawerTab !== "support") return;
-    if (supportConversations.length > 0) return;
+    if (!supportBizId) return;
+    // Si ya hay hilo para ESTE negocio, no se crea otro.
+    const hasThread = supportConversations.some(
+      (c: { businessName?: string }) => c.businessName === myBusinesses?.find((b) => b.id === supportBizId)?.name,
+    );
+    if (hasThread) return;
     if (ensureSupport.isPending) return;
-    ensureSupport.mutate({});
+    ensureSupport.mutate({ businessId: supportBizId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerTab, supportConversations.length]);
+  }, [drawerTab, supportBizId, supportConversations.length, myBusinesses]);
 
   const sendMessage = trpc.customerChat.sendMessage.useMutation({
     onSuccess: () => {
@@ -825,6 +837,18 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
 
                     {drawerTab === "support" && !activeCustomerChat && (
                       <>
+                        {(myBusinesses?.length ?? 0) > 1 && (
+                          <select
+                            value={supportBizId ?? ""}
+                            onChange={(e) => setSupportBusinessId(e.target.value)}
+                            className="mb-1 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-white"
+                          >
+                            {(myBusinesses ?? []).map((b) => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </select>
+                        )}
+
                         <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/10 p-3">
                           <p className="m-0 text-xs font-black text-cyan-200">🛟 Soporte Rabbitty</p>
                           <p className="m-0 mt-0.5 text-[11px] leading-relaxed text-gray-300">
@@ -845,9 +869,31 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                           </div>
                         )}
 
+                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
+                          <p className="m-0 text-[9px] font-black uppercase tracking-wider text-gray-400">
+                            Guías rápidas
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            <Link href="/academy" className="rounded-lg bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-200 no-underline hover:bg-white/10">
+                              Guías del panel
+                            </Link>
+                            <Link href="/operations-manual" className="rounded-lg bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-200 no-underline hover:bg-white/10">
+                              Manual de caja
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => { setDrawerTab("bunzy"); }}
+                              className="rounded-lg bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-200 hover:bg-white/10"
+                            >
+                              Preguntar a Bunzy
+                            </button>
+                          </div>
+                        </div>
+
                         {supportConversations.map((conv) => {
-                          const convWithUnread = conv as { id: string; unread?: number | null; lastMessageAt?: string | null; lastMessage?: string | null };
+                          const convWithUnread = conv as { id: string; unread?: number | null; lastMessageAt?: string | null; lastMessage?: string | null; supportStatus?: string | null };
                           const unreadCount = Number(convWithUnread.unread ?? 0);
+                          const status = convWithUnread.supportStatus;
                           return (
                             <div
                               key={conv.id}
@@ -857,6 +903,17 @@ export function DashboardClientWrapper({ children }: { children: React.ReactNode
                               <div className="flex items-center justify-between mb-1.5">
                                 <span className="text-xs font-bold text-white flex items-center gap-2">
                                   Soporte Rabbitty
+                                  {status && (
+                                    <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${
+                                      status === "RESOLVED"
+                                        ? "bg-emerald-500/15 text-emerald-300"
+                                        : status === "PENDING"
+                                        ? "bg-amber-500/15 text-amber-300"
+                                        : "bg-cyan-500/15 text-cyan-300"
+                                    }`}>
+                                      {status === "RESOLVED" ? "Resuelto" : status === "PENDING" ? "Respondido" : "Abierto"}
+                                    </span>
+                                  )}
                                   {unreadCount > 0 && (
                                     <span className="text-[9px] font-black text-white bg-cyan-500 rounded-full px-1.5 py-0.5 min-w-4 text-center">
                                       {unreadCount}

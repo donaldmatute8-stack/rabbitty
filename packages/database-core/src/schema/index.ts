@@ -370,6 +370,14 @@ export const conversations = pgTable("conversations", {
   participant1TypingAt: timestamp("participant1TypingAt"),
   participant2TypingAt: timestamp("participant2TypingAt"),
   lastMessageAt: timestamp("lastMessageAt").defaultNow(),
+  // ── SLA de soporte (solo audience='SUPPORT') ──
+  // Estado, primera respuesta humana y cierre. La bandeja God los usa para
+  // medir tiempo de respuesta y resolver; el afiliado ve el estado.
+  supportStatus: text("supportStatus").default("OPEN").notNull(), // OPEN | PENDING | RESOLVED
+  supportPriority: text("supportPriority").default("NORMAL").notNull(), // NORMAL | HIGH
+  supportFirstResponseAt: timestamp("supportFirstResponseAt"),
+  supportResolvedAt: timestamp("supportResolvedAt"),
+  supportAssignee: text("supportAssignee"),
   createdAt: timestamp("createdAt").defaultNow(),
   updatedAt: timestamp("updatedAt").defaultNow(),
 }, (table) => [

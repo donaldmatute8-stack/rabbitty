@@ -30,7 +30,7 @@ export async function GET(req: Request) {
       ? await db.query.conversations.findFirst({ where: eq(conversations.id, conversationId) })
       : undefined;
 
-    if (!conversation && targetId) {
+    if (!conversation && targetId && targetId !== 'support') {
       conversation = await db.query.conversations.findFirst({
         where: or(
           and(inArray(conversations.participant1, myIds), eq(conversations.participant2, targetId)),
@@ -76,35 +76,25 @@ export async function GET(req: Request) {
     // 'support' y el negocio. Así cada afiliado ve solo el suyo y el equipo
     // conserva el contexto sin exponer datos de otros comercios.
     if (!conversation && targetId === 'support') {
-      const bizId = businessIds[0];
+      const requestedBiz = searchParams.get('businessId');
+      const bizId = requestedBiz && businessIds.includes(requestedBiz)
+        ? requestedBiz
+        : businessIds[0];
       if (!bizId) {
         return NextResponse.json(
           { error: 'Necesitas un negocio para abrir soporte' },
           { status: 400 },
         );
       }
-      const [existingSupport] = await db
+      const { ensureSupportThread } = await import("@rabbitty/api/services/supportThread");
+      const thread = await ensureSupportThread(db, bizId);
+      const [supportConv] = await db
         .select()
         .from(conversations)
-        .where(and(
-          eq(conversations.audience, 'SUPPORT'),
-          eq(conversations.participant2, bizId),
-        ))
+        .where(eq(conversations.id, thread.id))
         .limit(1);
-      if (existingSupport) {
-        conversation = existingSupport;
-      } else {
-        const [createdSupport] = await db
-          .insert(conversations)
-          .values({
-            participant1: 'support',
-            participant2: bizId,
-            audience: 'SUPPORT',
-          })
-          .returning();
-        conversation = createdSupport;
-        createdNow = true;
-      }
+      conversation = supportConv;
+      createdNow = thread.created;
     }
 
     if (!conversation) {

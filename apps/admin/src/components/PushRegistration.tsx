@@ -46,6 +46,24 @@ export function PushRegistration() {
           }),
         );
 
+        // Tap del push → abrir la ruta (p. ej. /god/soporte cuando entra un
+        // caso de soporte). Sin esto el aviso llegaba pero no llevaba a ningún
+        // lado en la app del admin.
+        handles.push(
+          await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            try {
+              const data = (action.notification?.data ?? {}) as Record<string, unknown>;
+              const route = String(data.route || data.link || '');
+              if (route) {
+                if (/^https?:\/\//i.test(route)) window.location.assign(route);
+                else window.location.assign(route.startsWith('/') ? route : `/${route}`);
+              }
+            } catch {
+              /* payload raro: no romper */
+            }
+          }),
+        );
+
         await PushNotifications.register();
       } catch (err) {
         // Sin plugin (web o build viejo) no debe romper el POS.

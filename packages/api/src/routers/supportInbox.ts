@@ -3,6 +3,7 @@ import { and, eq, desc, sql } from "drizzle-orm";
 import { router, godAdminProcedure } from "../trpc";
 import { conversations, messages, ownedBusinesses, chatEventOutbox } from "@rabbitty/database-core";
 import { TRPCError } from "@trpc/server";
+import { ensureCoreColumnsReady } from "../db";
 
 /**
  * ── Bandeja de soporte (God) ───────────────────────────────────────────────
@@ -14,8 +15,27 @@ import { TRPCError } from "@trpc/server";
  * MVP deliberado: lista + hilo + responder + marcar leído. Sin SLA, sin
  * asignación y sin estados — eso es la siguiente fase, cuando haya volumen.
  */
+const FIRST_RESPONSE_MINUTES = Number(process.env.SUPPORT_FIRST_RESPONSE_MINUTES ?? 120);
+const RESOLVE_HOURS = Number(process.env.SUPPORT_RESOLVE_HOURS ?? 24);
+
+function slaFor(createdAt: Date | null, firstResponseAt: Date | null, resolvedAt: Date | null) {
+  if (!createdAt) return { state: "ON_TIME" as const, firstResponseDueAt: null, resolveDueAt: null };
+  const firstDue = new Date(createdAt.getTime() + FIRST_RESPONSE_MINUTES * 60_000);
+  const resolveDue = new Date(createdAt.getTime() + RESOLVE_HOURS * 3_600_000);
+  const now = Date.now();
+  const firstBreached = !firstResponseAt && now > firstDue.getTime();
+  const resolveBreached = !resolvedAt && now > resolveDue.getTime();
+  const state = resolvedAt
+    ? "RESOLVED"
+    : firstBreached || resolveBreached
+    ? "BREACHED"
+    : "ON_TIME";
+  return { state, firstResponseDueAt: firstDue, resolveDueAt: resolveDue };
+}
+
 export const supportInboxRouter = router({
   list: godAdminProcedure.query(async ({ ctx }) => {
+    await ensureCoreColumnsReady();
     const rows = await ctx.coreDb
       .select({
         id: conversations.id,
@@ -23,6 +43,10 @@ export const supportInboxRouter = router({
         businessName: ownedBusinesses.name,
         lastMessageAt: conversations.lastMessageAt,
         updatedAt: conversations.updatedAt,
+        createdAt: conversations.createdAt,
+        supportStatus: conversations.supportStatus,
+        supportFirstResponseAt: conversations.supportFirstResponseAt,
+        supportResolvedAt: conversations.supportResolvedAt,
       })
       .from(conversations)
       .leftJoin(ownedBusinesses, eq(ownedBusinesses.id, conversations.participant2))
@@ -50,6 +74,7 @@ export const supportInboxRouter = router({
           lastMessage: last?.content ?? "",
           lastSenderId: last?.senderId ?? null,
           unread: Number(unread?.n ?? 0),
+          sla: slaFor(c.createdAt ?? null, c.supportFirstResponseAt ?? null, c.supportResolvedAt ?? null),
         };
       }),
     );
@@ -58,6 +83,7 @@ export const supportInboxRouter = router({
   getMessages: godAdminProcedure
     .input(z.object({ conversationId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const [conv] = await ctx.coreDb
         .select()
         .from(conversations)
@@ -85,6 +111,11 @@ export const supportInboxRouter = router({
         conversationId: conv.id,
         businessId: conv.participant2,
         businessName: biz?.name ?? "Afiliado",
+        supportStatus: conv.supportStatus,
+        supportFirstResponseAt: conv.supportFirstResponseAt,
+        supportResolvedAt: conv.supportResolvedAt,
+        createdAt: conv.createdAt,
+        sla: slaFor(conv.createdAt ?? null, conv.supportFirstResponseAt ?? null, conv.supportResolvedAt ?? null),
         messages: rows,
       };
     }),
@@ -92,6 +123,7 @@ export const supportInboxRouter = router({
   markRead: godAdminProcedure
     .input(z.object({ conversationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const [conv] = await ctx.coreDb
         .select({ id: conversations.id, businessId: conversations.participant2 })
         .from(conversations)
@@ -115,12 +147,42 @@ export const supportInboxRouter = router({
       return { ok: true, markedCount: marked.length };
     }),
 
+  setStatus: godAdminProcedure
+    .input(z.object({
+      conversationId: z.string(),
+      status: z.enum(["OPEN", "PENDING", "RESOLVED"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
+      const [conv] = await ctx.coreDb
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(and(
+          eq(conversations.id, input.conversationId),
+          eq(conversations.audience, "SUPPORT"),
+        ))
+        .limit(1);
+      if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Hilo de soporte no encontrado" });
+
+      await ctx.coreDb
+        .update(conversations)
+        .set({
+          supportStatus: input.status,
+          supportResolvedAt: input.status === "RESOLVED" ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(conversations.id, conv.id));
+
+      return { ok: true, status: input.status };
+    }),
+
   send: godAdminProcedure
     .input(z.object({
       conversationId: z.string(),
       content: z.string().trim().min(1).max(2000),
     }))
     .mutation(async ({ ctx, input }) => {
+      await ensureCoreColumnsReady();
       const [conv] = await ctx.coreDb
         .select()
         .from(conversations)
@@ -145,7 +207,14 @@ export const supportInboxRouter = router({
 
       await ctx.coreDb
         .update(conversations)
-        .set({ updatedAt: new Date(), lastMessageAt: new Date() })
+        .set({
+          updatedAt: new Date(),
+          lastMessageAt: new Date(),
+          // Primera respuesta humana: arranca el reloj de SLA y deja el hilo
+          // esperando al afiliado (PENDING).
+          supportFirstResponseAt: conv.supportFirstResponseAt ?? new Date(),
+          supportStatus: "PENDING",
+        })
         .where(eq(conversations.id, conv.id));
 
       // Realtime para la app del afiliado (mismo outbox que el chat normal).
