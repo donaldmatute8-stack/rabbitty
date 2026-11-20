@@ -205,7 +205,11 @@ export function CashShiftModal({
 
   const closeMut = trpc.cashShifts.close.useMutation({
     onSuccess: async (r) => {
-      toast.success("Turno cerrado");
+      toast.success(
+        Number(r?.clearedTabs ?? 0) > 0
+          ? `Turno cerrado · ${r.clearedTabs} cuenta(s) pendiente(s) cancelada(s)`
+          : "Turno cerrado",
+      );
       refreshAll();
       await printReport(r);
       showResult(r);

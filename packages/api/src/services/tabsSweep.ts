@@ -1,5 +1,5 @@
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
-import { orders, paymentIntents, branches, restaurants } from "@rabbitty/database-restaurant/schema";
+import { orders, paymentIntents, tableSessions, branches, restaurants } from "@rabbitty/database-restaurant/schema";
 
 /**
  * ── Tabs huérfanas: expiración de órdenes nunca ejecutadas ──
@@ -73,4 +73,74 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
   } catch (err) {
     console.warn("[TABS_SWEEP] expiración de tabs falló:", err);
   }
+}
+
+/**
+ * ── Cierre de caja: no puede quedar nada "pendiente" en Operación ─────────
+ *
+ * Al cerrar el turno (Corte Z) se expiran las cuentas que quedaron abiertas y
+ * se cierran las sesiones de mesa. Se marca EXPIRED (auditable) en vez de
+ * borrar: desaparece de tabs, dashboard y contabilidad, pero el rastro queda.
+ *
+ * Solo toca lo NO cobrado (PENDING / PENDING_PAYMENT / CASH_PAYMENT_REQUESTED).
+ * Una orden PAID sigue su curso: ya es dinero del negocio y cocina puede estar
+ * preparándola.
+ *
+ * Devuelve las órdenes afectadas para avisar a los clientes de la app.
+ */
+export async function clearPendingTabsOnShiftClose(
+  db: any,
+  branchId: string,
+): Promise<Array<{ id: string; customerId: string | null; total: number; orderType: string | null }>> {
+  const rows: Array<{ id: string; customerId: string | null; total: number; orderType: string | null }> = await db
+    .select({
+      id: orders.id,
+      customerId: orders.customerId,
+      total: orders.total,
+      orderType: orders.orderType,
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.branchId, branchId),
+        inArray(orders.status, ["PENDING", "PENDING_PAYMENT", "CASH_PAYMENT_REQUESTED"]),
+      ),
+    )
+    .limit(500);
+
+  if (rows.length > 0) {
+    const ids = rows.map((r) => r.id);
+    await db
+      .update(orders)
+      .set({
+        status: "EXPIRED",
+        voidReason: "SHIFT_CLOSED",
+        updatedAt: new Date(),
+        version: sql`${orders.version} + 1`,
+      })
+      .where(
+        and(
+          inArray(orders.id, ids),
+          inArray(orders.status, ["PENDING", "PENDING_PAYMENT", "CASH_PAYMENT_REQUESTED"]),
+        ),
+      );
+
+    await db
+      .update(paymentIntents)
+      .set({ status: "CANCELLED", updatedAt: new Date() })
+      .where(
+        and(
+          inArray(paymentIntents.orderId, ids),
+          eq(paymentIntents.status, "PENDING_PAYMENT"),
+        ),
+      );
+  }
+
+  // Las mesas abiertas se liberan: el turno terminó.
+  await db
+    .update(tableSessions)
+    .set({ status: "CLOSED", closedAt: new Date() })
+    .where(and(eq(tableSessions.branchId, branchId), eq(tableSessions.status, "OPEN")));
+
+  return rows;
 }

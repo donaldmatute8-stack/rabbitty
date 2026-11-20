@@ -1,4 +1,5 @@
 import { z } from "zod";
+import crypto from "crypto";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, posProcedure, posPermission, adminOnlyProcedure, resolveBranchId } from "../trpc";
@@ -344,7 +345,8 @@ export const cashShiftsRouter = router({
       const mgr = await findStaffByPin(ctx.restaurantDb, branchId, input.managerPin, MANAGER_ROLES, "PIN de manager/admin incorrecto");
 
       const closedAt = new Date();
-      return await ctx.restaurantDb.transaction(async (tx: any) => {
+      let clearedForNotify: Array<{ id: string; customerId: string | null; total: number; orderType: string | null }> = [];
+      const result = await ctx.restaurantDb.transaction(async (tx: any) => {
         await lockShift(tx, shift.id);
         const totals = await computeShiftTotals(tx, shift);
 
@@ -405,6 +407,11 @@ export const cashShiftsRouter = router({
           notes: input.notes,
         });
 
+        // Al cerrar caja no puede quedar nada pendiente en Operación: se
+        // expiran las cuentas sin cobrar y se liberan las mesas.
+        const { clearPendingTabsOnShiftClose } = await import("../services/tabsSweep");
+        clearedForNotify = await clearPendingTabsOnShiftClose(tx, branchId);
+
         return {
           kind: "Z" as const,
           cashierName: actor.name,
@@ -419,6 +426,34 @@ export const cashShiftsRouter = router({
           notes: input.notes ?? null,
         };
       });
+
+      // Aviso a los clientes de la app cuyos pedidos quedaron sin cobrar.
+      // La DB core vive fuera de la transacción del restaurante: best-effort.
+      if (clearedForNotify.length > 0) {
+        try {
+          const { notifications } = await import("@rabbitty/database-core/schema");
+          const { resolveBusinessIdFromBranch } = await import("../services/businessContext");
+          const businessId = await resolveBusinessIdFromBranch(ctx.restaurantDb, branchId).catch(() => null);
+          for (const o of clearedForNotify) {
+            // Solo pedidos de la app (para llevar/domicilio). Una mesa con
+            // comensal presente no necesita un push de "cuenta cerrada".
+            if (!o.customerId || o.orderType === "DINE_IN") continue;
+            await ctx.coreDb.insert(notifications).values({
+              id: crypto.randomUUID(),
+              userId: o.customerId,
+              title: "Cuenta cerrada por cambio de turno",
+              message: `El local cerró la caja con tu pedido de $${Number(o.total || 0).toFixed(2)} pendiente. No se te cobró; puedes volver a pedir.`,
+              type: "SYSTEM",
+              route: businessId ? `/affiliate/${businessId}` : null,
+              createdAt: new Date(),
+            });
+          }
+        } catch (notifyErr) {
+          console.warn("[cashShifts.close] aviso a clientes falló:", notifyErr);
+        }
+      }
+
+      return { ...result, clearedTabs: clearedForNotify.length };
     }),
 
   /** Historial de turnos (admin/manager). */

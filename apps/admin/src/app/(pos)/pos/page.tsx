@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock, MembershipCard } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban, LifeBuoy } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban, LifeBuoy, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -2341,6 +2341,23 @@ export default function PosPage() {
             <Lock className="h-3.5 w-3.5 text-amber-400 group-hover:text-amber-300" />
             <ChevronLeft className="h-4 w-4 text-cyan-400 -ml-1" />
             <span>{operatorStatus?.active ? "Terminar turno" : "Dashboard"}</span>
+          </button>
+
+          {/* Salida sutil al panel SIN cerrar turno: el comercio que usa el
+              mismo lugar para caja y administración necesita entrar al panel
+              aunque el turno siga abierto. Pide el PIN de administrador. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (posExitAuthorized()) { window.location.assign("/"); return; }
+              setExitPin("");
+              setAdminPinModal(true);
+            }}
+            className="flex h-[34px] items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-bold text-gray-500 hover:bg-white/10 hover:text-gray-200 transition-all cursor-pointer active:scale-95"
+            title="Salir al panel sin cerrar el turno (PIN de administrador)"
+          >
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            <span className="hidden xl:inline">Panel</span>
           </button>
 
           {/* Business & Status Pill */}
