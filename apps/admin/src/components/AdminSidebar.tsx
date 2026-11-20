@@ -63,7 +63,9 @@ const readActiveModules = (): Set<string> | null => {
     const raw = localStorage.getItem(MODULES_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return new Set(parsed);
+    // Lista vacía = "sin filtro" (mostrar todo). Antes se interpretaba como
+    // "ningún módulo activo" y desaparecía el Menú y casi toda la navegación.
+    if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
   } catch {
     // localStorage corrupto o bloqueado — mostrar todo el menú
   }
@@ -326,7 +328,13 @@ export function AdminSidebar() {
   // Preferencias del negocio desde DB (sincroniza entre dispositivos).
   useEffect(() => {
     const raw = (restaurantPrefs?.[0] as { activeModules?: string } | undefined)?.activeModules;
-    if (!raw || raw === "[]") return;
+    if (!raw || raw === "[]") {
+      // La base dice "sin configuración": no dejamos que un localStorage viejo
+      // con [] siga ocultando el menú.
+      try { localStorage.removeItem(MODULES_STORAGE_KEY); } catch { /* noop */ }
+      setActiveModules(null);
+      return;
+    }
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -335,13 +343,29 @@ export function AdminSidebar() {
     } catch { /* preferencias corruptas: se ignora */ }
   }, [restaurantPrefs]);
 
-  const visibleItems = (pillar: MenuPillar) =>
-    activeModules
-      ? pillar.items.filter((i) => {
-          const mod = MODULE_BY_HREF[i.href];
-          return !mod || activeModules.has(mod);
-        })
-      : pillar.items;
+  // Navegación que NUNCA se oculta: si el comercio apaga módulos, igual debe
+  // poder llegar al panel, al POS, al menú, a reportes y a ajustes.
+  const ALWAYS_VISIBLE = new Set([
+    "/",
+    "/pos",
+    "/menu",
+    "/reports",
+    "/money",
+    "/academy",
+    "/operations-manual",
+    "/settings",
+    "/?chat=support",
+  ]);
+
+  const visibleItems = (pillar: MenuPillar) => {
+    if (!activeModules || activeModules.size === 0) return pillar.items;
+    return pillar.items.filter((i) => {
+      const mod = MODULE_BY_HREF[i.href];
+      if (!mod) return true;
+      if (ALWAYS_VISIBLE.has(i.href)) return true;
+      return activeModules.has(mod);
+    });
+  };
 
   // Keep all pillars open by default for quick access, user can toggle
   const [openPillars, setOpenPillars] = useState<Record<string, boolean>>({
@@ -631,7 +655,15 @@ export function AdminSidebar() {
                   {pillar.items.map(({ href, label, icon: Icon }) => {
                     const isActive = pathname.startsWith(href);
                     const mod = MODULE_BY_HREF[href];
-                    if (activeModules && mod && !activeModules.has(mod)) return null;
+                    // Lista vacía = sin filtro. El núcleo (Menú, POS, panel,
+                    // reportes, ajustes) nunca se oculta.
+                    if (
+                      activeModules &&
+                      activeModules.size > 0 &&
+                      mod &&
+                      !ALWAYS_VISIBLE.has(href) &&
+                      !activeModules.has(mod)
+                    ) return null;
                     return (
                       <Link
                         key={href}

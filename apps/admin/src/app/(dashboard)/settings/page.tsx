@@ -292,7 +292,8 @@ export default function SettingsPage() {
         const savedModules = localStorage.getItem(MODULES_STORAGE_KEY);
         if (savedModules) {
           const parsed = JSON.parse(savedModules);
-          if (Array.isArray(parsed)) return new Set(parsed);
+          // [] = sin filtro (mostrar todo), no "ningún módulo".
+          if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
         }
         return new Set(BUSINESS_PRESETS.find((p) => p.id === saved)!.defaultModules);
       }
