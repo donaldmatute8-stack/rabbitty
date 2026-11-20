@@ -8,7 +8,7 @@ const OPTIONS = [
     icon: '💬', bg: '#FFF0F5', btnBg: '#FFF0F5', btnHover: '#FCE4EC', btnColor: '#E91E63',
     title: 'Chat de Soporte',
     desc: 'Habla directo con el equipo de Rabbitty dentro de la app.',
-    cta: 'Abrir chat →', link: '/chat/support',
+    cta: 'Abrir ayuda →', link: '/support',
   },
   {
     icon: '❓', bg: '#EEF2FF', btnBg: '#EEF2FF', btnHover: '#E0E7FF', btnColor: '#4F46E5',

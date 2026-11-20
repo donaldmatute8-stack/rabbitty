@@ -1,9 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import ProfileSubpageLayout from '@/components/ui/ProfileSubpageLayout';
 import { LifeBuoy } from 'lucide-react';
+import { PlatformBridge } from '@/lib/platform';
+import { openBunzy } from '@/lib/bunzyLaunch';
 import { PremiumHero } from '@/components/premium/PremiumUI';
 
 /**
@@ -13,13 +16,38 @@ import { PremiumHero } from '@/components/premium/PremiumUI';
  * anuncios oficiales, guías y FAQ. Sin grupos de Telegram ni bots externos.
  */
 export default function SupportHubPage() {
+  // El chat humano es para AFILIADOS (tienen negocio). Un Rabbitter normal
+  // sigue con Bunzy + FAQ: así nadie cae en un hilo que no le corresponde.
+  const [hasBusiness, setHasBusiness] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch('/api/business', { headers });
+        const data = await res.json().catch(() => null);
+        if (alive) setHasBusiness(Boolean(data?.business));
+      } catch {
+        /* sin red: se queda en la ayuda estándar */
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const links = [
-    {
-      title: 'Hablar con soporte',
-      desc: 'Chat directo con el equipo de Rabbitty. Te responde una persona.',
-      icon: '🛟',
-      href: '/chat/support',
-    },
+    hasBusiness
+      ? {
+          title: 'Hablar con soporte',
+          desc: 'Chat directo con el equipo de Rabbitty. Te responde una persona.',
+          icon: '🛟',
+          href: '/chat/support',
+        }
+      : {
+          title: 'Preguntar a Bunzy',
+          desc: 'Tu asistente de Rabbitty responde al instante.',
+          icon: '🐰',
+          href: '#bunzy',
+        },
     {
       title: 'Avisos oficiales',
       desc: 'Novedades, mantenimiento y tips de tu negocio.',
@@ -51,8 +79,9 @@ export default function SupportHubPage() {
           subtitle="Soporte, avisos y guías dentro de la app."
         />
 
-        {links.map((link) => (
-          <Link key={link.href} href={link.href} className="no-underline">
+        {links.map((link) => {
+          const isBunzy = link.href === '#bunzy';
+          const Card = (
             <motion.div
               whileTap={{ scale: 0.98 }}
               className="bg-(--bg-elevated) rounded-[18px] p-5 flex items-center gap-4 shadow-sm border border-(--border-subtle)"
@@ -70,8 +99,23 @@ export default function SupportHubPage() {
                 </svg>
               </div>
             </motion.div>
-          </Link>
-        ))}
+          );
+          return isBunzy ? (
+            <button
+              key={link.title}
+              type="button"
+              onClick={() => openBunzy('Necesito ayuda con mi cuenta en Rabbitty')}
+              className="no-underline text-left bg-transparent border-0 p-0 cursor-pointer"
+            >
+              {Card}
+            </button>
+          ) : (
+            <Link key={link.href} href={link.href} className="no-underline">
+              {Card}
+            </Link>
+          );
+        })}
+
 
       </div>
     </ProfileSubpageLayout>

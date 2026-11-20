@@ -123,7 +123,7 @@ export default function FAQPage() {
         {/* Fallback: chat de soporte in-app */}
         <div style={{ marginTop: 32, textAlign: 'center', padding: 20 }}>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>¿Aún no encuentras lo que buscas?</p>
-          <Link href="/chat/support" style={{ textDecoration: 'none' }}>
+          <Link href="/support" style={{ textDecoration: 'none' }}>
             <motion.div
               whileTap={{ scale: 0.95 }}
               style={{
