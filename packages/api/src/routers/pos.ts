@@ -2274,6 +2274,38 @@ export const posRouter = router({
       };
     }),
 
+  /**
+   * ── requestAdminCredential ── avisar al dueño que configure PIN/Face ID ──
+   * El POS no permite definir el PIN desde la terminal (eso era un bypass:
+   * cualquiera podía crear uno y entrar). Si no hay credencial, se notifica
+   * al dueño para que la active en Admin → Ajustes → Seguridad.
+   */
+  requestAdminCredential: posProcedure.mutation(async ({ ctx }) => {
+    const businessId = await resolveBusinessIdFromBranch(ctx.restaurantDb, ctx.branchId);
+    if (!businessId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Sucursal sin negocio asociado." });
+    }
+    const [biz] = await ctx.coreDb
+      .select({ ownerId: coreBusinesses.ownerId, name: coreBusinesses.name })
+      .from(coreBusinesses)
+      .where(eq(coreBusinesses.id, businessId))
+      .limit(1);
+    if (!biz?.ownerId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Negocio sin dueño asociado." });
+    }
+    await ctx.coreDb.insert(coreNotifications).values({
+      id: crypto.randomUUID(),
+      userId: biz.ownerId,
+      title: "🔐 Protege la salida del POS",
+      message:
+        "No hay PIN de administrador ni Face ID configurado. Actívalos en Admin → Ajustes → Seguridad para que solo un administrador pueda entrar al panel desde el POS.",
+      type: "SYSTEM",
+      route: "/settings?tab=security",
+      createdAt: new Date(),
+    });
+    return { success: true };
+  }),
+
   generateQR: posProcedure
     .input(z.object({ tableId: z.string() }))
     .mutation(async ({ ctx, input }) => {

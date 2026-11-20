@@ -135,7 +135,11 @@ const TERMINAL_ALLOWED_PREFIXES = [
   // Comandero: celular/tablet enlazado como terminal (chequeo, mesas, tandas).
   "comandero.",
 ] as const;
-const TERMINAL_ALLOWED_EXACT = new Set(["staff.verifyAdminPin"]);
+const TERMINAL_ALLOWED_EXACT = new Set([
+  "staff.verifyAdminPin",
+  "passkeys.exitOptions",
+  "passkeys.exitVerify",
+]);
 
 export function terminalCanCallPath(path: string): boolean {
   return (

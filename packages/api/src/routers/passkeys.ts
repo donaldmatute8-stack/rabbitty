@@ -9,8 +9,9 @@ import {
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
-import { router, protectedProcedure, publicLimitedProcedure } from "../trpc";
-import { auditEntries, passkeys, users, verificationTokens } from "@rabbitty/database-core";
+import { router, protectedProcedure, publicLimitedProcedure, posProcedure } from "../trpc";
+import { auditEntries, passkeys, users, verificationTokens, ownedBusinesses } from "@rabbitty/database-core";
+import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { TRPCError } from "@trpc/server";
 import { decryptText } from "../services/crypto";
 
@@ -50,6 +51,32 @@ async function takeChallenge(coreDb: any, identifier: string): Promise<string | 
   if (!row) return null;
   if (new Date(row.expires).getTime() < Date.now()) return null;
   return row.token as string;
+}
+
+
+
+/** Resuelve el dueño del negocio desde la sucursal del terminal del POS. */
+async function resolvePosOwner(ctx: any): Promise<{ ownerId: string; businessId: string } | null> {
+  if (!ctx.branchId) return null;
+  const [branch] = await ctx.restaurantDb
+    .select({ restaurantId: branches.restaurantId })
+    .from(branches)
+    .where(eq(branches.id, ctx.branchId))
+    .limit(1);
+  if (!branch?.restaurantId) return null;
+  const [rest] = await ctx.restaurantDb
+    .select({ businessId: restaurants.businessId })
+    .from(restaurants)
+    .where(eq(restaurants.id, branch.restaurantId))
+    .limit(1);
+  if (!rest?.businessId) return null;
+  const [biz] = await ctx.coreDb
+    .select({ ownerId: ownedBusinesses.ownerId })
+    .from(ownedBusinesses)
+    .where(eq(ownedBusinesses.id, rest.businessId))
+    .limit(1);
+  if (!biz?.ownerId) return null;
+  return { ownerId: biz.ownerId, businessId: rest.businessId };
 }
 
 export const passkeysRouter = router({
@@ -256,6 +283,75 @@ export const passkeysRouter = router({
       });
 
       return { success: true, token: loginToken, email };
+    }),
+
+  // ── Salida del POS con Face ID / huella (passkey del dueño del negocio) ──
+  // El terminal no tiene sesión NextAuth: se resuelve el dueño desde la
+  // sucursal del token de terminal y se verifica su passkey. Si no hay
+  // passkey, el POS cae al PIN (nunca a un bypass).
+  exitOptions: posProcedure.query(async ({ ctx }) => {
+    const owner = await resolvePosOwner(ctx);
+    if (!owner) return { available: false as const, reason: "NO_BUSINESS" as const };
+
+    const creds = await ctx.coreDb
+      .select({ credentialId: passkeys.credentialId, transports: passkeys.transports })
+      .from(passkeys)
+      .where(eq(passkeys.userId, owner.ownerId));
+    if (creds.length === 0) return { available: false as const, reason: "NO_PASSKEY" as const };
+
+    const options = await generateAuthenticationOptions({
+      rpID,
+      allowCredentials: creds.map((pk) => ({
+        id: pk.credentialId,
+        transports: JSON.parse(pk.transports || "[]") as AuthenticatorTransportFuture[],
+      })),
+      userVerification: "required",
+    });
+    const exitId = crypto.randomBytes(16).toString("hex");
+    await saveChallenge(ctx.coreDb, `pk_exit:${exitId}`, options.challenge);
+    return { available: true as const, exitId, options };
+  }),
+
+  exitVerify: posProcedure
+    .input(z.object({ exitId: z.string().min(10), credential: z.any() }))
+    .mutation(async ({ ctx, input }) => {
+      const owner = await resolvePosOwner(ctx);
+      if (!owner) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sucursal sin negocio asociado." });
+
+      const challenge = await takeChallenge(ctx.coreDb, `pk_exit:${input.exitId}`);
+      if (!challenge) throw new TRPCError({ code: "BAD_REQUEST", message: "Reto expirado. Intenta de nuevo." });
+
+      const response = input.credential as { id?: string; rawId?: string };
+      const credentialId = response?.id || response?.rawId;
+      if (!credentialId) throw new TRPCError({ code: "BAD_REQUEST", message: "Credencial inválida" });
+
+      const [cred] = await ctx.coreDb
+        .select()
+        .from(passkeys)
+        .where(and(eq(passkeys.userId, owner.ownerId), eq(passkeys.credentialId, credentialId)))
+        .limit(1);
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Esa llave no pertenece al dueño del negocio." });
+
+      const verification = await verifyAuthenticationResponse({
+        response: input.credential,
+        expectedChallenge: challenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential: {
+          id: cred.credentialId,
+          publicKey: Buffer.from(cred.publicKey, "base64url"),
+          counter: cred.counter,
+          transports: JSON.parse(cred.transports || "[]") as AuthenticatorTransportFuture[],
+        },
+      });
+      if (!verification.verified) throw new TRPCError({ code: "BAD_REQUEST", message: "Verificación fallida" });
+
+      await ctx.coreDb
+        .update(passkeys)
+        .set({ counter: verification.authenticationInfo.newCounter })
+        .where(eq(passkeys.id, cred.id));
+
+      return { success: true, ownerId: owner.ownerId };
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {

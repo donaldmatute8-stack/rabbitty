@@ -11,7 +11,7 @@ import {
 } from "@rabbitty/api/services/posPermissions";
 import { PosOrderAlert } from "../../../components/PosOrderAlert";
 import { Button, Dialog, Input, toast, cn, useWakeLock, MembershipCard } from "@rabbitty/ui";
-import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban, LifeBuoy, LayoutDashboard } from "lucide-react";
+import { Clock, Search, Users, CreditCard, Banknote, QrCode, Split, Wallet, Loader2, Smartphone, Landmark, Table2, Trash2, ChevronLeft, Plus, Minus, Check, ChevronDown, CheckCircle2, AlertTriangle, Shield, ShoppingBag, Bike, UtensilsCrossed, Store, Printer, Bluetooth, BluetoothConnected, Maximize2, MessageCircle, LogOut, FlaskConical, X, ArrowRight, Sparkles, Send, Pause, Play, Lock, ClipboardCheck, Camera, History, RotateCw, ChefHat, Flame, UserRound, Gift, Ticket, Ban, LifeBuoy, Fingerprint } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import QRDiscovery from "@/components/QRDiscovery";
@@ -98,19 +98,11 @@ function PosQrCountdown({ expiresAt }: { expiresAt: Date }) {
   );
 }
 
-// ── Gracia al salir del POS ──
-// Antes había que capturar el PIN de administrador CADA VEZ que se iba al
-// dashboard (y al regresar había que pedírselo al encargado otra vez). Tras
-// autenticarse una vez, se concede una ventana corta para volver a salir sin
-// repetirlo. Se guarda por sesión de terminal (sessionStorage, no se comparte).
-const POS_EXIT_GRACE_MS = 15 * 60 * 1000;
-const POS_EXIT_KEY = "rabbitty_pos_exit_auth_until";
-function posExitAuthorized(): boolean {
-  try { return Number(sessionStorage.getItem(POS_EXIT_KEY) || 0) > Date.now(); } catch { return false; }
-}
-function markPosExitAuthorized(): void {
-  try { sessionStorage.setItem(POS_EXIT_KEY, String(Date.now() + POS_EXIT_GRACE_MS)); } catch { /* noop */ }
-}
+// ── Salida al admin: SIEMPRE con credencial ──
+// Antes había una ventana de gracia de 15 min en sessionStorage: tras un PIN
+// válido, cualquiera podía volver a entrar al panel sin credencial. Eso era un
+// hueco de seguridad. Ahora cada salida exige Face ID (passkey del dueño) o el
+// PIN de administrador, sin bypass.
 
 export default function PosPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>("ALL");
@@ -1469,44 +1461,102 @@ export default function PosPage() {
   }, [tables, selectedTableId, orderType]);
 
   const { data: adminPinStatus, refetch: refetchAdminPinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
-  const setAdminPinMutation = trpc.staff.setAdminPin.useMutation({
-    onSuccess: (data) => {
-      refetchAdminPinStatus();
-      toast.success(data.message || "PIN configurado correctamente");
+
+  // ── Salida al admin: Face ID (passkey del dueño) o PIN ──
+  const exitVerify = trpc.passkeys.exitVerify.useMutation();
+  const requestAdminCredential = trpc.pos.requestAdminCredential.useMutation({
+    onSuccess: () => {
+      toast.success("Avisamos al dueño para que active PIN o Face ID en Ajustes → Seguridad.");
     },
-    onError: (err: any) => toast.error(err?.message || "Error al configurar PIN"),
+    onError: (e) => toast.error(e.message || "No se pudo avisar al dueño."),
   });
+  const [exitPasskeyAvailable, setExitPasskeyAvailable] = useState(false);
+
+  const b64urlToBytes = (value: string): Uint8Array => {
+    const pad = value.replace(/-/g, "+").replace(/_/g, "/");
+    const bin = atob(pad + "=".repeat((4 - (pad.length % 4)) % 4));
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  };
+  const bytesToB64url = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  };
+
+  /** Intenta entrar con la passkey del dueño. false = no disponible/canceló. */
+  const tryPasskeyExit = async (): Promise<boolean> => {
+    try {
+      const opt = await utils.passkeys.exitOptions.fetch();
+      if (!opt.available) {
+        setExitPasskeyAvailable(false);
+        return false;
+      }
+      setExitPasskeyAvailable(true);
+      if (typeof window === "undefined" || !window.PublicKeyCredential) return false;
+
+      const credential = (await navigator.credentials.get({
+        publicKey: {
+          ...opt.options,
+          challenge: b64urlToBytes(opt.options.challenge),
+          allowCredentials: (opt.options.allowCredentials ?? []).map((c: any) => ({
+            ...c,
+            id: b64urlToBytes(c.id),
+          })),
+        } as PublicKeyCredentialRequestOptions,
+      })) as PublicKeyCredential | null;
+      if (!credential) return false;
+
+      const response = credential.response as AuthenticatorAssertionResponse;
+      await exitVerify.mutateAsync({
+        exitId: opt.exitId,
+        credential: {
+          id: credential.id,
+          rawId: bytesToB64url(credential.rawId),
+          type: credential.type,
+          response: {
+            clientDataJSON: bytesToB64url(response.clientDataJSON),
+            authenticatorData: bytesToB64url(response.authenticatorData),
+            signature: bytesToB64url(response.signature),
+            userHandle: response.userHandle ? bytesToB64url(response.userHandle) : undefined,
+          },
+          clientExtensionResults: credential.getClientExtensionResults(),
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const startAdminExit = async () => {
+    const ok = await tryPasskeyExit();
+    if (ok) {
+      toast.success("Face ID verificado. Accediendo al Dashboard...");
+      window.location.assign("/");
+      return;
+    }
+    setExitPin("");
+    setAdminPinModal(true);
+  };
 
   const handleKeypadPress = async (digit: string) => {
-    if (exitPin.length >= 4 || verifyPinMutation.isPending || setAdminPinMutation.isPending) return;
+    // Sin PIN configurado NO se permite crear uno desde el POS: eso era el
+    // bypass por el que cualquiera entraba al panel. Se avisa al dueño.
+    if (adminPinStatus?.hasAdminPin !== true) return;
+    if (exitPin.length >= 4 || verifyPinMutation.isPending) return;
     const nextPin = exitPin + digit;
     setExitPin(nextPin);
 
     if (nextPin.length === 4) {
-      if (!adminPinStatus?.hasAdminPin) {
-        // Inicializar PIN de administrador si la sucursal no tiene uno
-        try {
-          await setAdminPinMutation.mutateAsync({ pin: nextPin });
-          setAdminPinModal(false);
-          setExitPin("");
-          markPosExitAuthorized();
-          toast.success("🐰 PIN de Administrador definido. Saliendo al Dashboard...");
-          window.location.assign("/");
-        } catch {
-          setExitPin("");
-        }
-      } else {
-        // Validar PIN existente
-        try {
-          await verifyPinMutation.mutateAsync({ pin: nextPin });
-          markPosExitAuthorized();
-          setAdminPinModal(false);
-          setExitPin("");
-          toast.success("PIN autorizado. Accediendo al Dashboard...");
-          window.location.assign("/");
-        } catch {
-          setExitPin("");
-        }
+      try {
+        await verifyPinMutation.mutateAsync({ pin: nextPin });
+        setAdminPinModal(false);
+        setExitPin("");
+        toast.success("PIN autorizado. Accediendo al Dashboard...");
+        window.location.assign("/");
+      } catch {
+        setExitPin("");
       }
     }
   };
@@ -2328,10 +2378,7 @@ export default function PosPage() {
                 endShiftMutation.mutate();
                 return;
               }
-              // Dentro de la ventana de gracia no se vuelve a pedir el PIN.
-              if (posExitAuthorized()) { window.location.assign("/"); return; }
-              setExitPin("");
-              setAdminPinModal(true);
+              void startAdminExit();
             }}
             className="flex items-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 px-3 py-2 border border-white/10 text-gray-200 hover:text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95 group"
             title={operatorStatus?.active
@@ -2343,22 +2390,6 @@ export default function PosPage() {
             <span>{operatorStatus?.active ? "Terminar turno" : "Dashboard"}</span>
           </button>
 
-          {/* Salida sutil al panel SIN cerrar turno: el comercio que usa el
-              mismo lugar para caja y administración necesita entrar al panel
-              aunque el turno siga abierto. Pide el PIN de administrador. */}
-          <button
-            type="button"
-            onClick={() => {
-              if (posExitAuthorized()) { window.location.assign("/"); return; }
-              setExitPin("");
-              setAdminPinModal(true);
-            }}
-            className="flex h-[34px] items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-bold text-gray-500 hover:bg-white/10 hover:text-gray-200 transition-all cursor-pointer active:scale-95"
-            title="Salir al panel sin cerrar el turno (PIN de administrador)"
-          >
-            <LayoutDashboard className="h-3.5 w-3.5" />
-            <span className="hidden xl:inline">Panel</span>
-          </button>
 
           {/* Business & Status Pill */}
           <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 shrink-0">
@@ -2500,6 +2531,19 @@ export default function PosPage() {
             />
           </div>
           <PosClock />
+
+          {/* Acceso al panel: esquina, discreto, SIEMPRE con PIN o Face ID.
+              No cierra el turno; sirve al comercio que usa el mismo lugar
+              para caja y administración. */}
+          <button
+            type="button"
+            onClick={() => void startAdminExit()}
+            className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 opacity-60 hover:opacity-100 hover:text-gray-300 hover:bg-white/5 transition-all cursor-pointer"
+            title="Admin · requiere PIN o Face ID"
+            aria-label="Entrar al panel de administración"
+          >
+            <Lock className="h-3.5 w-3.5" />
+          </button>
         </div>
       </header>
 
@@ -6777,7 +6821,7 @@ export default function PosPage() {
           setAdminPinModal(false);
           setExitPin("");
         }}
-        title={!adminPinStatus?.hasAdminPin ? "Definir PIN de Administrador" : "Seguridad: Acceso al Dashboard"}
+                title="Seguridad: Acceso al Dashboard"
         className="max-w-xs w-full"
       >
         <div className="space-y-4 p-1 flex flex-col items-center">
@@ -6785,69 +6829,114 @@ export default function PosPage() {
             <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-1">
               <Lock className="h-5 w-5" />
             </div>
-            <p className="text-xs text-gray-400 max-w-60 leading-relaxed">
-              {!adminPinStatus?.hasAdminPin
-                ? "Esta sucursal aún no tiene PIN maestro. Teclea 4 dígitos para definir tu PIN de Administrador y salir."
-                : "Ingresa el PIN de 4 dígitos de Administrador o Gerente para acceder al Dashboard."}
-            </p>
+
+            {adminPinStatus === undefined ? (
+              <p className="text-xs text-gray-400 max-w-60 leading-relaxed">Verificando credenciales…</p>
+            ) : !adminPinStatus.hasAdminPin ? (
+              <>
+                <p className="text-xs text-gray-300 max-w-60 leading-relaxed">
+                  No hay PIN de administrador ni Face ID configurado.
+                </p>
+                <p className="text-[10px] text-amber-300/80 max-w-60 leading-relaxed">
+                  Pide al dueño activarlo en Admin → Ajustes → Seguridad. Desde el POS
+                  no se puede crear la credencial.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={requestAdminCredential.isPending}
+                  onClick={() => requestAdminCredential.mutate()}
+                  className="mt-2 rounded-xl bg-amber-500 text-gray-950 text-[11px] font-black"
+                >
+                  {requestAdminCredential.isPending ? "Avisando…" : "Avisar al dueño"}
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400 max-w-60 leading-relaxed">
+                Ingresa el PIN de 4 dígitos de Administrador o Gerente para acceder al Dashboard.
+              </p>
+            )}
           </div>
 
-          {/* 4 Indicadores Visuales de Dígitos */}
-          <div className="flex items-center gap-3.5 py-1">
-            {[0, 1, 2, 3].map((index) => {
-              const isFilled = exitPin.length > index;
-              return (
-                <div
-                  key={index}
-                  className={cn(
-                    "w-3.5 h-3.5 rounded-full border-2 transition-all duration-150",
-                    isFilled
-                      ? "bg-amber-400 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)] scale-110"
-                      : "bg-white/5 border-white/20"
-                  )}
-                />
-              );
-            })}
-          </div>
+          {exitPasskeyAvailable && (
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await tryPasskeyExit();
+                if (ok) {
+                  setAdminPinModal(false);
+                  setExitPin("");
+                  toast.success("Face ID verificado. Accediendo al Dashboard...");
+                  window.location.assign("/");
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 py-2.5 text-xs font-black text-emerald-200 hover:bg-emerald-500/25 transition-colors"
+            >
+              <Fingerprint className="h-4 w-4" />
+              Usar Face ID / huella
+            </button>
+          )}
 
-          {/* Teclado Táctil 3x4 Especial para iPad */}
-          <div className="grid grid-cols-3 gap-2 w-full max-w-60">
-            {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
-              <button
-                key={num}
-                type="button"
-                onClick={() => handleKeypadPress(num)}
-                disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
-                className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-amber-500/20 border border-white/10 active:border-amber-500/40 text-lg font-black text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center select-none"
-              >
-                {num}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setExitPin("")}
-              disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
-              className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-black text-gray-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center select-none"
-            >
-              C
-            </button>
-            <button
-              type="button"
-              onClick={() => handleKeypadPress("0")}
-              disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
-              className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-amber-500/20 border border-white/10 active:border-amber-500/40 text-lg font-black text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center select-none"
-            >
-              0
-            </button>
-            <button
-              type="button"
-              onClick={() => setExitPin((prev) => prev.slice(0, -1))}
-              disabled={verifyPinMutation.isPending || setAdminPinMutation.isPending}
-              className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-black text-gray-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center select-none"
-            >
-              ⌫
-            </button>
-          </div>
+          {adminPinStatus?.hasAdminPin && (
+            <>
+              {/* 4 Indicadores Visuales de Dígitos */}
+              <div className="flex items-center gap-3.5 py-1">
+                {[0, 1, 2, 3].map((index) => {
+                  const isFilled = exitPin.length > index;
+                  return (
+                    <div
+                      key={index}
+                      className={cn(
+                        "w-3.5 h-3.5 rounded-full border-2 transition-all duration-150",
+                        isFilled
+                          ? "bg-amber-400 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)] scale-110"
+                          : "bg-white/5 border-white/20"
+                      )}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Teclado Táctil 3x4 Especial para iPad */}
+              <div className="grid grid-cols-3 gap-2 w-full max-w-60">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => handleKeypadPress(num)}
+                    disabled={verifyPinMutation.isPending}
+                    className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-amber-500/20 border border-white/10 active:border-amber-500/40 text-lg font-black text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center select-none"
+                  >
+                    {num}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setExitPin("")}
+                  disabled={verifyPinMutation.isPending}
+                  className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-black text-gray-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center select-none"
+                >
+                  C
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleKeypadPress("0")}
+                  disabled={verifyPinMutation.isPending}
+                  className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-amber-500/20 border border-white/10 active:border-amber-500/40 text-lg font-black text-white transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center select-none"
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExitPin((prev) => prev.slice(0, -1))}
+                  disabled={verifyPinMutation.isPending}
+                  className="h-12 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 text-xs font-black text-gray-400 hover:text-white transition-all cursor-pointer active:scale-95 flex items-center justify-center select-none"
+                >
+                  ⌫
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="w-full pt-1">
             <Button

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { trpc } from "../../lib/trpc-client";
 import { Card, Dialog, Button, Input, toast, cn } from "@rabbitty/ui";
-import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert, Trash2 } from "lucide-react";
+import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert, Trash2, Fingerprint } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import { useBranch } from "../../components/DashboardClientWrapper";
 import { BranchSelector } from "../../components/BranchSelector";
@@ -31,6 +31,9 @@ export default function AdminPage() {
   const { data: activeTabsData } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
   const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const { data: pinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
+  // Biometría de la cuenta (passkeys del dueño). Si no hay, el POS solo puede
+  // usar PIN y conviene avisar aquí para activarla.
+  const { data: accountPasskeys } = trpc.passkeys.list.useQuery(undefined, { retry: false });
 
   const utils = trpc.useUtils();
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -138,6 +141,36 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8 pb-10">
+      {/* 0b. Face ID opcional: si hay PIN pero no biometría, se avisa aquí. */}
+      {pinStatus?.hasAdminPin && accountPasskeys !== undefined && accountPasskeys.length === 0 && (
+        <div className="relative overflow-hidden rounded-3xl border border-emerald-500/25 bg-linear-to-r from-emerald-500/10 via-cyan-500/5 to-black/60 p-5 backdrop-blur-xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0">
+                <Fingerprint className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white m-0">
+                  Activa Face ID para entrar al panel sin PIN
+                </h3>
+                <p className="text-xs text-gray-300 mt-1 max-w-2xl leading-relaxed m-0">
+                  El POS pedirá Face ID o huella (o el PIN) cada vez que alguien
+                  quiera salir al panel. Con biometría no tienes que teclear el
+                  PIN frente al personal.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/settings?tab=security"
+              className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black px-4 py-2.5 text-xs transition-all shrink-0 active:scale-95"
+            >
+              Activar Face ID
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* 0. Alerta de PIN de Administrador no configurado */}
       {pinStatus && !pinStatus.hasAdminPin && (
         <div className="relative overflow-hidden rounded-3xl border border-amber-500/30 bg-linear-to-r from-amber-500/15 via-orange-500/10 to-black/60 p-6 backdrop-blur-xl shadow-[0_0_40px_rgba(245,158,11,0.12)] animate-in fade-in slide-in-from-top-4 duration-500">
@@ -154,7 +187,7 @@ export default function AdminPage() {
                   </span>
                 </h3>
                 <p className="text-sm text-gray-300 mt-1 max-w-2xl leading-relaxed">
-                  Para proteger la operación de tu negocio, autorizar cancelaciones (Voids) en el POS y autorizar la eliminación de gastos u operaciones críticas, es indispensable configurar un PIN de 4 dígitos antes de operar.
+                  Para proteger la operación de tu negocio, autorizar cancelaciones (Voids) en el POS y la salida al panel, configura un PIN de 4 dígitos o Face ID antes de operar.
                 </p>
               </div>
             </div>
