@@ -161,6 +161,7 @@ Pasos propuestos:
 | Deuda de migraciones DB | `Docs/DEUDA-MIGRACIONES-DB.md` | abierta |
 | Legal pendiente `[REVISAR]` | `Docs/LEGAL/00-INDICE-Y-ADVERTENCIA.md` | abogado |
 | Monitoreo de la app | `/api/health?strict=1` | endpoint listo; **decidir** si un uptime externo lo consulta |
+| Proximidad + Google + “Parked Car” | `Docs/ROADMAP/ACTUALIZACION-PROXIMIDAD-GOOGLE-PARKED-CAR-2026-11-20.md` | **pospuesto**: espera aprobación de Apple y app nativa |
 
 ---
 
@@ -204,3 +205,30 @@ proveedor.
   1 acción primaria, ≤ 3 pestañas, y las capturas antes/después lo demuestran.
 - **Offline:** el POS abre y cobra en efectivo sin red, imprime, y al volver la red
   el cobro se concilia sin duplicar (misma orden, misma llave) — probado con 626.
+
+---
+
+## 8. Pospuesto · Proximidad, Google Maps y “Parked Car”
+
+> **Documento maestro:** [`ACTUALIZACION-PROXIMIDAD-GOOGLE-PARKED-CAR-2026-11-20.md`](./ACTUALIZACION-PROXIMIDAD-GOOGLE-PARKED-CAR-2026-11-20.md)
+
+No se empieza hasta que **Apple apruebe la app nativa** (`com.rabbitty.app`) y el
+permiso de ubicación “Always” pase la revisión. La mini app de Telegram no puede
+monitorear ubicación en segundo plano, así que esta fase depende del binario.
+
+**Qué incluye (resumen):**
+- Señal de llegada en 3 niveles: manual (“Estacioné”), geocerca + permanencia e
+  inferencia de estacionamiento (motion/Bluetooth).
+- Jugadas: validación de estacionamiento con consumo, “Park & Walk” en zonas
+  turísticas, curbside y estacionamientos como afiliados.
+- Google: Places (POI, horarios, `parkingOptions`), Routes (ETA caminando) y Maps
+  SDK. **No** se puede leer el “parked car” de Google Maps: no hay API.
+- Atribución en el POS (`customerId` + `offerId`); la ubicación exacta se queda en
+  el teléfono y al servidor solo sube el evento.
+
+**Fases cuando se desbloquee:** F0 manual + geocerca (1–2 sem) → F1 automático +
+panel del comercio (3–5 sem) → F2 inferencia + Park & Walk (6–8 sem) → F3
+autoservicio/CPAs.
+
+**Criterio de arranque:** app nativa aprobada + permiso “Always” aprobado +
+comercio y estacionamiento piloto confirmados.
