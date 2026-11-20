@@ -456,6 +456,7 @@ export const customerChatRouter = router({
                   recipientUserId,
                   preview: input.content.trim(),
                   senderName,
+                  ...(conv.audience === 'SUPPORT' ? { targetId: 'support' } : {}),
                 }),
               });
             }

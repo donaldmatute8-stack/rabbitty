@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     const recipientId = String(body?.recipientUserId || '');
     const preview = String(body?.preview || '').slice(0, 140);
     const senderName = String(body?.senderName || 'El negocio');
+    const targetId = body?.targetId ? String(body.targetId) : undefined;
     if (!conversationId || !recipientId) {
       return NextResponse.json({ error: 'conversationId y recipientUserId requeridos' }, { status: 400 });
     }
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest) {
       senderName,
       preview,
       conversationId,
+      targetId,
     });
     return NextResponse.json({ success: true });
   } catch (error) {

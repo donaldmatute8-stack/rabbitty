@@ -201,6 +201,7 @@ export const supportInboxRouter = router({
                 recipientUserId: biz.ownerId,
                 preview: content,
                 senderName: "Soporte Rabbitty",
+                targetId: "support",
               }),
             });
           }
