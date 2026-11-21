@@ -23,7 +23,7 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
       .where(
         and(
           eq(orders.branchId, branchId),
-          inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"]),
+          inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED", "PENDING_PAYMENT"]),
           lt(orders.createdAt, sql`(now() AT TIME ZONE 'UTC') - (COALESCE(${restaurants.staleOrderHours}, 12) * interval '1 hour')`)
         )
       )
@@ -36,7 +36,7 @@ export async function expireStaleOrders(db: any, branchId: string): Promise<void
     await db
       .update(orders)
       .set({ status: "EXPIRED", voidReason: "STALE_TAB", version: sql`${orders.version} + 1` })
-      .where(and(inArray(orders.id, ids), inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"])));
+      .where(and(inArray(orders.id, ids), inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED", "PENDING_PAYMENT"])));
 
     // 3. Payment intents ligados que sigan PENDING → cancelados
     await db

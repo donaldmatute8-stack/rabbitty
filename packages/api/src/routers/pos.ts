@@ -2051,7 +2051,7 @@ export const posRouter = router({
       if (order.branchId !== ctx.branchId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
       }
-      if (![ORDER_STATUS.PENDING, ORDER_STATUS.PENDING_PAYMENT].includes(order.status as never)) {
+      if (![ORDER_STATUS.PENDING, ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.CASH_REQUESTED].includes(order.status as never)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message:
@@ -2154,7 +2154,7 @@ export const posRouter = router({
       if (order.branchId !== ctx.branchId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Orden de otra sucursal" });
       }
-      if (![ORDER_STATUS.PENDING, ORDER_STATUS.PENDING_PAYMENT].includes(order.status as never)) {
+      if (![ORDER_STATUS.PENDING, ORDER_STATUS.PENDING_PAYMENT, ORDER_STATUS.CASH_REQUESTED].includes(order.status as never)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Solo se aplica membresía a cuentas abiertas y sin cobrar.",

@@ -189,17 +189,6 @@ const handler = async (req: Request) => {
           const ownRest = await restaurantDb.select({ id: restaurants.id }).from(restaurants).where(eq(restaurants.businessId, bizId));
           if (ownRest[0]?.id) targetRestaurantId = ownRest[0].id;
         }
-        if (!targetRestaurantId) {
-          console.warn("[TENANCY] owner sin restaurante", JSON.stringify({
-            sessionUserId: session?.user?.id ?? null,
-            sessionEmail: session?.user?.email ?? null,
-            resolvedEmail: sessionEmail,
-            effectiveUserId,
-            bizId: bizId ?? null,
-            staffBranchId,
-            staffRole,
-          }));
-        }
         if (!targetRestaurantId && staffBranchId) {
           const [staffBranch] = await restaurantDb.select({ restaurantId: branches.restaurantId }).from(branches).where(eq(branches.id, staffBranchId)).limit(1);
           if (staffBranch?.restaurantId) targetRestaurantId = staffBranch.restaurantId;
@@ -256,17 +245,6 @@ const handler = async (req: Request) => {
       ]);
       const isPublicPosPath = PUBLIC_POS_PATHS.has(reqPath);
       if (!impersonating && !activeBranchId && !isPublicPaymentPath && !isPublicPosPath) {
-        console.warn("[TENANCY] sin sucursal", JSON.stringify({
-          sessionUserId: session?.user?.id ?? null,
-          sessionEmail: session?.user?.email ?? null,
-          resolvedEmail: sessionEmail,
-          effectiveUserId,
-          staffRole,
-          staffBranchId,
-          headerBranchId,
-          impersonating: Boolean(impersonating),
-          terminalBranchId: posTerminal?.branchId ?? null,
-        }));
         // Si no hay NINGÚN tenant (ni usuario/staff/terminal), la sesión no
         // sirve: se manda a login en vez de dejar un error de negocio sin
         // salida (era el "me sacó y no puedo volver a entrar").

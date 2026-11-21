@@ -9,28 +9,6 @@ let coreClient: ReturnType<typeof postgres> | null = null;
 let coreDbInstance: ReturnType<typeof drizzle> | null = null;
 
 let migrationPromise: Promise<void> | null = null;
-let coreMigrationPromise: Promise<void> | null = null;
-
-// Columnas de CORE que se agregan de forma idempotente al arrancar el admin.
-// El esquema de core no tiene runner de migraciones en el deploy, así que las
-// columnas nuevas de soporte se aseguran aquí (ADD COLUMN IF NOT EXISTS).
-const CORE_COLUMNS: string[] = [
-  `ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "supportStatus" text DEFAULT 'OPEN' NOT NULL`,
-  `ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "supportPriority" text DEFAULT 'NORMAL' NOT NULL`,
-  `ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "supportFirstResponseAt" timestamp`,
-  `ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "supportResolvedAt" timestamp`,
-  `ALTER TABLE "conversations" ADD COLUMN IF NOT EXISTS "supportAssignee" text`,
-];
-
-async function ensureCoreColumns(client: ReturnType<typeof postgres>) {
-  for (const statement of CORE_COLUMNS) {
-    try {
-      await client.unsafe(statement);
-    } catch (err) {
-      console.error("[DB] core column migration failed:", statement, err);
-    }
-  }
-}
 
 const RESTAURANT_COLUMNS: string[] = [
   `ALTER TABLE "restaurants" ADD COLUMN IF NOT EXISTS "currency" text DEFAULT 'MXN' NOT NULL`,
@@ -145,9 +123,6 @@ export function getCoreDb() {
     }
     coreClient = postgres(url);
     coreDbInstance = drizzle(coreClient, { schema: coreSchema });
-    if (!coreMigrationPromise) {
-      coreMigrationPromise = ensureCoreColumns(coreClient);
-    }
   }
   return coreDbInstance;
 }
@@ -158,9 +133,9 @@ export function getCoreDb() {
  * termine para que la primera petición no vea columnas inexistentes.
  */
 export async function ensureCoreColumnsReady() {
-  const db = getCoreDb();
-  if (coreMigrationPromise) await coreMigrationPromise;
-  return db;
+  // Las columnas de CORE las aplica el predeploy (sql-migrate). El rol de
+  // runtime no es owner de las tablas, así que NO se hace DDL aquí.
+  return getCoreDb();
 }
 
 export async function closeRestaurantDb() {
