@@ -62,6 +62,10 @@ export default function TwoFactorAuthPage() {
   };
 
   const handlePasskeyAuth = async () => {
+    if (!window.PublicKeyCredential || !navigator.credentials?.get) {
+      toast.error("Este dispositivo no soporta biometría web. Usa el código de tu app de autenticación.");
+      return;
+    }
     setVerifyingPasskey(true);
     try {
       const options = await generateAuthOptions.refetch();

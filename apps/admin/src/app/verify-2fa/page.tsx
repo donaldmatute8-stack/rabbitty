@@ -11,6 +11,9 @@ export default function Verify2FAPage() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState<{ required: boolean; verified: boolean; totpConfigured: boolean } | null>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  // El WebView nativo de Mac (WKWebView) no expone WebAuthn. Touch ID del Mac
+  // sólo funciona en Safari/Chrome o en el iPhone; aquí usamos TOTP.
+  const [supportsWebAuthn, setSupportsWebAuthn] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const b64 = (bytes: Uint8Array) => {
@@ -18,6 +21,14 @@ export default function Verify2FAPage() {
     for (const b of bytes) s += String.fromCharCode(b);
     return btoa(s);
   };
+
+  useEffect(() => {
+    setSupportsWebAuthn(
+      typeof window !== "undefined" &&
+      Boolean(window.PublicKeyCredential) &&
+      Boolean(navigator.credentials?.get),
+    );
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/2fa/verify")
@@ -61,6 +72,10 @@ export default function Verify2FAPage() {
   };
 
   const unlockWithPasskey = async () => {
+    if (!supportsWebAuthn) {
+      setError("Esta app nativa no expone biometría web. Usa el código de 6 dígitos de tu app de autenticación.");
+      return;
+    }
     const email = 'marco.munoz9@gmail.com';
     setPasskeyLoading(true);
     setError('');
@@ -160,17 +175,24 @@ export default function Verify2FAPage() {
             <div className="h-px flex-1 bg-white/10" />
           </div>
 
-          <Button
-            variant="secondary"
-            onClick={unlockWithPasskey}
-            disabled={passkeyLoading}
-            className={cn(
-              "w-full h-11 rounded-xl bg-white/5 border border-white/10 font-bold text-gray-200 hover:bg-white/10 cursor-pointer disabled:opacity-40"
-            )}
-          >
-            {passkeyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4 mr-1 text-cyan-400" />}
-            {passkeyLoading ? "Esperando biometría..." : "Usar Face ID / Touch ID (passkey)"}
-          </Button>
+          {supportsWebAuthn ? (
+            <Button
+              variant="secondary"
+              onClick={unlockWithPasskey}
+              disabled={passkeyLoading}
+              className={cn(
+                "w-full h-11 rounded-xl bg-white/5 border border-white/10 font-bold text-gray-200 hover:bg-white/10 cursor-pointer disabled:opacity-40"
+              )}
+            >
+              {passkeyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4 mr-1 text-cyan-400" />}
+              {passkeyLoading ? "Esperando biometría..." : "Usar Face ID / Touch ID (passkey)"}
+            </Button>
+          ) : (
+            <p className="m-0 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-center text-[11px] font-bold text-amber-300">
+              Esta app nativa no expone biometría web. Usa el código de 6 dígitos
+              de tu app de autenticación.
+            </p>
+          )}
 
           {status && !status.totpConfigured && (
             <p className="text-[11px] text-amber-400 text-center font-bold">

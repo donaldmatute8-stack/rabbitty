@@ -45,8 +45,8 @@ export function AccountBiometricsCard() {
     if (busy) return;
     setBusy(true);
     try {
-      if (!window.PublicKeyCredential) {
-        toast.error("Este navegador no soporta llaves biométricas");
+      if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+        toast.error("Este dispositivo no soporta biometría web. En Mac usa Safari; en la app nativa usa el código TOTP.");
         return;
       }
       const options = await generateOptions.mutateAsync() as unknown as {

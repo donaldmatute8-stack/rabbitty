@@ -1292,6 +1292,10 @@ function God2FAPasskeysCard() {
   useEffect(() => { void loadState(); }, []);
 
   const registerPasskey = async () => {
+    if (!window.PublicKeyCredential || !navigator.credentials?.create) {
+      setMsg("Este dispositivo no soporta biometría web. En Mac usa Safari; en la app nativa usa el código TOTP.");
+      return;
+    }
     setBusy(true); setMsg("");
     try {
       const optRes = await fetch("/api/auth/2fa/passkey", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "register_options" }) });

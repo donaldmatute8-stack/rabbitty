@@ -1498,8 +1498,11 @@ export default function PosPage() {
         setExitPasskeyAvailable(false);
         return false;
       }
+      if (typeof window === "undefined" || !window.PublicKeyCredential || !navigator.credentials?.get) {
+        setExitPasskeyAvailable(false);
+        return false;
+      }
       setExitPasskeyAvailable(true);
-      if (typeof window === "undefined" || !window.PublicKeyCredential) return false;
 
       const credential = (await navigator.credentials.get({
         publicKey: {
