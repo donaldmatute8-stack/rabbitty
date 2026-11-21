@@ -4,5 +4,14 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Passkeys (Touch ID / Face ID) dentro del WebView de la app nativa.
+	     Apple solo las expone si el RP está declarado como dominio asociado y
+	     el dominio sirve /.well-known/apple-app-site-association sin redirects.
+	     RP_ID actual en Railway: rabbitty.me. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:rabbitty.me</string>
+		<string>webcredentials:admin.rabbitty.me</string>
+	</array>
 </dict>
 </plist>

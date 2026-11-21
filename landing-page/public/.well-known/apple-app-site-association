@@ -33,5 +33,10 @@
         ]
       }
     ]
+  },
+  "webcredentials": {
+    "apps": [
+      "FW97275K5X.com.rabbitty.pos"
+    ]
   }
 }

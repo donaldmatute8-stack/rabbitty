@@ -407,8 +407,17 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
 
   if (earnedBunz > 0) {
     chunks.push(boldOn);
-    
-    if (data.paymentMethod === "QR BUNZ" || data.paymentMethod?.includes("BUNZ") || (data.awardedBunz && data.awardedBunz > 0)) {
+
+    // CONTENT-AWARE: el ticket cambia según quién compró.
+    //  · Rabbitter ya vinculado (o pago con Bunz) → Bunz acreditados, SIN QR.
+    //  · Cliente sin vínculo → gana Bunz y el QR impreso es la vía para
+    //    reclamarlos; si aún no tiene la app, el mismo QR lo lleva a bajarla.
+    const isLinkedRabbitter =
+      data.paymentMethod === "QR BUNZ" ||
+      Boolean(data.paymentMethod?.includes("BUNZ")) ||
+      Boolean(data.awardedBunz && data.awardedBunz > 0);
+
+    if (isLinkedRabbitter) {
       const credited = data.awardedBunz ?? earnedBunz;
       addText(`¡Cashback de +${Number(credited).toFixed(2)} Bunz!\n`);
       chunks.push(boldOff);
@@ -420,20 +429,34 @@ export async function generateEscPosTicketPayload(data: any, is58mm: boolean = t
     } else {
       addText(`¡Ganas +${earnedBunz.toFixed(2)} Bunz Recompensa!\n`);
       chunks.push(boldOff);
-      addText(`Escanea tu ticket en la mini app de\nTelegram o Rabbitty para recibir tu cashback.\n\n`);
+      addText(`Escanea tu ticket en la app Rabbitty\npara recibir tu cashback.\n\n`);
+
+      // El token firmado es lo que acredita los Bunz. Si no viniera, el QR
+      // sigue imprimiéndose: lleva a bajar/abrir la app.
+      const claimTarget = data.claimToken
+        ? `https://app.rabbitty.me/scan?claimToken=${encodeURIComponent(String(data.claimToken))}`
+        : "https://rabbitty.me/download";
+
+      // QR generado en la MISMA app (/api/pos/qr). Antes se pedía a
+      // api.qrserver.com y, si esa red fallaba, el ticket salía sin QR.
+      let qrBytes: Uint8Array | null = null;
       try {
-        // Create QR Code (Direct app.rabbitty.me URL opens native Capacitor webview / miniapp immediately)
-        const claimParam = (data as any).claimToken ? `claimToken=${(data as any).claimToken}` : null;
-        // Sin claimToken válido NO se imprime QR de reclamo (un claim=orderNumber es inutilizable)
-        const qrUrl = claimParam ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`https://app.rabbitty.me/scan?${claimParam}`)}` : null;
-        const qrBytes = qrUrl ? await rasterizeImage(qrUrl, 200) : null;
-        if (qrBytes) {
-          chunks.push(qrBytes);
-        }
-      } catch {
-        // Ignore if QR generation fails
+        qrBytes = await rasterizeImage(
+          `/api/pos/qr?data=${encodeURIComponent(claimTarget)}`,
+          200,
+        );
+      } catch (err) {
+        console.warn("[payload-builder] no se pudo rasterizar el QR:", err);
       }
-      
+
+      if (qrBytes) {
+        chunks.push(qrBytes);
+      } else {
+        // Sin imagen, el enlace impreso sigue sirviendo para reclamar.
+        console.warn("[payload-builder] sin QR, se imprime el enlace:", claimTarget);
+        addText(`${claimTarget}\n`);
+      }
+
       addText(`\nRBBTY-VERIF-${data.orderNumber || "0001"}\n\n`);
     }
   }
