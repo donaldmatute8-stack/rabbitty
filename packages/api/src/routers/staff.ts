@@ -14,6 +14,13 @@ const AUTHORIZER_ROLES = ["ADMIN", "MANAGER", "admin", "manager"];
 
 const isAuthorizer = (role: string) => AUTHORIZER_ROLES.includes(role);
 
+/**
+ * Quién puede administrar fichas de ADMIN: el dueño (sin staffRole) y un
+ * ADMIN de la sucursal. Un gerente o cajero, no.
+ */
+const canManageAdmins = (ctx: { staffRole?: string | null }) =>
+  !ctx.staffRole || String(ctx.staffRole).toUpperCase() === "ADMIN";
+
 export const staffRouter = router({
   getStaff: protectedProcedure
     .input(z.object({ branchId: z.string().optional() }))
@@ -37,9 +44,9 @@ export const staffRouter = router({
     .mutation(async ({ ctx, input }) => {
       const email = input.email.trim().toLowerCase();
 
-      // Solo el dueño crea administradores: un gerente no puede fabricar pares
-      // con más privilegios que él.
-      if (input.role === "ADMIN" && ctx.staffRole) {
+      // Solo el dueño o un ADMIN crean administradores: un gerente no puede
+      // fabricar pares con más privilegios que él.
+      if (input.role === "ADMIN" && !canManageAdmins(ctx)) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Solo el dueño del negocio puede crear administradores.",
@@ -119,7 +126,7 @@ export const staffRouter = router({
       }
 
       // Un gerente no puede promover a nadie a admin ni tocar a un admin.
-      if (ctx.staffRole) {
+      if (!canManageAdmins(ctx)) {
         const touchesAdmin = existing.role === "ADMIN" || input.role === "ADMIN";
         if (touchesAdmin) {
           throw new TRPCError({
@@ -199,7 +206,7 @@ export const staffRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
       }
-      if (ctx.staffRole && existing.role === "ADMIN") {
+      if (!canManageAdmins(ctx) && existing.role === "ADMIN") {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Solo el dueño del negocio puede dar de baja a un administrador.",
@@ -385,7 +392,7 @@ export const staffRouter = router({
       const existingPinHolder = staffList.find(
         (s) => isAuthorizer(s.role) && !!s.pinCode
       );
-      if (existingPinHolder && !ctx.staffRole) {
+      if (existingPinHolder && !canManageAdmins(ctx)) {
         const { restaurants, branches } = await import("@rabbitty/database-restaurant/schema");
         const coreOwned = await import("@rabbitty/database-core/schema").then(m => m.ownedBusinesses);
         const [branchRow] = await ctx.restaurantDb

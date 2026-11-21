@@ -183,6 +183,20 @@ export default function PosTerminalsPage() {
         </Card>
       )}
 
+      {/* Cómo se asigna (lo que más pregunta el equipo) */}
+      <Card className="border-cyan-500/20 bg-cyan-500/5 p-4">
+        <p className="m-0 text-[10px] font-black uppercase tracking-widest text-cyan-500">Cómo se asigna</p>
+        <div className="mt-2 grid gap-2 text-[11px] text-gray-600 dark:text-gray-300 sm:grid-cols-2 lg:grid-cols-4">
+          <p className="m-0"><strong>Tipo</strong><br />Caja cobra · Comandero toma pedidos · KDS cocina.</p>
+          <p className="m-0"><strong>Caja / gaveta</strong><br />Nombre del corte (por defecto <span className="font-mono">MAIN</span>). Mismo nombre = mismo corte.</p>
+          <p className="m-0"><strong>Estación fija</strong><br />A dónde manda los pedidos (comandero/KDS).</p>
+          <p className="m-0"><strong>Empleado</strong><br />No se asigna aquí: abre turno con su PIN en el POS.</p>
+        </div>
+        <p className="m-0 mt-2 text-[10px] text-gray-500">
+          Nada es automático: cada terminal se configura en su tarjeta. El dispositivo se asigna a la caja; la persona se asigna al turno.
+        </p>
+      </Card>
+
       {/* Solicitudes pendientes */}
       {pending.length > 0 && (
         <Card className="p-4">
