@@ -1,6 +1,6 @@
 import { z } from "zod";
 import crypto from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { verify as verifyTotp } from "otplib";
 import {
   generateRegistrationOptions,
@@ -11,7 +11,7 @@ import {
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { router, protectedProcedure, publicLimitedProcedure, posProcedure } from "../trpc";
 import { auditEntries, passkeys, users, verificationTokens, ownedBusinesses } from "@rabbitty/database-core";
-import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
+import { branches, restaurants, staff as staffTable } from "@rabbitty/database-restaurant/schema";
 import { TRPCError } from "@trpc/server";
 import { decryptText } from "../services/crypto";
 
@@ -55,8 +55,13 @@ async function takeChallenge(coreDb: any, identifier: string): Promise<string | 
 
 
 
-/** Resuelve el dueño del negocio desde la sucursal del terminal del POS. */
-async function resolvePosOwner(ctx: any): Promise<{ ownerId: string; businessId: string } | null> {
+/**
+ * Identidades que pueden autorizar la salida al panel desde el POS:
+ * el dueño del negocio y los ADMIN/MANAGER de la sucursal. Así una passkey
+ * registrada por un admin/staff (Touch ID en Mac, Face ID en iPhone) sirve,
+ * no solo la del dueño.
+ */
+async function resolvePosIdentities(ctx: any): Promise<{ businessId: string; userIds: string[] } | null> {
   if (!ctx.branchId) return null;
   const [branch] = await ctx.restaurantDb
     .select({ restaurantId: branches.restaurantId })
@@ -75,8 +80,19 @@ async function resolvePosOwner(ctx: any): Promise<{ ownerId: string; businessId:
     .from(ownedBusinesses)
     .where(eq(ownedBusinesses.id, rest.businessId))
     .limit(1);
-  if (!biz?.ownerId) return null;
-  return { ownerId: biz.ownerId, businessId: rest.businessId };
+
+  const staffRows = await ctx.restaurantDb
+    .select({ userId: staffTable.userId, role: staffTable.role })
+    .from(staffTable)
+    .where(and(eq(staffTable.branchId, ctx.branchId), eq(staffTable.isActive, true)));
+
+  const adminIds = staffRows
+    .filter((r: { role: string | null; userId: string | null }) =>
+      r.userId && ["ADMIN", "MANAGER", "admin", "manager"].includes(String(r.role)))
+    .map((r: { userId: string }) => r.userId);
+
+  const userIds = Array.from(new Set([biz?.ownerId, ...adminIds].filter(Boolean))) as string[];
+  return { businessId: rest.businessId, userIds };
 }
 
 export const passkeysRouter = router({
@@ -290,13 +306,13 @@ export const passkeysRouter = router({
   // sucursal del token de terminal y se verifica su passkey. Si no hay
   // passkey, el POS cae al PIN (nunca a un bypass).
   exitOptions: posProcedure.query(async ({ ctx }) => {
-    const owner = await resolvePosOwner(ctx);
-    if (!owner) return { available: false as const, reason: "NO_BUSINESS" as const };
+    const identity = await resolvePosIdentities(ctx);
+    if (!identity) return { available: false as const, reason: "NO_BUSINESS" as const };
 
     const creds = await ctx.coreDb
       .select({ credentialId: passkeys.credentialId, transports: passkeys.transports })
       .from(passkeys)
-      .where(eq(passkeys.userId, owner.ownerId));
+      .where(inArray(passkeys.userId, identity.userIds));
     if (creds.length === 0) return { available: false as const, reason: "NO_PASSKEY" as const };
 
     const options = await generateAuthenticationOptions({
@@ -315,8 +331,8 @@ export const passkeysRouter = router({
   exitVerify: posProcedure
     .input(z.object({ exitId: z.string().min(10), credential: z.any() }))
     .mutation(async ({ ctx, input }) => {
-      const owner = await resolvePosOwner(ctx);
-      if (!owner) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sucursal sin negocio asociado." });
+      const identity = await resolvePosIdentities(ctx);
+      if (!identity) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sucursal sin negocio asociado." });
 
       const challenge = await takeChallenge(ctx.coreDb, `pk_exit:${input.exitId}`);
       if (!challenge) throw new TRPCError({ code: "BAD_REQUEST", message: "Reto expirado. Intenta de nuevo." });
@@ -328,9 +344,9 @@ export const passkeysRouter = router({
       const [cred] = await ctx.coreDb
         .select()
         .from(passkeys)
-        .where(and(eq(passkeys.userId, owner.ownerId), eq(passkeys.credentialId, credentialId)))
+        .where(and(inArray(passkeys.userId, identity.userIds), eq(passkeys.credentialId, credentialId)))
         .limit(1);
-      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Esa llave no pertenece al dueño del negocio." });
+      if (!cred) throw new TRPCError({ code: "NOT_FOUND", message: "Esa llave no pertenece a un administrador del negocio." });
 
       const verification = await verifyAuthenticationResponse({
         response: input.credential,
@@ -351,8 +367,25 @@ export const passkeysRouter = router({
         .set({ counter: verification.authenticationInfo.newCounter })
         .where(eq(passkeys.id, cred.id));
 
-      return { success: true, ownerId: owner.ownerId };
+      return { success: true, userId: cred.userId };
     }),
+
+  /**
+   * ¿El negocio ya tiene biometría configurada? (para el banner del admin)
+   * Mira al dueño y a los ADMIN/MANAGER de la sucursal, no solo al usuario
+   * actual: una passkey de Touch ID en la Mac del admin también cuenta.
+   */
+  businessBiometrics: protectedProcedure.query(async ({ ctx }) => {
+    const identity = await resolvePosIdentities(ctx);
+    if (!identity || identity.userIds.length === 0) {
+      return { available: false, count: 0 };
+    }
+    const rows = await ctx.coreDb
+      .select({ id: passkeys.id })
+      .from(passkeys)
+      .where(inArray(passkeys.userId, identity.userIds));
+    return { available: rows.length > 0, count: rows.length };
+  }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
     return await ctx.coreDb.select({

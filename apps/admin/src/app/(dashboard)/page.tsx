@@ -31,9 +31,9 @@ export default function AdminPage() {
   const { data: activeTabsData } = trpc.pos.getActiveTabs.useQuery(undefined, { refetchInterval: 10000, retry: false });
   const { data: crossStore } = trpc.admin.getCrossStoreKpis.useQuery(undefined, { refetchInterval: 30000, retry: false });
   const { data: pinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
-  // Biometría de la cuenta (passkeys del dueño). Si no hay, el POS solo puede
-  // usar PIN y conviene avisar aquí para activarla.
-  const { data: accountPasskeys } = trpc.passkeys.list.useQuery(undefined, { retry: false });
+  // Biometría del NEGOCIO: dueño + admins/managers de la sucursal. Una passkey
+  // de Touch ID en la Mac del admin también cuenta, no solo Face ID.
+  const { data: businessBio } = trpc.passkeys.businessBiometrics.useQuery(undefined, { retry: false });
 
   const utils = trpc.useUtils();
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -142,7 +142,7 @@ export default function AdminPage() {
   return (
     <div className="space-y-8 pb-10">
       {/* 0b. Face ID opcional: si hay PIN pero no biometría, se avisa aquí. */}
-      {pinStatus?.hasAdminPin && accountPasskeys !== undefined && accountPasskeys.length === 0 && (
+      {pinStatus?.hasAdminPin && businessBio && !businessBio.available && (
         <div className="relative overflow-hidden rounded-3xl border border-emerald-500/25 bg-linear-to-r from-emerald-500/10 via-cyan-500/5 to-black/60 p-5 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
@@ -151,12 +151,12 @@ export default function AdminPage() {
               </div>
               <div>
                 <h3 className="text-base font-black text-white m-0">
-                  Activa Face ID para entrar al panel sin PIN
+                  Activa biometría para entrar al panel sin PIN
                 </h3>
                 <p className="text-xs text-gray-300 mt-1 max-w-2xl leading-relaxed m-0">
-                  El POS pedirá Face ID o huella (o el PIN) cada vez que alguien
-                  quiera salir al panel. Con biometría no tienes que teclear el
-                  PIN frente al personal.
+                  El POS pedirá biometría (Face ID, Touch ID o huella) o el PIN
+                  cada vez que alguien quiera salir al panel. Con biometría no
+                  tienes que teclear el PIN frente al personal.
                 </p>
               </div>
             </div>
@@ -187,7 +187,7 @@ export default function AdminPage() {
                   </span>
                 </h3>
                 <p className="text-sm text-gray-300 mt-1 max-w-2xl leading-relaxed">
-                  Para proteger la operación de tu negocio, autorizar cancelaciones (Voids) en el POS y la salida al panel, configura un PIN de 4 dígitos o Face ID antes de operar.
+                  Para proteger la operación de tu negocio, autorizar cancelaciones (Voids) en el POS y la salida al panel, configura un PIN de 4 dígitos o biometría antes de operar.
                 </p>
               </div>
             </div>

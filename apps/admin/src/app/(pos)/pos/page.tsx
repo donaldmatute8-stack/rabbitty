@@ -101,7 +101,7 @@ function PosQrCountdown({ expiresAt }: { expiresAt: Date }) {
 // ── Salida al admin: SIEMPRE con credencial ──
 // Antes había una ventana de gracia de 15 min en sessionStorage: tras un PIN
 // válido, cualquiera podía volver a entrar al panel sin credencial. Eso era un
-// hueco de seguridad. Ahora cada salida exige Face ID (passkey del dueño) o el
+// hueco de seguridad. Ahora cada salida exige biometría (passkey de un admin) o el
 // PIN de administrador, sin bypass.
 
 export default function PosPage() {
@@ -1462,11 +1462,11 @@ export default function PosPage() {
 
   const { data: adminPinStatus, refetch: refetchAdminPinStatus } = trpc.staff.getAdminPinStatus.useQuery(undefined, { retry: false });
 
-  // ── Salida al admin: Face ID (passkey del dueño) o PIN ──
+  // ── Salida al admin: biometría (passkey de un admin) o PIN ──
   const exitVerify = trpc.passkeys.exitVerify.useMutation();
   const requestAdminCredential = trpc.pos.requestAdminCredential.useMutation({
     onSuccess: () => {
-      toast.success("Avisamos al dueño para que active PIN o Face ID en Ajustes → Seguridad.");
+      toast.success("Avisamos al dueño para que active PIN o biometría en Ajustes → Seguridad.");
     },
     onError: (e) => toast.error(e.message || "No se pudo avisar al dueño."),
   });
@@ -1532,7 +1532,7 @@ export default function PosPage() {
   const startAdminExit = async () => {
     const ok = await tryPasskeyExit();
     if (ok) {
-      toast.success("Face ID verificado. Accediendo al Dashboard...");
+      toast.success("Biometría verificada. Accediendo al Dashboard...");
       window.location.assign("/");
       return;
     }
@@ -2532,14 +2532,14 @@ export default function PosPage() {
           </div>
           <PosClock />
 
-          {/* Acceso al panel: esquina, discreto, SIEMPRE con PIN o Face ID.
+          {/* Acceso al panel: esquina, discreto, SIEMPRE con PIN o biometría.
               No cierra el turno; sirve al comercio que usa el mismo lugar
               para caja y administración. */}
           <button
             type="button"
             onClick={() => void startAdminExit()}
             className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-lg text-gray-600 opacity-60 hover:opacity-100 hover:text-gray-300 hover:bg-white/5 transition-all cursor-pointer"
-            title="Admin · requiere PIN o Face ID"
+            title="Admin · requiere PIN o biometría"
             aria-label="Entrar al panel de administración"
           >
             <Lock className="h-3.5 w-3.5" />
@@ -6835,7 +6835,7 @@ export default function PosPage() {
             ) : !adminPinStatus.hasAdminPin ? (
               <>
                 <p className="text-xs text-gray-300 max-w-60 leading-relaxed">
-                  No hay PIN de administrador ni Face ID configurado.
+                  No hay PIN de administrador ni biometría configurada.
                 </p>
                 <p className="text-[10px] text-amber-300/80 max-w-60 leading-relaxed">
                   Pide al dueño activarlo en Admin → Ajustes → Seguridad. Desde el POS
@@ -6866,14 +6866,14 @@ export default function PosPage() {
                 if (ok) {
                   setAdminPinModal(false);
                   setExitPin("");
-                  toast.success("Face ID verificado. Accediendo al Dashboard...");
+                  toast.success("Biometría verificada. Accediendo al Dashboard...");
                   window.location.assign("/");
                 }
               }}
               className="w-full flex items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 py-2.5 text-xs font-black text-emerald-200 hover:bg-emerald-500/25 transition-colors"
             >
               <Fingerprint className="h-4 w-4" />
-              Usar Face ID / huella
+              Usar biometría
             </button>
           )}
 

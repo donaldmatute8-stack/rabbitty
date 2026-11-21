@@ -93,7 +93,7 @@ export function AccountBiometricsCard() {
         deviceName: "Face ID / Touch ID",
       });
 
-      toast.success("✅ Face ID activado para tu cuenta");
+      toast.success("✅ Biometría activada para tu cuenta");
       void utils.passkeys.list.invalidate();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "No se pudo activar";
@@ -110,8 +110,8 @@ export function AccountBiometricsCard() {
           <Fingerprint className="h-6 w-6 text-emerald-400" />
         </div>
         <div>
-          <h3 className="text-base font-black text-white m-0">Face ID / Huella</h3>
-          <p className="text-xs text-gray-400 m-0">Entra sin contraseña usando la biometría de este dispositivo.</p>
+          <h3 className="text-base font-black text-white m-0">Biometría</h3>
+          <p className="text-xs text-gray-400 m-0">Face ID, Touch ID o huella para entrar sin contraseña.</p>
         </div>
       </div>
 
