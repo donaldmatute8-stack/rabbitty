@@ -20,8 +20,8 @@ const roleConfig: Record<string, { label: string; icon: any; color: string; bg: 
   WAITER:  { label: "Mesero",  icon: UtensilsCrossed,  color: "text-gray-400",   bg: "bg-gray-500/10 border-gray-500/20",   badge: "default" },
 };
 
-type StaffForm = { name: string; email: string; role: string; pinCode: string; hourlyRate: string; commissionPct: string };
-const defaultForm: StaffForm = { name: "", email: "", role: "WAITER", pinCode: "", hourlyRate: "", commissionPct: "" };
+type StaffForm = { name: string; email: string; role: string; pinCode: string; hourlyRate: string; commissionPct: string; isActive: boolean };
+const defaultForm: StaffForm = { name: "", email: "", role: "WAITER", pinCode: "", hourlyRate: "", commissionPct: "", isActive: true };
 
 // Random avatar bg from user name
 function getAvatarColor(name: string) {
@@ -43,7 +43,7 @@ export default function StaffPage() {
   const [filterRole, setFilterRole] = useState<string>("ALL");
 
   const openEdit = (m: NonNullable<typeof staff>[number]) => {
-    setForm({ name: m.name, email: m.email, role: m.role, pinCode: "", hourlyRate: String((m as { hourlyRate?: number }).hourlyRate ?? ""), commissionPct: String((m as { commissionPct?: number }).commissionPct ?? "") });
+    setForm({ name: m.name, email: m.email, role: m.role, pinCode: "", hourlyRate: String((m as { hourlyRate?: number }).hourlyRate ?? ""), commissionPct: String((m as { commissionPct?: number }).commissionPct ?? ""), isActive: m.isActive !== false });
     setDialog({ mode: "edit", id: m.id });
   };
 
@@ -58,6 +58,9 @@ export default function StaffPage() {
         role: form.role as any,
         hourlyRate: form.hourlyRate ? Number(form.hourlyRate) : 0,
         commissionPct: form.commissionPct ? Number(form.commissionPct) : 0,
+        isActive: form.isActive,
+        // Solo se manda si escribieron uno nuevo (vacío = no tocarlo).
+        pinCode: form.pinCode ? form.pinCode : undefined,
       });
     }
   };
@@ -86,6 +89,33 @@ export default function StaffPage() {
           <Button onClick={() => { setForm(defaultForm); setDialog({ mode: "create" }); }}>
             <Plus className="h-4 w-4" /> Agregar Empleado
           </Button>
+        </div>
+      </div>
+
+      {/* ── Guía rápida: alta de empleado y apertura de terminal ── */}
+      <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+        <p className="text-xs font-black uppercase tracking-widest text-cyan-400">Cómo se opera</p>
+        <div className="mt-3 grid gap-3 text-[12px] text-gray-300 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="font-bold text-white">1. Da de alta a la persona</p>
+            <p className="text-gray-400">Nombre, correo, rol y un PIN de 4 dígitos. El PIN es personal: no se repite entre empleados.</p>
+          </div>
+          <div>
+            <p className="font-bold text-white">2. Vincula la terminal</p>
+            <p className="text-gray-400">En el dispositivo (iPad/Mac/celular) entra a <span className="font-mono">/pos/link</span> con la cuenta del negocio y ponle nombre: “Caja 1”.</p>
+          </div>
+          <div>
+            <p className="font-bold text-white">3. El cajero abre turno</p>
+            <p className="text-gray-400">En el POS elige su nombre y teclea su PIN. Sin turno no puede cobrar ni anular.</p>
+          </div>
+          <div>
+            <p className="font-bold text-white">4. Control desde Ajustes</p>
+            <p className="text-gray-400">Ajustes → Terminales: tipo (Caja/Comandero/KDS), estación, cerrar turno y revocar el dispositivo.</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-bold">
+          <a href="/settings/terminals" className="text-cyan-300 underline">Abrir Ajustes → Terminales</a>
+          <a href="/operations-manual" className="text-cyan-300 underline">Manual de operación</a>
         </div>
       </div>
 
@@ -172,9 +202,9 @@ export default function StaffPage() {
                   </Badge>
                 </div>
 
-                <div className="mt-2 flex items-center gap-1 text-[10px] text-gray-600">
+                <div className={cn("mt-2 flex items-center gap-1 text-[10px]", member.hasPin ? "text-emerald-500/80" : "text-amber-500/80")}>
                   <Hash className="h-2.5 w-2.5" />
-                  PIN configurado
+                  {member.hasPin ? "PIN configurado" : "Sin PIN (no puede abrir turno en el POS)"}
                 </div>
               </div>
             );
@@ -188,24 +218,39 @@ export default function StaffPage() {
           <Input label="Nombre" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
           <Input label="Email" type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
           <Select label="Rol" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} options={roleOptions} />
-          {dialog?.mode === "create" && (
-            <Input label="PIN (4 dígitos)" maxLength={4} value={form.pinCode} onChange={(e) => setForm((f) => ({ ...f, pinCode: e.target.value }))} />
-          )}
+          <Input
+            label={dialog?.mode === "create" ? "PIN (4 dígitos)" : "Nuevo PIN (opcional)"}
+            maxLength={4}
+            inputMode="numeric"
+            value={form.pinCode}
+            onChange={(e) => setForm((f) => ({ ...f, pinCode: e.target.value.replace(/\D/g, "") }))}
+          />
           {dialog?.mode === "edit" && (
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="Costo por hora (MXN)"
-                inputMode="decimal"
-                value={form.hourlyRate}
-                onChange={(e) => setForm((f) => ({ ...f, hourlyRate: e.target.value.replace(/[^0-9.]/g, "") }))}
-              />
-              <Input
-                label="Comisión sobre ventas (%)"
-                inputMode="decimal"
-                value={form.commissionPct}
-                onChange={(e) => setForm((f) => ({ ...f, commissionPct: e.target.value.replace(/[^0-9.]/g, "") }))}
-              />
-            </div>
+            <>
+              <label className="flex items-center gap-2 text-xs font-bold text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+                  className="h-4 w-4 rounded border-white/20 bg-white/5"
+                />
+                Empleado activo (puede entrar al POS y abrir turno)
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Costo por hora (MXN)"
+                  inputMode="decimal"
+                  value={form.hourlyRate}
+                  onChange={(e) => setForm((f) => ({ ...f, hourlyRate: e.target.value.replace(/[^0-9.]/g, "") }))}
+                />
+                <Input
+                  label="Comisión sobre ventas (%)"
+                  inputMode="decimal"
+                  value={form.commissionPct}
+                  onChange={(e) => setForm((f) => ({ ...f, commissionPct: e.target.value.replace(/[^0-9.]/g, "") }))}
+                />
+              </div>
+            </>
           )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setDialog(null)}>Cancelar</Button>
@@ -218,10 +263,14 @@ export default function StaffPage() {
 
       {/* ── Delete Confirm ── */}
       <Dialog open={!!delete_} onClose={() => setDelete(null)} title="Confirmar eliminación">
-        <p className="text-sm text-gray-400">¿Eliminar a <strong className="text-white">{delete_?.name}</strong>? El registro se desactivará.</p>
+        <p className="text-sm text-gray-400">
+          ¿Dar de baja a <strong className="text-white">{delete_?.name}</strong>?
+          El registro se <strong className="text-white">desactiva</strong> (no se borra): deja de poder
+          entrar al POS y su PIN deja de servir, pero se conserva su historial de ventas y turnos.
+        </p>
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="secondary" onClick={() => setDelete(null)}>Cancelar</Button>
-          <Button variant="danger" onClick={() => delete_?.id && deleteStaff.mutate({ id: delete_.id })} disabled={deleteStaff.isPending}>Eliminar</Button>
+          <Button variant="danger" onClick={() => delete_?.id && deleteStaff.mutate({ id: delete_.id })} disabled={deleteStaff.isPending}>Dar de baja</Button>
         </div>
       </Dialog>
     </div>

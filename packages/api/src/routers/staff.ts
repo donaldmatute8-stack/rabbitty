@@ -1,14 +1,18 @@
 import { z } from "zod";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, ilike } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, publicProcedure, adminOnlyProcedure, resolveBranchId, posProcedure } from "../trpc";
 import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
+import { users as usersCore } from "@rabbitty/database-core/schema";
 import { hashPin, verifyPin } from "../services/crypto";
 import { assertPinNotLocked, registerPinFail, clearPinFails } from "../services/cashShift";
 
+/** Roles que pueden autorizar en caja (PIN de gerente/admin). */
+const AUTHORIZER_ROLES = ["ADMIN", "MANAGER", "admin", "manager"];
 
+const isAuthorizer = (role: string) => AUTHORIZER_ROLES.includes(role);
 
 export const staffRouter = router({
   getStaff: protectedProcedure
@@ -16,7 +20,9 @@ export const staffRouter = router({
     .query(async ({ ctx, input }) => {
       const branchId = await resolveBranchId(ctx, input.branchId);
       const staff = await ctx.restaurantDb.select().from(staffTable).where(eq(staffTable.branchId, branchId));
-      return staff.map((s) => ({ ...s, pinCode: undefined }));
+      // `hasPin` para que la UI diga la verdad (antes imprimía "PIN configurado"
+      // siempre, hubiera PIN o no). El hash nunca sale del servidor.
+      return staff.map((s) => ({ ...s, pinCode: undefined, hasPin: Boolean(s.pinCode) }));
     }),
 
   createStaff: adminOnlyProcedure
@@ -29,26 +35,64 @@ export const staffRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const email = input.email.trim().toLowerCase();
+
+      // Solo el dueño crea administradores: un gerente no puede fabricar pares
+      // con más privilegios que él.
+      if (input.role === "ADMIN" && ctx.staffRole) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Solo el dueño del negocio puede crear administradores.",
+        });
+      }
+
+      const list = await ctx.restaurantDb
+        .select({ id: staffTable.id, email: staffTable.email, pinCode: staffTable.pinCode })
+        .from(staffTable)
+        .where(eq(staffTable.branchId, ctx.branchId));
+
+      if (list.some((s) => String(s.email || "").trim().toLowerCase() === email)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Ya existe un empleado con ese correo en esta sucursal.",
+        });
+      }
+
       if (input.pinCode) {
-        const list = await ctx.restaurantDb
-          .select({ pinCode: staffTable.pinCode })
-          .from(staffTable)
-          .where(eq(staffTable.branchId, ctx.branchId));
         for (const s of list) {
           if (s.pinCode && verifyPin(input.pinCode, s.pinCode)) {
             throw new TRPCError({ code: "CONFLICT", message: "Este PIN ya está en uso por otro empleado." });
           }
         }
       }
+
+      // ── Identidad del empleado ──
+      // Antes se guardaba `userId: ctx.userId` (el del creador), así que TODOS
+      // los empleados quedaban ligados al dueño: propinas, caja y KDS se
+      // atribuían a él. Ahora: si el correo ya tiene cuenta core se usa esa;
+      // si no, un marcador propio que se resuelve cuando la persona entra.
+      let staffUserId: string;
+      const sessionEmail = String(ctx.user?.email || "").trim().toLowerCase();
+      if (sessionEmail && sessionEmail === email && ctx.userId) {
+        staffUserId = ctx.userId; // se está registrando a sí mismo
+      } else {
+        const [coreUser] = await ctx.coreDb
+          .select({ id: usersCore.id })
+          .from(usersCore)
+          .where(ilike(usersCore.email, email))
+          .limit(1);
+        staffUserId = coreUser?.id ?? `pending:${crypto.randomUUID()}`;
+      }
+
       const [result] = await ctx.restaurantDb.insert(staffTable).values({
-        userId: ctx.userId,
+        userId: staffUserId,
         branchId: ctx.branchId,
         name: input.name,
-        email: input.email,
+        email,
         role: input.role,
         pinCode: input.pinCode ? hashPin(input.pinCode) : null,
       }).returning();
-      return { ...result, pinCode: undefined };
+      return { ...result, pinCode: undefined, hasPin: Boolean(result?.pinCode) };
     }),
 
   updateStaff: adminOnlyProcedure
@@ -56,9 +100,10 @@ export const staffRouter = router({
       z.object({
         id: z.string(),
         name: z.string().optional(),
-        email: z.string().optional(),
+        email: z.string().email().optional(),
         role: z.enum(["WAITER", "CASHIER", "MANAGER", "ADMIN"]).optional(),
         pinCode: z.string().length(4).optional(),
+        isActive: z.boolean().optional(),
         hourlyRate: z.number().min(0).max(100000).optional(),
         commissionPct: z.number().min(0).max(100).optional(),
       })
@@ -72,11 +117,34 @@ export const staffRouter = router({
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
       }
+
+      // Un gerente no puede promover a nadie a admin ni tocar a un admin.
+      if (ctx.staffRole) {
+        const touchesAdmin = existing.role === "ADMIN" || input.role === "ADMIN";
+        if (touchesAdmin) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Solo el dueño del negocio puede administrar a un administrador.",
+          });
+        }
+      }
+
+      const list = await ctx.restaurantDb
+        .select({ id: staffTable.id, email: staffTable.email, pinCode: staffTable.pinCode, role: staffTable.role, isActive: staffTable.isActive })
+        .from(staffTable)
+        .where(eq(staffTable.branchId, branchId));
+
+      const email = input.email?.trim().toLowerCase();
+      if (email) {
+        if (list.some((s) => s.id !== input.id && String(s.email || "").trim().toLowerCase() === email)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Ya existe otro empleado con ese correo en esta sucursal.",
+          });
+        }
+      }
+
       if (input.pinCode) {
-        const list = await ctx.restaurantDb
-          .select({ id: staffTable.id, pinCode: staffTable.pinCode })
-          .from(staffTable)
-          .where(eq(staffTable.branchId, branchId));
         for (const s of list) {
           if (s.id === input.id) continue;
           if (s.pinCode && verifyPin(input.pinCode, s.pinCode)) {
@@ -84,29 +152,74 @@ export const staffRouter = router({
           }
         }
       }
+
+      // No dejar la sucursal sin nadie que autorice en caja.
+      const willBeActive = input.isActive ?? existing.isActive;
+      const nextRole = input.role ?? existing.role;
+      if (isAuthorizer(existing.role) && (!willBeActive || !isAuthorizer(nextRole))) {
+        const otherAuthorizer = list.some(
+          (s) => s.id !== input.id && s.isActive && isAuthorizer(s.role),
+        );
+        if (!otherAuthorizer) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No puedes dejar la sucursal sin un administrador o gerente activo.",
+          });
+        }
+      }
+
       const data: Record<string, unknown> = {};
       if (input.name) data.name = input.name;
-      if (input.email) data.email = input.email;
+      if (email) data.email = email;
       if (input.role) data.role = input.role;
       if (input.pinCode !== undefined) data.pinCode = input.pinCode ? hashPin(input.pinCode) : null;
+      if (input.isActive !== undefined) data.isActive = input.isActive;
       if (input.hourlyRate !== undefined) data.hourlyRate = input.hourlyRate;
       if (input.commissionPct !== undefined) data.commissionPct = input.commissionPct;
       await ctx.restaurantDb.update(staffTable).set(data).where(eq(staffTable.id, input.id));
       return { success: true };
     }),
 
+  /**
+   * Baja de un empleado: se DESACTIVA, no se borra.
+   * El diálogo siempre dijo "el registro se desactivará", pero antes se hacía
+   * un DELETE que además fallaba cuando el empleado tenía turnos de caja
+   * (FK de cash_shifts) — y perdía el historial de propinas/ventas.
+   */
   deleteStaff: adminOnlyProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [existing] = await ctx.restaurantDb
-        .select({ id: staffTable.id })
+      const branchId = await resolveBranchId(ctx, undefined);
+      const list = await ctx.restaurantDb
+        .select({ id: staffTable.id, role: staffTable.role, isActive: staffTable.isActive })
         .from(staffTable)
-        .where(and(eq(staffTable.id, input.id), eq(staffTable.branchId, await resolveBranchId(ctx, undefined))));
+        .where(eq(staffTable.branchId, branchId));
+
+      const existing = list.find((s) => s.id === input.id);
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Empleado no encontrado en esta sucursal" });
       }
-      await ctx.restaurantDb.delete(staffTable).where(eq(staffTable.id, input.id));
-      return { success: true };
+      if (ctx.staffRole && existing.role === "ADMIN") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Solo el dueño del negocio puede dar de baja a un administrador.",
+        });
+      }
+      if (isAuthorizer(existing.role)) {
+        const otherAuthorizer = list.some((s) => s.id !== input.id && s.isActive && isAuthorizer(s.role));
+        if (!otherAuthorizer) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No puedes dar de baja al último administrador o gerente activo.",
+          });
+        }
+      }
+
+      await ctx.restaurantDb
+        .update(staffTable)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(staffTable.id, input.id));
+      return { success: true, deactivated: true };
     }),
 
   verifyPin: publicProcedure
@@ -241,18 +354,26 @@ export const staffRouter = router({
       .from(staffTable)
       .where(eq(staffTable.branchId, ctx.branchId));
 
-    const adminWithPin = staffList.find(
-      (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && !!s.pinCode
-    );
+    const withPin = staffList.filter((s) => isAuthorizer(s.role) && s.isActive && !!s.pinCode);
+    const adminWithPin = withPin.find((s) => String(s.role).toUpperCase() === "ADMIN") ?? withPin[0];
 
     return {
       hasAdminPin: !!adminWithPin,
       adminName: adminWithPin?.name ?? null,
+      // Cuántos autorizan en caja: con más de uno, la UI de Ajustes avisa
+      // a quién le está cambiando el PIN.
+      authorizersWithPin: withPin.length,
     };
   }),
 
   setAdminPin: protectedProcedure
-    .input(z.object({ pin: z.string().length(4, "El PIN debe ser de 4 dígitos") }))
+    .input(z.object({
+      pin: z.string().length(4, "El PIN debe ser de 4 dígitos"),
+      // Opcional: a quién se le asigna. Sin él se resuelve sin ambigüedad
+      // (ver abajo): antes tomaba el PRIMER admin/gerente de la lista, así que
+      // con dos administradores el PIN podía cambiársele al que no era.
+      staffId: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const staffList = await ctx.restaurantDb
         .select()
@@ -262,7 +383,7 @@ export const staffRouter = router({
       // ── Guard: no permitir sobreescribir silenciosamente un PIN admin existente.
       //    Solo dueño del negocio o staff de plataforma puede reemplazarlo. ──
       const existingPinHolder = staffList.find(
-        (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && !!s.pinCode
+        (s) => isAuthorizer(s.role) && !!s.pinCode
       );
       if (existingPinHolder && !ctx.staffRole) {
         const { restaurants, branches } = await import("@rabbitty/database-restaurant/schema");
@@ -290,16 +411,35 @@ export const staffRouter = router({
         }
       }
 
-      const admin = staffList.find(
-        (s) => ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role)
-      );
+      const authorizers = staffList.filter((s) => isAuthorizer(s.role) && s.isActive);
+      const sessionEmail = String(ctx.user?.email || "").trim().toLowerCase();
 
-      if (admin) {
+      // Orden de preferencia: el indicado → el de mi propio correo → el admin
+      // más antiguo → el gerente más antiguo.
+      const target =
+        (input.staffId ? authorizers.find((s) => s.id === input.staffId) : undefined) ??
+        (sessionEmail ? authorizers.find((s) => String(s.email || "").trim().toLowerCase() === sessionEmail) : undefined) ??
+        authorizers.find((s) => String(s.role).toUpperCase() === "ADMIN") ??
+        authorizers[0];
+
+      if (input.staffId && !target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Ese empleado no es administrador/gerente activo de esta sucursal.",
+        });
+      }
+
+      if (target) {
         await ctx.restaurantDb
           .update(staffTable)
-          .set({ pinCode: hashPin(input.pin) })
-          .where(eq(staffTable.id, admin.id));
-        return { success: true, message: "PIN de Administrador actualizado con éxito" };
+          .set({ pinCode: hashPin(input.pin), updatedAt: new Date() })
+          .where(eq(staffTable.id, target.id));
+        return {
+          success: true,
+          staffId: target.id,
+          staffName: target.name,
+          message: `PIN de ${target.name} actualizado con éxito`,
+        };
       }
 
       await ctx.restaurantDb.insert(staffTable).values({
@@ -329,9 +469,7 @@ export const staffRouter = router({
         .from(staffTable)
         .where(eq(staffTable.branchId, ctx.branchId));
 
-      const managers = staffList.filter((s) =>
-        ["ADMIN", "MANAGER", "admin", "manager"].includes(s.role) && !!s.pinCode
-      );
+      const managers = staffList.filter((s) => isAuthorizer(s.role) && !!s.pinCode);
 
       let authorized = false;
       for (const m of managers) {
