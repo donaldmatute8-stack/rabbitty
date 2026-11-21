@@ -184,10 +184,17 @@ if (currentBuildId !== build.id) {
 }
 
 if (whatsNew) {
-  await api("PATCH", `/v1/appStoreVersions/${version.id}`, {
-    data: { type: "appStoreVersions", id: version.id, attributes: { whatsNew } },
-  });
-  console.log("▸ Novedades escritas");
+  // whatsNew vive en la localización de la versión, no en la versión.
+  const locs = await api(
+    "GET",
+    `/v1/appStoreVersions/${version.id}/appStoreVersionLocalizations?fields[appStoreVersionLocalizations]=locale`,
+  );
+  for (const loc of locs.data ?? []) {
+    await api("PATCH", `/v1/appStoreVersionLocalizations/${loc.id}`, {
+      data: { type: "appStoreVersionLocalizations", id: loc.id, attributes: { whatsNew } },
+    });
+    console.log(`▸ Novedades escritas (${loc.attributes.locale})`);
+  }
 }
 
 // ── 3b. App Review Information ─────────────────────────────────────────────
