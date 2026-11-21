@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Card } from "@rabbitty/ui";
-import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame, Ticket, Coins } from "lucide-react";
+import { BookOpen, ChevronRight, Building2, DollarSign, Monitor, Store, Award, Megaphone, Cake, QrCode, Gift, Store as StoreIcon, Salad, Truck, Receipt as ReceiptIcon, Clock, Users, Sparkles, Activity, Compass, Headphones, Flame, Ticket, Coins, KeyRound } from "lucide-react";
 
 type GuideRole = "all" | "admin" | "pos" | "marketing" | "phygital";
 
@@ -193,6 +193,121 @@ Con eso el mesero no puede salirse a otras apps ni recibir notificaciones que lo
     desc: "Gestiona todas tus sucursales desde un solo panel",
     role: "admin",
     content: `## Dashboard Multi-Sucursal\n\nEl dashboard unificado muestra KPIs de todas las sucursales en una sola vista.\n\n### Características:\n- Selector de sucursal en el header del admin\n- KPIs agregados: órdenes totales, ingresos totales, clientes únicos\n- Desglose por sucursal con métricas individuales\n- Contexto global (BranchContext) disponible en todas las páginas\n\n### Cómo usar:\n1. Usa el selector en la esquina superior derecha\n2. Selecciona "Todas las sucursales" para ver datos consolidados\n3. Selecciona una sucursal específica para ver sus datos`,
+  },
+  {
+    id: "empleados-roles",
+    icon: Users,
+    label: "Empleados, roles y terminales",
+    desc: "Cómo dar de alta a tu equipo, qué puede hacer cada rol y cómo se abre la caja",
+    role: "admin",
+    content: `## Empleados, roles y terminales
+
+Son dos mitades distintas: la **ficha** dice quién es la persona y la **terminal** dice en qué dispositivo trabaja.
+
+### 1) Roles y permisos
+
+- **Propietario, Admin y Gerente**: pedidos, cobrar, caja, descuentos, reembolsos, configuración y reportes.
+- **Cajero**: cobra, maneja caja y redime Bunz. NO reembolsa, NO regala cortesías, NO configura.
+- **Mesero**: toma pedidos y cobra. NO abre/cierra caja ni reembolsa.
+- **Cocina**: solo usa KDS.
+- El rol **nunca** amplía la sucursal: un cajero sigue atado a la suya.
+- Solo el dueño o un Admin pueden crear o editar administradores.
+
+### 2) Dar de alta a un empleado
+
+- Entra a **Personal & Roles → Agregar Empleado**.
+- Captura nombre, correo, rol y un **PIN de 4 dígitos**.
+- El **correo** es único por sucursal y el **PIN** también: no se comparten.
+- El PIN se guarda cifrado; si se olvida, se asigna uno nuevo desde el lápiz.
+- Si la tarjeta dice **Sin PIN**, ese empleado no puede abrir turno en el POS.
+
+### 3) Dar de baja (no se borra)
+
+- Lápiz → desmarca **Empleado activo**, o basura → **Dar de baja**.
+- Deja de entrar, su PIN deja de servir y desaparece del POS.
+- Se **conserva** su historial de ventas, propinas y turnos. Es reversible.
+- El sistema **nunca** deja la sucursal sin un Admin/Gerente activo.
+
+### 4) Abrir turno y caja
+
+- El empleado abre turno **con su PIN** en el POS.
+- Todo se atribuye a esa persona: ventas, propinas, descuentos, anulaciones.
+- Anular, reembolsar o autorizar pide **PIN de Admin/Gerente**, no el del cajero.
+- Un turno por terminal; al abrir uno nuevo se cierran los huérfanos de esa terminal.
+
+### 5) Dónde seguir
+
+- **Ajustes → Terminales**: vincular dispositivos, tipo, caja/gaveta y estación.
+- Guía relacionada: **Terminales, cajas y asignaciones**.`,
+  },
+  {
+    id: "terminales-cajas",
+    icon: Monitor,
+    label: "Terminales, cajas y asignaciones",
+    desc: "Vincular el iPad o la Mac, asignar gaveta y estación, y revocar sin perder historial",
+    role: "pos",
+    content: `## Terminales, cajas y asignaciones
+
+**Nada se asigna solo.** Cada dispositivo se autoriza una vez y luego se configura en su tarjeta.
+
+### 1) Vincular la terminal
+
+- En el dispositivo abre **/pos/link** e inicia sesión con la cuenta del negocio.
+- Ponle un nombre reconocible: **Caja 1**, **Caja Mac**, **iPad Barra**.
+- Entra a **/pos**: ese dispositivo ya está autorizado.
+- Si el dispositivo no tiene sesión: **/pos/auth** genera un **código de 6 dígitos** que el dueño o admin recibe por push o Telegram.
+- También hay **QR de invitación de un solo uso** en Ajustes → Terminal Móvil.
+
+### 2) Asignaciones (Ajustes → Terminales)
+
+- **Tipo**: **Caja** cobra, **Comandero** toma pedidos, **KDS** es pantalla de cocina.
+- **Caja / gaveta**: nombre del corte (por defecto **MAIN**). Todas las terminales con el mismo nombre comparten corte de caja.
+- **Estación fija**: a qué estación de preparación manda los pedidos.
+- **Empleado**: NO se asigna aquí. Se elige al **abrir turno con su PIN**.
+
+Regla: **el dispositivo se asigna a la caja; la persona se asigna al turno.**
+
+### 3) Control y revocación
+
+- **Cerrar turno**: si el empleado se fue sin cerrarlo.
+- **Revocar**: el dispositivo deja de abrir sesión nueva, pero **no borra ventas ni historial**.
+- El reporte **Ajustes → Terminales** muestra terminales usables, staff con PIN y turnos abiertos.
+
+### 4) Impresión
+
+- En **iPad** solo la **app nativa Rabbitty POS** imprime por Bluetooth.
+- Safari, Edge o la PWA en iPadOS **no** exponen Web Bluetooth.
+- El ticket imprime el **QR de recompensa** cuando el cliente no está vinculado, y los **Bunz acreditados** cuando sí lo está.`,
+  },
+  {
+    id: "accesos-admin",
+    icon: KeyRound,
+    label: "Accesos del panel (sin contraseñas)",
+    desc: "Quién entra, cómo se entra y cómo se retira un acceso sin romper la operación",
+    role: "admin",
+    content: `## Accesos del panel
+
+El panel **no usa contraseña**.
+
+### 1) Cómo se entra
+
+- Abre **admin.rabbitty.me/login** y escribe tu correo.
+- Recibe un **enlace o código de un solo uso** (caduca en minutos).
+- También se puede entrar con **Telegram**; la passkey (Face ID / Touch ID) es opcional y depende del dispositivo.
+- Un correo **sin cuenta** no recibe el enlace: primero se crea la cuenta y la ficha de staff.
+
+### 2) Qué necesita un administrador
+
+- Cuenta con ese correo.
+- **Ficha de staff activa** en la sucursal, con rol Admin y PIN de 4 dígitos.
+- Sucursal de producción activa.
+
+### 3) Retirar un acceso
+
+- Personal & Roles → lápiz → desmarca **Empleado activo**.
+- Deja de entrar, su PIN deja de servir y desaparece del POS.
+- Se conserva su historial y se puede reactivar cuando vuelva.
+- Nunca borres filas de staff a mano: se pierde el historial.`,
   },
   {
     id: "pos-basics",

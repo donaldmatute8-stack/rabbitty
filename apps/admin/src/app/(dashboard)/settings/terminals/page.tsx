@@ -194,6 +194,10 @@ export default function PosTerminalsPage() {
         </div>
         <p className="m-0 mt-2 text-[10px] text-gray-500">
           Nada es automático: cada terminal se configura en su tarjeta. El dispositivo se asigna a la caja; la persona se asigna al turno.
+          {" "}
+          <Link href="/academy" className="font-bold text-cyan-500 underline">
+            Ver guía completa
+          </Link>
         </p>
       </Card>
 

@@ -115,7 +115,7 @@ export default function StaffPage() {
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-bold">
           <a href="/settings/terminals" className="text-cyan-300 underline">Abrir Ajustes → Terminales</a>
-          <a href="/operations-manual" className="text-cyan-300 underline">Manual de operación</a>
+          <a href="/academy" className="text-cyan-300 underline">Guías y Academy</a>
         </div>
       </div>
 
