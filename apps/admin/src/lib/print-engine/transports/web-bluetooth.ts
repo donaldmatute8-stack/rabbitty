@@ -71,9 +71,15 @@ export class WebBluetoothTransport implements PrintTransport {
           error: "Web Bluetooth requiere HTTPS o localhost.",
         };
       }
+      const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+      const isIPadOS =
+        /iPad|iPhone|iPod/.test(ua) ||
+        (/Macintosh/.test(ua) && typeof navigator !== "undefined" && navigator.maxTouchPoints > 1);
       return {
         success: false,
-        error: "Tu navegador no soporta Web Bluetooth. Usa Chrome o Edge.",
+        error: isIPadOS
+          ? "iPadOS/iPhone no permiten Web Bluetooth en Safari, Edge ni PWA. Abre la app nativa Rabbitty POS para imprimir."
+          : "Este navegador no expone Web Bluetooth. En Mac usa Chrome; en escritorio/Android Chrome o Edge; o usa la app nativa Rabbitty POS.",
       };
     }
 

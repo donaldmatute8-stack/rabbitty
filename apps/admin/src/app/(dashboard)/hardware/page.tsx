@@ -686,7 +686,7 @@ export default function HardwarePage() {
             <h2 className="text-sm font-black text-white">Reporte de Conexión de Impresora</h2>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 mb-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 mb-3">
             <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${diag.secure ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-red-500/10 border-red-500/30 text-red-400"}`}>
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
               HTTPS: {diag.secure ? "Sí" : "No"}
@@ -699,8 +699,12 @@ export default function HardwarePage() {
               <Monitor className="h-3.5 w-3.5 shrink-0" />
               Pestaña principal: {diag.topLevel ? "Sí" : "No (iframe)"}
             </div>
+            <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold ${diag.isNative ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-amber-500/10 border-amber-500/30 text-amber-300"}`}>
+              <Cpu className="h-3.5 w-3.5 shrink-0" />
+              {diag.isNative ? "App nativa Rabbitty POS" : "Navegador / PWA"}
+            </div>
             <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-gray-300">
-              <Cpu className="h-3.5 w-3.5 shrink-0 text-pink-400" />
+              <Monitor className="h-3.5 w-3.5 shrink-0 text-pink-400" />
               {diag.browser} · {diag.os}
             </div>
           </div>

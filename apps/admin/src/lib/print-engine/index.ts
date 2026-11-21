@@ -538,7 +538,7 @@ export function diagnosePrinterConnection(): PrinterDiagnostics {
       "Usa la app nativa de Rabbitty POS en iPad/iPhone para imprimir directamente.";
   } else if (!webBluetooth) {
     status = "BLOCKED_BY_BROWSER";
-    recommendation = `Tu navegador (${browser}) no expone Web Bluetooth. Usa Chrome o Edge en escritorio/Android o la app nativa.`;
+    recommendation = `Tu navegador (${browser}) no expone Web Bluetooth. En Mac usa Chrome (Edge puede no exponerlo); en escritorio/Android Chrome o Edge; o usa la app nativa Rabbitty POS.`;
   } else {
     status = "BLE_ONLY";
     recommendation =

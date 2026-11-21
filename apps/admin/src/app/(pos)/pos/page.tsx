@@ -47,7 +47,8 @@ function membershipTicketData(pass: any, applied = false) {
 }
 import { CashShiftModal, CashShiftBadge } from "../../../components/CashShiftModal";
 import { 
-  printEngine
+  printEngine,
+  diagnosePrinterConnection
 } from "../../../lib/print-engine";
 
 function PosClock() {
@@ -394,6 +395,11 @@ export default function PosPage() {
 
   const handleConnectBluetooth = async () => {
     try {
+      const diag = diagnosePrinterConnection();
+      if (diag.status === "BLOCKED_BY_BROWSER" || diag.status === "HTTP" || diag.status === "BLOCKED_BY_CONTEXT") {
+        toast.error(diag.recommendation);
+        return;
+      }
       toast.info("Buscando impresora Bluetooth POS-58 / MTP...");
       const result = await printEngine.connect();
       if (result.success) {
