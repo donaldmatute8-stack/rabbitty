@@ -238,9 +238,11 @@ export const staffRouter = router({
       const scope = `pin:staff:${input.branchId}`;
       await assertPinNotLocked(ctx.restaurantDb, scope);
 
+      // Solo empleados ACTIVOS: una baja debe invalidar el PIN de inmediato.
+      // (Antes el PIN de un empleado dado de baja seguía verificando.)
       const staffList = await ctx.restaurantDb.select()
         .from(staffTable)
-        .where(eq(staffTable.branchId, input.branchId));
+        .where(and(eq(staffTable.branchId, input.branchId), eq(staffTable.isActive, true)));
 
       for (const s of staffList) {
         if (s.pinCode && verifyPin(input.pin, s.pinCode)) {
@@ -474,8 +476,9 @@ export const staffRouter = router({
       const staffList = await ctx.restaurantDb
         .select()
         .from(staffTable)
-        .where(eq(staffTable.branchId, ctx.branchId));
+        .where(and(eq(staffTable.branchId, ctx.branchId), eq(staffTable.isActive, true)));
 
+      // Un PIN de una baja no debe autorizar anulaciones, retiros ni cortes.
       const managers = staffList.filter((s) => isAuthorizer(s.role) && !!s.pinCode);
 
       let authorized = false;
