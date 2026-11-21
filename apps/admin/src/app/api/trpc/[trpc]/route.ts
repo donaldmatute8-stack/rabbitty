@@ -6,7 +6,7 @@ import { getRestaurantDb, getCoreDb } from "@rabbitty/api/db";
 import { getEnv } from "@/env";
 import { staff, branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { users, ownedBusinesses } from "@rabbitty/database-core/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ilike, sql } from "drizzle-orm";
 import { verifyGod2faCookieValue, verifyImpersonationCookieValue, GOD_IMP_COOKIE } from "@rabbitty/api/services/god2fa";
 import {
   isTerminalSessionsEnabled,
@@ -44,10 +44,27 @@ const handler = async (req: Request) => {
     },
     createContext: async () => {
       const restaurantDb = getRestaurantDb();
+      const coreDb = getCoreDb();
       let staffRole: "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN" | null = null;
       let staffBranchId = null;
 
-      if (session?.user?.email || session?.user?.id) {
+      // NextAuth puede traer solo el id de `adminAuthUsers` y no el email.
+      // Sin email no se encuentra al dueño del negocio y todo el admin queda
+      // "sin sucursal". Se resuelve el email desde adminAuthUsers.
+      let sessionEmail = (session?.user?.email ?? "").trim().toLowerCase();
+      if (!sessionEmail && session?.user?.id) {
+        try {
+          const adminRows: any = await (coreDb as any).execute(
+            sql`SELECT "email" FROM "adminAuthUsers" WHERE "id" = ${session.user.id} LIMIT 1`,
+          );
+          const found = Array.isArray(adminRows) ? adminRows[0] : adminRows?.rows?.[0];
+          if (found?.email) sessionEmail = String(found.email).trim().toLowerCase();
+        } catch {
+          /* sin adminAuthUsers: se sigue con el id */
+        }
+      }
+
+      if (sessionEmail || session?.user?.id) {
         // Columnas explícitas a propósito: esto corre en CADA request. Un
         // `select()` traía la fila completa de `staff`, así que cualquier
         // columna nueva (p. ej. hourlyRate) cuya migración no llegara a
@@ -61,12 +78,12 @@ const handler = async (req: Request) => {
           branchId: staff.branchId,
           branchName: branches.name,
         };
-        let staffRows = session.user.email
+        let staffRows = sessionEmail
           ? await restaurantDb
               .select(staffSelect)
               .from(staff)
               .leftJoin(branches, eq(branches.id, staff.branchId))
-              .where(and(eq(staff.email, session.user.email), eq(staff.isActive, true)))
+              .where(and(ilike(staff.email, sessionEmail), eq(staff.isActive, true)))
           : [];
         if (staffRows.length === 0 && session.user.id) {
           staffRows = await restaurantDb
@@ -99,7 +116,6 @@ const handler = async (req: Request) => {
         activeBranchId = impersonating.branchId;
       }
 
-      const coreDb = getCoreDb();
       let effectiveUserId = session?.user?.id ?? null;
 
       // ── Fase 2 · Terminal POS con sesión propia (doble lectura) ──
@@ -134,14 +150,13 @@ const handler = async (req: Request) => {
         }
       }
 
-      if (session?.user?.email || session?.user?.id) {
-        // Mapear adminAuthUsers.email a core users.id para enlazar la propiedad
-        // de negocios y saldo de Bunz. Si el correo no existe en core (p. ej.
-        // login de staff con otro correo), se intenta por id de sesión.
-        let coreUser = session.user.email
-          ? (await coreDb.select({ id: users.id }).from(users).where(eq(users.email, session.user.email)).limit(1))[0]
+      if (sessionEmail || session?.user?.id) {
+        // Mapear el email (o el id de adminAuthUsers) a core users.id para
+        // enlazar la propiedad de negocios y saldo de Bunz.
+        let coreUser = sessionEmail
+          ? (await coreDb.select({ id: users.id }).from(users).where(ilike(users.email, sessionEmail)).limit(1))[0]
           : undefined;
-        if (!coreUser && session.user.id) {
+        if (!coreUser && session?.user?.id) {
           coreUser = (await coreDb.select({ id: users.id }).from(users).where(eq(users.id, session.user.id)).limit(1))[0];
         }
         if (coreUser) {
