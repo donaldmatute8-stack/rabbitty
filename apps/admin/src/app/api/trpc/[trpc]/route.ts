@@ -153,9 +153,20 @@ const handler = async (req: Request) => {
       if (sessionEmail || session?.user?.id) {
         // Mapear el email (o el id de adminAuthUsers) a core users.id para
         // enlazar la propiedad de negocios y saldo de Bunz.
+        //
+        // Caso Telegram: la sesión trae `8880011@telegram.rabbitty` y el id
+        // `8880011`, pero el usuario core es otro UUID con telegramId 8880011.
+        // Sin este mapeo, Poncho quedaba "sin sucursal" y 626 no podía operar.
+        const telegramMatch = sessionEmail.match(/^(\d+)@telegram\.rabbitty$/i);
+        const telegramId = telegramMatch?.[1] ??
+          (/^\d+$/.test(String(session?.user?.id ?? "")) ? String(session.user.id) : null);
+
         let coreUser = sessionEmail
           ? (await coreDb.select({ id: users.id }).from(users).where(ilike(users.email, sessionEmail)).limit(1))[0]
           : undefined;
+        if (!coreUser && telegramId) {
+          coreUser = (await coreDb.select({ id: users.id }).from(users).where(eq(users.telegramId, telegramId)).limit(1))[0];
+        }
         if (!coreUser && session?.user?.id) {
           coreUser = (await coreDb.select({ id: users.id }).from(users).where(eq(users.id, session.user.id)).limit(1))[0];
         }
