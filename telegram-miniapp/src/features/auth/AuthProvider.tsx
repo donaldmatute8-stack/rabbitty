@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { readSettings, subscribeSettings } from '@/lib/userSettings';
 
-import { captureAffiliateIntent } from '@/lib/affiliateIntent';
 import { captureDevUserFromUrl, getDevUserId } from '@/lib/devAuth';
 
 export interface UserProfile {
@@ -219,7 +218,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   };
 
   useEffect(() => {
-    captureAffiliateIntent();
   }, []);
 
   useEffect(() => {

@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { getFastLogin, verifyBiometric, hasAnyLocalSecurity, isBiometricEnabled, hasPin } from '@/lib/securityVault';
-import { hasAffiliateIntent } from '@/lib/affiliateIntent';
 
 interface CountryCode {
   code: string;
@@ -57,8 +56,6 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     if (data.isNewUser || !data.user?.firstName) {
       // New members must complete their identity before entering the app
       router.replace('/signup?setup=1');
-    } else if (hasAffiliateIntent()) {
-      router.replace('/business');
     } else if (data.user?.role === 'AFFILIATE') {
       router.replace('/business');
     } else {
@@ -72,7 +69,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     pendingNavRef.current = null;
     if (pending) {
       if (pending.isNewUser) router.replace('/signup?setup=1');
-      else if (hasAffiliateIntent()) router.replace('/business');
+
       else if (pending.role === 'AFFILIATE') router.replace('/business');
       else router.replace('/');
     }
@@ -89,8 +86,6 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
     if (!authLoading && user) {
       if (!user.firstName) {
         router.replace('/signup?setup=1');
-      } else if (hasAffiliateIntent()) {
-        router.replace('/business');
       } else if (user.role === 'AFFILIATE') {
         router.replace('/business');
       } else {
@@ -148,7 +143,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
         await PlatformBridge.setSessionToken(verifyData.sessionToken);
         PlatformBridge.hapticFeedback('success');
         await checkAuth();
-        router.replace(hasAffiliateIntent() ? '/business' : '/');
+        router.replace('/');
       } else {
         // fastToken expirado/revocado → limpiar stash, OTP normal
         await import('@/lib/securityVault').then(m => m.clearFastLogin());
@@ -203,7 +198,7 @@ export default function PhoneAuthFlow({ mode, onBack }: PhoneAuthFlowProps) {
               if (!data.user?.firstName) {
                 router.replace('/signup?setup=1');
               } else {
-                router.replace(hasAffiliateIntent() ? '/business' : '/');
+                router.replace('/');
               }
               return;
             }

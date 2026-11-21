@@ -195,10 +195,10 @@ export function PosReauthPanel({ terminalName }: { terminalName?: string | null 
 
         <button
           type="button"
-          onClick={() => window.location.assign("/login")}
+          onClick={() => window.location.assign("/login?next=%2Fpos")}
           className="mt-4 w-full rounded-xl py-2.5 text-[11px] font-bold text-gray-500 hover:text-white"
         >
-          Entrar como administrador
+          Entrar con mi cuenta de administrador
         </button>
       </div>
     </div>

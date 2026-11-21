@@ -1,5 +1,6 @@
 import { inArray } from "drizzle-orm";
-import { users } from "@rabbitty/database-core/schema";
+import { notifications, users } from "@rabbitty/database-core/schema";
+import crypto from "crypto";
 import { GOD_ADMIN_EMAILS } from "./god2fa";
 
 /**
@@ -26,6 +27,7 @@ function staffEmails(): string[] {
 
 type CoreDb = {
   select: (...args: any[]) => any;
+  insert: (...args: any[]) => any;
 };
 
 export async function getSupportStaffUserIds(coreDb: CoreDb): Promise<string[]> {
@@ -49,9 +51,27 @@ export async function notifySupportStaff(
   const userIds = await getSupportStaffUserIds(coreDb);
   if (userIds.length === 0) return 0;
 
+  // Campana in-app para el equipo (la bandeja God es la fuente, pero el aviso
+  // también queda en la app del staff).
+  try {
+    for (const userId of userIds) {
+      await coreDb.insert(notifications).values({
+        id: crypto.randomUUID(),
+        userId,
+        title: params.title.slice(0, 120),
+        message: params.message.slice(0, 500),
+        type: "SYSTEM",
+        route: params.route ?? "/god/soporte",
+        createdAt: new Date(),
+      });
+    }
+  } catch (notifyErr) {
+    console.warn("[supportNotify] notificación in-app falló:", notifyErr);
+  }
+
   const base = process.env.RABBITTY_MINIAPP_URL;
   const secret = process.env.PUSH_SEND_SECRET;
-  if (!base || !secret) return 0;
+  if (!base || !secret) return userIds.length;
 
   try {
     const res = await fetch(`${base.replace(/\/$/, "")}/api/notifications/send`, {

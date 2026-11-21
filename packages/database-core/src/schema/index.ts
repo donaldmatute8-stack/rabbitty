@@ -352,6 +352,21 @@ export const messageHides = pgTable("message_hides", {
   index("message_hides_user_idx").on(table.userId),
 ]);
 
+/**
+ * ── Bloqueos entre usuarios (UGC · App Store 1.2) ─────────────────────────
+ * Un bloqueo debe persistir y detener mensajes, no ser solo un estado visual.
+ * blockerId = quien bloquea · blockedId = quien queda bloqueado.
+ */
+export const userBlocks = pgTable("user_blocks", {
+  id: id(),
+  blockerId: text("blockerId").notNull(),
+  blockedId: text("blockedId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("user_blocks_uq").on(t.blockerId, t.blockedId),
+  index("user_blocks_blocked_idx").on(t.blockedId),
+]);
+
 export const conversations = pgTable("conversations", {
   // ── Tipo y audiencia (0034) ──
   // kind: DIRECT | GROUP · audience: BUSINESS | PEER

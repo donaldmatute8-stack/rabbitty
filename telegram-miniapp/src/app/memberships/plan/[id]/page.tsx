@@ -78,6 +78,10 @@ export default function MembershipPlanPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [giftOpen, setGiftOpen] = useState(false);
+  // App Store 3.1.1: una membresía es un servicio digital que se consume en la
+  // app. En el binario iOS NO se vende: se compra en el negocio o en la web.
+  // Fuera de iOS (Telegram/web/Android) se mantiene el checkout de Stripe.
+  const isIOS = typeof window !== 'undefined' && PlatformBridge.isIos();
   const [giftRecipient, setGiftRecipient] = useState('');
   const [giftMessage, setGiftMessage] = useState('');
   const [gifting, setGifting] = useState(false);
@@ -308,7 +312,7 @@ export default function MembershipPlanPage() {
         <PremiumSection title="Cómo funciona">
           <PremiumCard>
             <div className="space-y-2 p-4 text-[11px] text-(--text-muted)">
-              <p className="flex items-start gap-2"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#E91E63]" /> Pago seguro con Stripe. Apple Pay y Google Pay disponibles.</p>
+              <p className="flex items-start gap-2"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#E91E63]" /> {isIOS ? 'La membresía se compra en el negocio; aquí puedes consultar tu pase.' : 'Pago seguro con Stripe. Apple Pay y Google Pay disponibles.'}</p>
               <p className="flex items-start gap-2"><BadgeCheck size={14} className="mt-0.5 shrink-0 text-[#E91E63]" /> Tu pase se activa al confirmar el pago y vive en Mis Membresías.</p>
               <p className="flex items-start gap-2"><Gift size={14} className="mt-0.5 shrink-0 text-[#E91E63]" /> Cancela cuando quieras; conservas el acceso hasta el final del periodo.</p>
             </div>
@@ -328,6 +332,14 @@ export default function MembershipPlanPage() {
             >
               Ver mi pase
             </button>
+          ) : isIOS && plan.priceFiat > 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-center">
+              <p className="m-0 text-[12.5px] font-black text-white">Compra tu membresía en el negocio</p>
+              <p className="m-0 mt-1 text-[10.5px] leading-relaxed text-white/50">
+                Por políticas de App Store, las membresías no se venden dentro de la app.
+                Pídesela al equipo del local; tu pase aparecerá aquí.
+              </p>
+            </div>
           ) : plan.priceFiat <= 0 ? (
             <div className="flex gap-2">
               <button
@@ -338,13 +350,15 @@ export default function MembershipPlanPage() {
               >
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <Gift size={16} />} Unirme gratis
               </button>
-              <button
-                type="button"
-                onClick={() => { setGiftOpen(true); setGiftResult(''); }}
-                className="rounded-2xl border border-[#E91E63]/30 bg-[#E91E63]/10 px-4 text-[12px] font-black text-[#FF7DBB]"
-              >
-                Regalar
-              </button>
+              {!isIOS && (
+                <button
+                  type="button"
+                  onClick={() => { setGiftOpen(true); setGiftResult(''); }}
+                  className="rounded-2xl border border-[#E91E63]/30 bg-[#E91E63]/10 px-4 text-[12px] font-black text-[#FF7DBB]"
+                >
+                  Regalar
+                </button>
+              )}
             </div>
           ) : (
             <button

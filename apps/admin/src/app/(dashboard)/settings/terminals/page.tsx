@@ -17,6 +17,7 @@ import { trpc } from "../../../../lib/trpc-client";
 import { Card, Badge, Button, toast } from "@rabbitty/ui";
 import {
   Ban,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   History,
@@ -47,6 +48,11 @@ export default function PosTerminalsPage() {
 
   const feature = trpc.posTerminals.featureEnabled.useQuery(undefined, { retry: false });
   const overview = trpc.posTerminals.overview.useQuery(undefined, { retry: false });
+  // Diagnóstico sin Sentry: explica en segundos por qué un POS no abre.
+  const diagnose = trpc.posTerminals.diagnose.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 60_000,
+  });
 
   const utils = trpc.useUtils();
 
@@ -115,6 +121,56 @@ export default function PosTerminalsPage() {
           </Button>
         </div>
       </div>
+
+      <Card className="p-4">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          {diagnose.data?.ok ? (
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          ) : (
+            <AlertTriangle className={`h-4 w-4 ${diagnose.data ? "text-amber-500" : "text-gray-400"}`} />
+          )}
+          <p className="m-0 text-sm font-black">Diagnóstico de la sucursal</p>
+          {diagnose.data && (
+            <Badge variant={diagnose.data.ok ? "success" : "warning"}>
+              {diagnose.data.ok ? "Todo en orden" : `${diagnose.data.issues.length} punto(s) a revisar`}
+            </Badge>
+          )}
+        </div>
+
+        {diagnose.isLoading ? (
+          <p className="m-0 text-xs text-gray-500">Revisando terminales, staff y turnos…</p>
+        ) : diagnose.error ? (
+          <p className="m-0 text-xs text-rose-500">{diagnose.error.message}</p>
+        ) : diagnose.data ? (
+          <>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-600 dark:text-gray-300 sm:grid-cols-4">
+              <div>
+                <span className="block text-[9px] font-bold uppercase text-gray-400">Sucursal</span>
+                {diagnose.data.branchName ?? "—"} · {diagnose.data.branchActive ? "activa" : "inactiva"}
+              </div>
+              <div>
+                <span className="block text-[9px] font-bold uppercase text-gray-400">Terminales</span>
+                {diagnose.data.terminals.filter((t) => t.usable).length} de {diagnose.data.terminals.length} usables
+              </div>
+              <div>
+                <span className="block text-[9px] font-bold uppercase text-gray-400">Staff con PIN</span>
+                {diagnose.data.staffWithPin}
+              </div>
+              <div>
+                <span className="block text-[9px] font-bold uppercase text-gray-400">Turnos abiertos</span>
+                {diagnose.data.activeOperators}
+              </div>
+            </div>
+            {diagnose.data.issues.length > 0 && (
+              <ul className="m-0 mt-2 list-disc space-y-1 pl-4 text-[11px] text-amber-700 dark:text-amber-300">
+                {diagnose.data.issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : null}
+      </Card>
 
       {!enabled && (
         <Card className="border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">

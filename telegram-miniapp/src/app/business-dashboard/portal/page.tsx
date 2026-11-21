@@ -626,13 +626,13 @@ export default function BusinessPortal() {
                   <input
                     type="text"
                     required
-                    placeholder="@username, Telegram ID o Wallet TON"
+                    placeholder="@username, Telegram ID o correo"
                     value={mintCustomerId}
                     onChange={(e) => setMintCustomerId(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl bg-(--secondary) border border-(--border-subtle) text-xs focus:outline-hidden focus:border-pink-500"
                   />
                   <p className="text-[10px] text-(--foreground-muted) mt-1">
-                    Ingresa el Telegram ID del cliente o su dirección de Wallet registrada.
+                    Ingresa el Telegram ID, usuario o correo del cliente.
                   </p>
                 </div>
 

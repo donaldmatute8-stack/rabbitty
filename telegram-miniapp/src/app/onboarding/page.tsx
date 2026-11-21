@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { PlatformBridge } from '@/lib/platform';
-import { hasAffiliateIntent } from '@/lib/affiliateIntent';
 import { BunzyVideoStage } from '@/components/onboarding/BunzyVideoStage';
 import { DevLoginBypass } from '@/features/auth/DevLoginBypass';
 
@@ -109,8 +108,6 @@ export default function OnboardingPage() {
     if (!user) return;
     if (!user.firstName) {
       router.replace('/signup?setup=1');
-    } else if (hasAffiliateIntent()) {
-      router.replace('/business');
     } else if (user.role === 'AFFILIATE') {
       router.replace('/business');
     } else {
@@ -129,10 +126,6 @@ export default function OnboardingPage() {
 
   const finish = async () => {
     await PlatformBridge.hapticFeedback('success');
-    if (hasAffiliateIntent()) {
-      router.replace('/business');
-      return;
-    }
     router.replace('/?ritual=1');
   };
 

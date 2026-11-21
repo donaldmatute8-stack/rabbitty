@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { PlatformBridge } from '@/lib/platform';
 import { useAuth } from '@/features/auth/AuthProvider';
 
-import { hasAffiliateIntent } from '@/lib/affiliateIntent';
 export default function SignupPage() {
   const router = useRouter();
   const { user, loading: authLoading, checkAuth } = useAuth();
@@ -119,7 +118,7 @@ export default function SignupPage() {
         await PlatformBridge.hapticFeedback('success');
         await checkAuth();
         // El welcome ritual se muestra al entrar por primera vez tras el setup.
-        router.replace(hasAffiliateIntent() ? '/business' : '/?ritual=1');
+        router.replace('/?ritual=1');
       } else {
         setError(data.error);
         if (res.status === 409 || res.status === 400) setStep(2);

@@ -30,7 +30,7 @@ export function BusinessSignupUnavailable({
   const body =
     variant === 'load-failed'
       ? 'Revisa tu conexión y vuelve a intentarlo. Tu negocio y tu panel siguen intactos.'
-      : 'Aquí no se crean cuentas de negocio. Si ya operas uno, entra con la cuenta con la que lo registraste y verás tu panel.';
+      : 'Esta sección es para negocios que ya operan en Rabbitty. Entra con tu cuenta de negocio y verás tu panel.';
 
   return (
     <div

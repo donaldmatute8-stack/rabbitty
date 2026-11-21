@@ -1,6 +1,6 @@
 import { z } from "zod";
 import crypto from "crypto";
-import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { router, protectedProcedure, adminOnlyProcedure, publicProcedure, posPermissionsOf, resolvePosRole } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { stations } from "@rabbitty/database-restaurant/schema";
@@ -147,6 +147,81 @@ async function resolveScope(ctx: { restaurantDb: any; branchId: string }) {
 export const posTerminalsRouter = router({
   /** ¿Está habilitado el modelo de terminal? (el POS decide si lo usa) */
   featureEnabled: publicProcedure.query(async () => ({ enabled: featureEnabled() })),
+
+  /**
+   * ── Diagnóstico de la sucursal (soporte / monitoreo) ──
+   * Responde en segundos por qué un POS no abre: flag, sucursal, terminales
+   * vencidas/revocadas, staff sin PIN o turnos. Sin Sentry.
+   */
+  diagnose: adminOnlyProcedure.query(async ({ ctx }) => {
+    const scope = await resolveScope(ctx);
+    const [branch] = await ctx.restaurantDb
+      .select({ id: branches.id, name: branches.name, isActive: branches.isActive })
+      .from(branches)
+      .where(eq(branches.id, scope.branchId))
+      .limit(1);
+
+    const terminals = await ctx.coreDb
+      .select({
+        id: posTerminals.id,
+        name: posTerminals.name,
+        status: posTerminals.status,
+        expiresAt: posTerminals.expiresAt,
+        kind: posTerminals.kind,
+        registerId: posTerminals.registerId,
+      })
+      .from(posTerminals)
+      .where(eq(posTerminals.branchId, scope.branchId));
+
+    const staffWithPin = await ctx.restaurantDb
+      .select({ id: staffTable.id })
+      .from(staffTable)
+      .where(and(
+        eq(staffTable.branchId, scope.branchId),
+        eq(staffTable.isActive, true),
+        isNotNull(staffTable.pinCode),
+      ));
+
+    const terminalIds = terminals.map((t) => t.id);
+    const activeOperators = terminalIds.length
+      ? await ctx.coreDb
+          .select({ id: posOperatorSessions.id })
+          .from(posOperatorSessions)
+          .where(and(
+            inArray(posOperatorSessions.terminalId, terminalIds),
+            isNull(posOperatorSessions.endedAt),
+            gt(posOperatorSessions.expiresAt, new Date()),
+          ))
+      : [];
+
+    const now = Date.now();
+    const usable = terminals.filter(
+      (t) => t.status === "ACTIVE" && (!t.expiresAt || new Date(t.expiresAt).getTime() > now),
+    );
+
+    const issues: string[] = [];
+    if (!featureEnabled()) issues.push("El modo terminal está apagado (POS_TERMINAL_SESSIONS != 1).");
+    if (!branch) issues.push("La sucursal no existe.");
+    else if (!branch.isActive) issues.push("La sucursal está inactiva/archivada.");
+    if (terminals.length === 0) issues.push("No hay terminales vinculadas en esta sucursal.");
+    else if (usable.length === 0) issues.push("Todas las terminales están vencidas o revocadas.");
+    if (staffWithPin.length === 0) issues.push("No hay empleados activos con PIN en esta sucursal.");
+
+    return {
+      ok: issues.length === 0,
+      branchId: scope.branchId,
+      branchName: branch?.name ?? null,
+      branchActive: branch?.isActive ?? false,
+      featureEnabled: featureEnabled(),
+      terminals: terminals.map((t) => ({
+        ...t,
+        usable: t.status === "ACTIVE" && (!t.expiresAt || new Date(t.expiresAt).getTime() > now),
+      })),
+      staffWithPin: staffWithPin.length,
+      activeOperators: activeOperators.length,
+      issues,
+    };
+  }),
 
   /**
    * ── Contexto del POS (Fase 2) ──

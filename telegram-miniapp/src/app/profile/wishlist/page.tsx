@@ -77,7 +77,10 @@ export default function WishlistPage() {
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState<Wishlist | null>(null);
   const [items, setItems] = useState<WishItem[]>([]);
-  const [circle, setCircle] = useState<CircleItem[]>([]);
+  const [circle, setCircle] = useState<CircleItem[]>([]);  // App Store 3.1.1: el regalo con pago (Stripe) no se ofrece en iOS;
+  // el afiliado puede 'apuntarse' y pagar en el negocio.
+  const isIOS = typeof window !== 'undefined' && PlatformBridge.isIos();
+
   const [giftsReceived, setGiftsReceived] = useState<GiftRow[]>([]);
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [sharedGroupIds, setSharedGroupIds] = useState<string[]>([]);
@@ -458,7 +461,7 @@ export default function WishlistPage() {
                     >
                       {item.iPledged ? <><Check size={13} /> Ya me apunté</> : <><Gift size={13} /> Me apunto</>}
                     </button>
-                    {item.priceSnapshot != null && Number(item.priceSnapshot) > 0 && (
+                    {!isIOS && item.priceSnapshot != null && Number(item.priceSnapshot) > 0 && (
                       <button
                         type="button"
                         onClick={() => giftWithPayment(item)}

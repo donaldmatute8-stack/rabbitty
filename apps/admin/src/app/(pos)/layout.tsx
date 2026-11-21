@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { trpc } from "../../lib/trpc-client";
 import { initAppLifecycleHandlers } from "../../lib/print-engine";
-import { getPosTerminalInfo, getPosTerminalToken, hasPosDeviceKey } from "../../lib/pos-terminal";
+import { clearPosTerminal, getPosTerminalInfo, getPosTerminalToken, hasPosDeviceKey } from "../../lib/pos-terminal";
 import { PosShiftGate } from "../../components/PosShiftGate";
 import { PosReauthPanel } from "../../components/PosReauthPanel";
 import { EnableNotificationsBanner } from "../../components/EnableNotificationsBanner";
@@ -153,12 +153,22 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             </button>
             <button
               type="button"
-              onClick={() => router.replace("/login")}
+              onClick={() => router.replace("/login?next=/pos")}
               className="flex-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 px-4 py-2.5 text-xs font-black cursor-pointer"
             >
               Entrar como admin
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              clearPosTerminal();
+              window.location.assign("/login?next=/pos");
+            }}
+            className="w-full rounded-xl border border-white/10 bg-transparent px-4 py-2 text-[11px] font-bold text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
+          >
+            Desvincular esta terminal y usar mi cuenta
+          </button>
         </div>
       </div>
     );
@@ -173,8 +183,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             {error.message || "La sesión no tiene una sucursal asignada."}
           </p>
           <p className="text-xs text-gray-500 m-0">
-            Tu sesión sigue activa. Elige una sucursal en el admin y vuelve a entrar; no necesitas capturar tus
-            credenciales de nuevo.
+            Si no tienes sucursal asignada, inicia sesión de nuevo con la cuenta del negocio o pide que te asignen una.
           </p>
           <div className="flex gap-2 pt-1">
             <button
@@ -186,11 +195,32 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             </button>
             <button
               type="button"
-              onClick={() => window.location.assign("/")}
+              onClick={() => router.replace("/login?next=/pos")}
               className="flex-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-gray-950 px-4 py-2.5 text-xs font-black cursor-pointer"
+            >
+              Iniciar sesión
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => window.location.assign("/")}
+              className="flex-1 rounded-xl border border-white/10 bg-transparent px-4 py-2 text-[11px] font-bold text-gray-300 hover:bg-white/5 cursor-pointer"
             >
               Ir al admin
             </button>
+            {hasTerminalToken && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearPosTerminal();
+                  window.location.assign("/login?next=/pos");
+                }}
+                className="flex-1 rounded-xl border border-white/10 bg-transparent px-4 py-2 text-[11px] font-bold text-gray-400 hover:text-white hover:bg-white/5 cursor-pointer"
+              >
+                Desvincular terminal
+              </button>
+            )}
           </div>
         </div>
       </div>

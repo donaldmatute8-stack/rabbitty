@@ -825,6 +825,24 @@ export default function ChatRoomPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef<string | null>(null);
+  // Bloqueo persistente (App Store 1.2): se lee del servidor, no de un estado
+  // local que se perdía al recargar.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await PlatformBridge.getAuthHeaders();
+        const res = await fetch('/api/chat/blocks', { headers, cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (alive && data?.success) {
+          setTargetBlocked((data.blockedIds ?? []).includes(String(targetId)));
+        }
+      } catch {
+        /* sin red: se conserva el estado actual */
+      }
+    })();
+    return () => { alive = false; };
+  }, [targetId]);
   const otherTypingAtRef = useRef<string | null>(null);
   const typingCooldownRef = useRef(0);
   const tempCounterRef = useRef(0);
@@ -1631,14 +1649,24 @@ export default function ChatRoomPage() {
     }
   };
 
-  const reportMessage = (msg: Message) => {
-    try {
-      navigator.clipboard?.writeText(msg.content);
-    } catch {
-      // silencioso
-    }
+  const reportMessage = async (msg: Message) => {
     setContextMsg(null);
-    router.push('/chat/bot?prefill=' + encodeURIComponent(`Reportar mensaje: ${msg.content.slice(0, 160)}`));
+    try {
+      const headers = await PlatformBridge.getAuthHeaders();
+      const res = await fetch('/api/chat/report', {
+        method: 'POST',
+        headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId: conversationIdRef.current,
+          messageId: msg.id,
+          reason: 'Reporte de mensaje',
+        }),
+      });
+      if (!res.ok) throw new Error('report failed');
+      showToast('Reportado. Gracias, el equipo lo revisará.', 'success');
+    } catch {
+      showToast('No se pudo reportar. Intenta de nuevo.', 'error');
+    }
   };
 
   const pickRecorderMime = (): string => {
@@ -3155,13 +3183,27 @@ export default function ChatRoomPage() {
               <span style={{ fontSize: 11, fontWeight: 700 }}>search</span>
             </button>
 
-            {/* Block */}
+            {/* Block — solo personas; un negocio/soporte no se bloquea */}
+            {targetRole !== 'AFFILIATE' && targetRole !== 'SUPPORT' && !isBot && (
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 PlatformBridge.hapticFeedback('warning');
-                setTargetBlocked(b => !b);
-                showToast(targetBlocked ? 'Usuario desbloqueado' : 'Usuario bloqueado', targetBlocked ? 'success' : 'error');
+                const next = !targetBlocked;
+                try {
+                  const headers = await PlatformBridge.getAuthHeaders();
+                  const res = await fetch('/api/chat/block', {
+                    method: 'POST',
+                    headers: { ...(headers || {}), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: String(targetId), blocked: next }),
+                  });
+                  const data = await res.json().catch(() => null);
+                  if (!res.ok || data?.success === false) throw new Error(data?.error || 'block failed');
+                  setTargetBlocked(next);
+                  showToast(next ? 'Usuario bloqueado' : 'Usuario desbloqueado', next ? 'error' : 'success');
+                } catch {
+                  showToast('No se pudo actualizar el bloqueo', 'error');
+                }
               }}
               className="active:scale-95 transition-transform"
               style={{
@@ -3181,6 +3223,7 @@ export default function ChatRoomPage() {
               <Ban size={20} />
               <span style={{ fontSize: 11, fontWeight: 700 }}>{targetBlocked ? 'unblock' : 'block'}</span>
             </button>
+            )}
 
             {/* More */}
             <button

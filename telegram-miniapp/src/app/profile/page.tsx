@@ -48,7 +48,9 @@ const ACCOUNT_ITEMS = [
 ];
 
 const COMMUNITY_ITEMS = [
-  { icon: Store, label: 'Afiliados', desc: 'Comercios cerca de ti', href: '/business' },
+  // "Afiliados" es un DIRECTORIO de comercios para el consumidor, no el alta
+  // de negocio. Antes apuntaba a /business y App Store lo leyó como registro B2B.
+  { icon: Store, label: 'Lugares', desc: 'Comercios cerca de ti', href: '/map' },
   { icon: Users, label: 'Invitar amigos', desc: 'Gana Bunz por referido', href: '/referral' },
   { icon: Trophy, label: 'Logros y Misiones', desc: 'Insignias y niveles', href: '/profile/gamification' },
 ];
@@ -101,6 +103,9 @@ export default function ProfilePage() {
   const lastTapTimeRef = useRef(0);
 
   const handleAvatarTap = async () => {
+    // App Store 2.3.1: el binario iOS no debe tener gestos ocultos. La consola
+    // de equipo vive en el admin web; en iOS el avatar no abre nada.
+    if (typeof window !== 'undefined' && PlatformBridge.isIos()) return;
     const now = Date.now();
     if (now - lastTapTimeRef.current > 3000) {
       tapCountRef.current = 1;

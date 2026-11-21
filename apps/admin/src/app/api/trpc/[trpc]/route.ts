@@ -47,15 +47,39 @@ const handler = async (req: Request) => {
       let staffRole: "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN" | null = null;
       let staffBranchId = null;
 
-      if (session?.user?.email) {
+      if (session?.user?.email || session?.user?.id) {
         // Columnas explícitas a propósito: esto corre en CADA request. Un
         // `select()` traía la fila completa de `staff`, así que cualquier
         // columna nueva (p. ej. hourlyRate) cuya migración no llegara a
         // producción tumbaba el admin y el POS enteros (incidente 2026-11-16).
-        const [staffRecord] = await restaurantDb
-          .select({ role: staff.role, branchId: staff.branchId })
-          .from(staff)
-          .where(and(eq(staff.email, session.user.email), eq(staff.isActive, true)));
+        //
+        // Doble llave: el login puede traer un correo distinto al del staff
+        // (p. ej. adminAuthUsers vs staff.email) pero el `userId` sí coincide.
+        // Sin esto, la sesión quedaba "sin sucursal" y el POS moría.
+        const staffSelect = {
+          role: staff.role,
+          branchId: staff.branchId,
+          branchName: branches.name,
+        };
+        let staffRows = session.user.email
+          ? await restaurantDb
+              .select(staffSelect)
+              .from(staff)
+              .leftJoin(branches, eq(branches.id, staff.branchId))
+              .where(and(eq(staff.email, session.user.email), eq(staff.isActive, true)))
+          : [];
+        if (staffRows.length === 0 && session.user.id) {
+          staffRows = await restaurantDb
+            .select(staffSelect)
+            .from(staff)
+            .leftJoin(branches, eq(branches.id, staff.branchId))
+            .where(and(eq(staff.userId, session.user.id), eq(staff.isActive, true)));
+        }
+        // Si el staff tiene fila en producción y en sandbox, SIEMPRE se elige
+        // la de producción: caer en la de entrenamiento parecía "sin datos".
+        const staffRecord =
+          staffRows.find((r) => r.branchName && !/sandbox|entrenamiento|prueba|test/i.test(r.branchName)) ??
+          staffRows[0];
         if (staffRecord) {
           staffRole = staffRecord.role as "WAITER" | "CASHIER" | "KITCHEN" | "MANAGER" | "ADMIN" | null;
           staffBranchId = staffRecord.branchId;
@@ -110,13 +134,16 @@ const handler = async (req: Request) => {
         }
       }
 
-      if (session?.user?.email) {
-        // Mapear adminAuthUsers.email a core users.id para enlazar la propiedad de negocios y saldo de Bunz
-        const [coreUser] = await coreDb
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.email, session.user.email))
-          .limit(1);
+      if (session?.user?.email || session?.user?.id) {
+        // Mapear adminAuthUsers.email a core users.id para enlazar la propiedad
+        // de negocios y saldo de Bunz. Si el correo no existe en core (p. ej.
+        // login de staff con otro correo), se intenta por id de sesión.
+        let coreUser = session.user.email
+          ? (await coreDb.select({ id: users.id }).from(users).where(eq(users.email, session.user.email)).limit(1))[0]
+          : undefined;
+        if (!coreUser && session.user.id) {
+          coreUser = (await coreDb.select({ id: users.id }).from(users).where(eq(users.id, session.user.id)).limit(1))[0];
+        }
         if (coreUser) {
           effectiveUserId = coreUser.id;
         }
@@ -192,6 +219,16 @@ const handler = async (req: Request) => {
       ]);
       const isPublicPosPath = PUBLIC_POS_PATHS.has(reqPath);
       if (!impersonating && !activeBranchId && !isPublicPaymentPath && !isPublicPosPath) {
+        // Si no hay NINGÚN tenant (ni usuario/staff/terminal), la sesión no
+        // sirve: se manda a login en vez de dejar un error de negocio sin
+        // salida (era el "me sacó y no puedo volver a entrar").
+        const hasTenant = Boolean(effectiveUserId || staffRole || posTerminal);
+        if (!hasTenant) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Tu sesión no tiene un negocio asignado. Inicia sesión de nuevo.",
+          });
+        }
         throw new TRPCError({ code: "FORBIDDEN", message: "Sin sucursal asignada para esta sesión" });
       }
 

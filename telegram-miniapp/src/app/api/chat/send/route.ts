@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { messages, conversations, ownedBusinesses, notificationsOutbox, conversationMembers, conversationKeys } from '@/db/schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { messages, conversations, ownedBusinesses, notificationsOutbox, conversationMembers, conversationKeys, userBlocks } from '@/db/schema';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import {
   getOwnedBusinessIds,
@@ -147,6 +147,32 @@ export async function POST(req: Request) {
 
     const hasCoords = typeof body.lat === 'number' && typeof body.lng === 'number';
     const isLocation = body.type === 'LOCATION' && hasCoords;
+
+    // ── Bloqueo persistente (App Store 1.2): si cualquiera bloqueó al otro,
+    // no se permiten mensajes. Antes era solo un estado visual del cliente.
+    if (!['bot', 'bunzy', 'support'].includes(otherId)) {
+      const [biz] = await db
+        .select({ id: ownedBusinesses.id })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, otherId))
+        .limit(1);
+      if (!biz) {
+        const [block] = await db
+          .select({ id: userBlocks.id })
+          .from(userBlocks)
+          .where(or(
+            and(eq(userBlocks.blockerId, otherId), eq(userBlocks.blockedId, caller.id)),
+            and(eq(userBlocks.blockerId, caller.id), eq(userBlocks.blockedId, otherId)),
+          ))
+          .limit(1);
+        if (block) {
+          return NextResponse.json(
+            { error: 'No puedes enviar mensajes a este usuario. Desbloquéalo para continuar.' },
+            { status: 403 },
+          );
+        }
+      }
+    }
 
     // userId REAL del destinatario para el outbox (el worker NOTIFICA a users).
     // El par puede ser businessId ⇒ el userId es el ownerId.
