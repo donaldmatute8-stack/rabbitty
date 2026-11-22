@@ -48,6 +48,7 @@ import { bunzyRouter } from "./bunzy";
 import { bunzyConnectRouter } from "./bunzyConnect";
 import { updatesRouter } from "./updates";
 import { godRouter } from "./god";
+import { uberEatsRouter } from "./uberEats";
 import { ratingsRouter } from "./ratings";
 import "../services/queue";
 
@@ -101,6 +102,7 @@ export const appRouter = router({
   bunzyConnect: bunzyConnectRouter,
   updates: updatesRouter,
   god: godRouter,
+  uberEats: uberEatsRouter,
   ratings: ratingsRouter,
 });
 

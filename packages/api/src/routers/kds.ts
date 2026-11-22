@@ -127,6 +127,7 @@ async function loadKdsQueue(
       .select({
         id: orderItems.id,
         menuItemId: orderItems.menuItemId,
+        nameSnapshot: orderItems.nameSnapshot,
         quantity: orderItems.quantity,
         status: orderItems.status,
         notes: orderItems.notes,
@@ -150,7 +151,13 @@ async function loadKdsQueue(
 
     const itemsWithNames = await Promise.all(visible.map(async (item: any) => {
       const [menuItem] = await ctx.restaurantDb.select().from(menuItems).where(eq(menuItems.id, item.menuItemId));
-      return { ...item, name: menuItem?.name ?? item.menuItemId, kind: menuItem?.kind ?? "DISH" };
+      // Pedidos de marketplace: el platillo puede no existir en nuestro menú, así
+      // que manda el nombre que congelamos al crear el renglón.
+      return {
+        ...item,
+        name: menuItem?.name ?? item.nameSnapshot ?? item.menuItemId,
+        kind: menuItem?.kind ?? "DISH",
+      };
     }));
 
     // Los productos de tienda (kind = PRODUCT) no pasan por cocina: no hay nada

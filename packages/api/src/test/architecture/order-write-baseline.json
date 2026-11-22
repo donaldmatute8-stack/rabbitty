@@ -136,6 +136,11 @@
       "count": 2,
       "category": "PROTECTED",
       "importsHelper": true
+    },
+    "packages/api/src/services/aggregatorOrders.ts": {
+      "count": 2,
+      "category": "PROTECTED",
+      "importsHelper": true
     }
   },
   "pendingFiles": [

@@ -286,6 +286,11 @@ export const orders = pgTable("orders", {
   externalProvider: text("externalProvider"),
   /** Id de la orden/entrega en el proveedor externo. */
   externalId: text("externalId"),
+  /**
+   * Canal comercial: POS, APP, UBER_EATS, UBER_DIRECT, RAPPI…
+   * Un pedido de marketplace viene PREPAGADO: no se vuelve a cobrar en caja.
+   */
+  channel: text("channel"),
   /** ETA efectivo que ve el cliente (cocina mientras no hay entrega; luego el del proveedor). */
   etaMinutes: integer("etaMinutes"),
   etaAt: timestamp("etaAt"),
@@ -386,6 +391,12 @@ export const orderItems = pgTable("order_items", {
   voidReason: text("voidReason"),
   voidedAt: timestamp("voidedAt"),
   authorizedById: fkIdOpt("authorizedById").references(() => staff.id),
+  /**
+   * Nombre del platillo congelado al crear el renglón. Los pedidos de
+   * marketplace pueden no existir en nuestro menú: sin esto, cocina y ticket
+   * mostraban el UUID del item placeholder.
+   */
+  nameSnapshot: text("nameSnapshot"),
 });
 
 export const payments = pgTable("payments", {
@@ -1294,4 +1305,53 @@ export const providerFees = pgTable("provider_fees", {
   createdAt: timestamp("createdAt").defaultNow(),
 }, (t) => [
   index("provider_fees_lookup_idx").on(t.provider, t.scope, t.scopeId),
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKETPLACES / AGREGADORES (Uber Eats) — migración 0032
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Conexión de una sucursal con un marketplace. `storeId` es el id en el proveedor. */
+export const aggregatorConnections = pgTable("aggregator_connections", {
+  id: id(),
+  provider: text("provider").notNull(),
+  branchId: fkId("branchId").references(() => branches.id, { onDelete: "cascade" }),
+  storeId: text("storeId"),
+  /** PENDING (sin credenciales/aprobación) · CONNECTED · DISABLED */
+  status: text("status").default("PENDING").notNull(),
+  autoAccept: boolean("autoAccept").default(false).notNull(),
+  menuSyncEnabled: boolean("menuSyncEnabled").default(true).notNull(),
+  /** PLATFORM = repartidor de Uber · BYOC = repartidor del negocio */
+  deliveryMode: text("deliveryMode").default("PLATFORM").notNull(),
+  lastSyncAt: timestamp("lastSyncAt"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("aggregator_connections_provider_branch_uidx").on(t.provider, t.branchId),
+]);
+
+/** Mapeo catálogo del marketplace ↔ menú Rabbitty. */
+export const aggregatorMenuMap = pgTable("aggregator_menu_map", {
+  id: id(),
+  connectionId: fkId("connectionId").references(() => aggregatorConnections.id, { onDelete: "cascade" }),
+  providerItemId: text("providerItemId").notNull(),
+  providerName: text("providerName"),
+  menuItemId: fkIdOpt("menuItemId").references(() => menuItems.id, { onDelete: "set null" }),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("aggregator_menu_map_uidx").on(t.connectionId, t.providerItemId),
+]);
+
+/** Bitácora de webhooks: idempotencia, auditoría y reintentos. */
+export const aggregatorWebhookEvents = pgTable("aggregator_webhook_events", {
+  id: id(),
+  provider: text("provider").notNull(),
+  eventType: text("eventType"),
+  externalId: text("externalId"),
+  storeId: text("storeId"),
+  payload: jsonb("payload"),
+  processed: boolean("processed").default(false).notNull(),
+  error: text("error"),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("aggregator_webhook_events_uidx").on(t.provider, t.eventType, t.externalId),
 ]);

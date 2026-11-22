@@ -754,6 +754,7 @@ export const posRouter = router({
 
     const openRows = await ctx.restaurantDb.execute(sql`
       SELECT o.id, o."tableId", o.status, o."orderType", o."customerName", o.total, o."createdAt",
+             o."channel", o."externalProvider",
              t.number AS "tableNumber", t."location" AS "tableLocation",
              COALESCE((SELECT SUM(oi.quantity)::int FROM "order_items" oi WHERE oi."orderId" = o.id), 0) AS "itemsCount"
       FROM "orders" o
@@ -780,6 +781,7 @@ export const posRouter = router({
         tableLocation: (r.tableLocation ?? null) as string | null,
         status: r.status as string,
         orderType: r.orderType as string | null,
+        channel: (r.channel ?? r.externalProvider ?? null) as string | null,
         customerName: (r.customerName ?? null) as string | null,
         total: Number(r.total ?? 0),
         createdAt: r.createdAt as string,
@@ -2680,7 +2682,11 @@ export const posRouter = router({
       let order: typeof orders.$inferSelect;
       if (input.existingOrderId) {
         const [reusedOrder] = await ctx.restaurantDb
-          .select({ status: orders.status })
+          .select({
+            status: orders.status,
+            channel: orders.channel,
+            externalProvider: orders.externalProvider,
+          })
           .from(orders)
           .where(and(eq(orders.id, input.existingOrderId), eq(orders.branchId, ctx.branchId)))
           .limit(1);
@@ -2690,6 +2696,16 @@ export const posRouter = router({
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "La comanda abierta del cliente ya no está disponible. Vuelve a vincularlo.",
+          });
+        }
+        // Un pedido de marketplace YA lo cobró la plataforma. Cobrarlo aquí
+        // sería un doble cobro al cliente: se bloquea en el servidor, no solo
+        // en la pantalla.
+        const marketplaceChannel = reusedOrder.channel ?? reusedOrder.externalProvider;
+        if (marketplaceChannel && marketplaceChannel !== "UBER_DIRECT") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Pedido prepagado por ${marketplaceChannel}: no se cobra en caja, solo se prepara y entrega.`,
           });
         }
         if (!isOrderPayableStatus(reusedOrder.status)) {
@@ -3955,6 +3971,8 @@ export const posRouter = router({
         tableNumber: table?.number ?? null,
         tableLocation: table?.location ?? null,
         orderType: ord.orderType,
+        /** Canal comercial: UBER_EATS, APP, POS… (los de marketplace vienen prepagados). */
+        channel: (ord as any).channel ?? (ord as any).externalProvider ?? null,
         status: ord.status,
         cashRequested: isCashPaymentRequested(ord.status),
         /** El mesero pidió la cuenta desde el comandero (ADR-025). */

@@ -5921,6 +5921,19 @@ export default function PosPage() {
                     </div>
                   )}
 
+                  {/* Origen: un pedido de marketplace viene prepagado */}
+                  {tab.channel && tab.channel !== 'POS' && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-emerald-300">
+                        {tab.channel === 'UBER_EATS' ? 'Uber Eats' : String(tab.channel).replace(/_/g, ' ')}
+                        {tab.status === 'PAID' ? ' · pagado' : ''}
+                      </span>
+                      {tab.channel === 'UBER_EATS' && (
+                        <span className="text-[10px] font-bold text-gray-400">No cobrar: lo pagó el marketplace</span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Tipo de pedido: en local / recoger / domicilio */}
                   {tab.fromApp && (
                     <div className="flex flex-wrap items-center gap-2 pt-2">
