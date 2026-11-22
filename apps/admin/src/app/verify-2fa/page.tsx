@@ -4,6 +4,13 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { ShieldCheck, Lock, ArrowRight, Fingerprint, Loader2 } from "lucide-react";
 import { Button, Input, cn } from "@rabbitty/ui";
+import {
+  getNativeBiometrics,
+  hasDeviceToken,
+  nativeBiometricsAvailable,
+  readDeviceTokenWithBiometrics,
+  storeDeviceToken,
+} from "@/lib/native-biometrics";
 
 export default function Verify2FAPage() {
   const [code, setCode] = useState("");
@@ -14,6 +21,14 @@ export default function Verify2FAPage() {
   // El WebView nativo de Mac (WKWebView) no expone WebAuthn. Touch ID del Mac
   // sólo funciona en Safari/Chrome o en el iPhone; aquí usamos TOTP.
   const [supportsWebAuthn, setSupportsWebAuthn] = useState(false);
+  // Puente nativo (build 1.4+): si el binario lo trae y el dispositivo tiene
+  // biometría, se puede entrar con Touch ID/Face ID sin teclear el código.
+  const [nativeBio, setNativeBio] = useState<{ available: boolean; biometryType: string }>({
+    available: false,
+    biometryType: "none",
+  });
+  const [hasStoredToken, setHasStoredToken] = useState(false);
+  const [bioLoading, setBioLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const b64 = (bytes: Uint8Array) => {
@@ -28,6 +43,14 @@ export default function Verify2FAPage() {
       Boolean(window.PublicKeyCredential) &&
       Boolean(navigator.credentials?.get),
     );
+
+    void (async () => {
+      const bio = await nativeBiometricsAvailable();
+      setNativeBio(bio);
+      if (bio.available && getNativeBiometrics()) {
+        setHasStoredToken(await hasDeviceToken());
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -57,6 +80,20 @@ export default function Verify2FAPage() {
       });
       const data = await res.json();
       if (data.success) {
+        // Si el binario trae el puente nativo, guardamos un token de dispositivo
+        // en el Keychain: la próxima entrada se resuelve con Touch ID/Face ID.
+        try {
+          if (nativeBio.available && getNativeBiometrics()) {
+            const enrolled = await fetch("/api/auth/2fa/device", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "enroll" }),
+            }).then((r) => r.json());
+            if (enrolled?.success && enrolled?.token) await storeDeviceToken(enrolled.token);
+          }
+        } catch {
+          /* sin puente nativo: TOTP manda */
+        }
         window.location.href = "/";
         return;
       }
@@ -175,7 +212,47 @@ export default function Verify2FAPage() {
             <div className="h-px flex-1 bg-white/10" />
           </div>
 
-          {supportsWebAuthn ? (
+          {nativeBio.available && hasStoredToken ? (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                setBioLoading(true);
+                setError("");
+                try {
+                  const token = await readDeviceTokenWithBiometrics();
+                  if (!token) {
+                    setError("No se pudo validar la biometría. Usa el código de 6 dígitos.");
+                    return;
+                  }
+                  const res = await fetch("/api/auth/2fa/device", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "redeem", token }),
+                  }).then((r) => r.json());
+                  if (res?.success) {
+                    window.location.href = "/";
+                    return;
+                  }
+                  setError(res?.error || "Token inválido. Usa el código de 6 dígitos.");
+                } catch {
+                  setError("Error de biometría. Usa el código de 6 dígitos.");
+                } finally {
+                  setBioLoading(false);
+                }
+              }}
+              disabled={bioLoading}
+              className={cn(
+                "w-full h-11 rounded-xl bg-white/5 border border-white/10 font-bold text-gray-200 hover:bg-white/10 cursor-pointer disabled:opacity-40"
+              )}
+            >
+              {bioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Fingerprint className="h-4 w-4 mr-1 text-cyan-400" />}
+              {bioLoading
+                ? "Esperando biometría…"
+                : nativeBio.biometryType === "face"
+                  ? "Entrar con Face ID"
+                  : "Entrar con Touch ID"}
+            </Button>
+          ) : supportsWebAuthn ? (
             <Button
               variant="secondary"
               onClick={unlockWithPasskey}
