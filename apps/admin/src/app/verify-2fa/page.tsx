@@ -188,10 +188,13 @@ export default function Verify2FAPage() {
               {passkeyLoading ? "Esperando biometría..." : "Usar Face ID / Touch ID (passkey)"}
             </Button>
           ) : (
-            <p className="m-0 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-center text-[11px] font-bold text-amber-300">
+            <div className="m-0 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-center text-[11px] font-bold text-amber-300">
               Esta app nativa no expone biometría web. Usa el código de 6 dígitos
               de tu app de autenticación.
-            </p>
+              <a href="/biometric-check" className="mt-1 block text-[10px] text-cyan-300 underline">
+                Ver diagnóstico del WebView
+              </a>
+            </div>
           )}
 
           {status && !status.totpConfigured && (

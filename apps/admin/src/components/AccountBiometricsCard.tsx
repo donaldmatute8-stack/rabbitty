@@ -112,6 +112,9 @@ export function AccountBiometricsCard() {
         <div>
           <h3 className="text-base font-black text-white m-0">Biometría</h3>
           <p className="text-xs text-gray-400 m-0">Face ID, Touch ID o huella para entrar sin contraseña.</p>
+          <a href="/biometric-check" className="text-[10px] font-bold text-cyan-400 underline">
+            Ver diagnóstico del dispositivo
+          </a>
         </div>
       </div>
 
