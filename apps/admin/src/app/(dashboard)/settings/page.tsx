@@ -983,6 +983,9 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-gray-400">Protege tu cuenta con un segundo factor usando Google Authenticator, Authy o cualquier app compatible con TOTP.</p>
+          <a href="/biometric-check" className="text-[11px] font-bold text-cyan-400 underline">
+            Ver qué biometría expone este dispositivo
+          </a>
                   <Button onClick={handleSetupTotp} disabled={generateTotp.isPending}><QrCode className="h-4 w-4" />Configurar 2FA</Button>
                 </div>
               )}

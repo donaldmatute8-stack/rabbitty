@@ -160,13 +160,18 @@ export default function AdminPage() {
                 </p>
               </div>
             </div>
-            <Link
-              href="/settings?tab=security"
-              className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black px-4 py-2.5 text-xs transition-all shrink-0 active:scale-95"
-            >
-              Activar Face ID
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <Link
+                href="/settings?tab=security"
+                className="flex items-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black px-4 py-2.5 text-xs transition-all active:scale-95"
+              >
+                Activar Face ID
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link href="/biometric-check" className="text-[10px] font-bold text-cyan-300 underline">
+                ¿No aparece? Ver diagnóstico
+              </Link>
+            </div>
           </div>
         </div>
       )}
