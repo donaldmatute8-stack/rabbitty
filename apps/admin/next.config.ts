@@ -42,6 +42,22 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // El HTML de /pos se servía con s-maxage=31536000 (cache de 1 año).
+        // Eso dejaba iPads corriendo un bundle viejo durante días: el botón de
+        // Ayuda seguía abriendo el admin en Safari aunque el código ya estuviera
+        // corregido. Estas rutas deben revalidar SIEMPRE.
+        source: "/pos",
+        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, max-age=0, must-revalidate" }],
+      },
+      {
+        source: "/pos/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, max-age=0, must-revalidate" }],
+      },
+      {
+        source: "/comandero",
+        headers: [{ key: "Cache-Control", value: "private, no-cache, no-store, max-age=0, must-revalidate" }],
+      },
     ];
   },
 };

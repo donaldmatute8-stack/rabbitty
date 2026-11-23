@@ -14,6 +14,42 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   // ── Fase 2: ¿este dispositivo es una terminal vinculada? ──
   // El token vive en localStorage; se lee en efecto para no romper la hidratación.
+  // ── Guard de versión desplegada ──
+  // Si el HTML quedó cacheado en el WebView (iPad), la app podía seguir con un
+  // bundle viejo durante días. Al volver a primer plano comparamos el commit
+  // desplegado y recargamos UNA vez cuando cambia.
+  useEffect(() => {
+    let cancelled = false;
+    const KEY = "rabbitty_pos_build";
+    const checkBuild = async () => {
+      try {
+        const res = await fetch("/api/health", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const commit = String(data?.commit ?? "").slice(0, 12);
+        if (!commit || cancelled) return;
+        const seen = localStorage.getItem(KEY);
+        if (seen && seen !== commit) {
+          localStorage.setItem(KEY, commit);
+          window.location.reload();
+          return;
+        }
+        localStorage.setItem(KEY, commit);
+      } catch {
+        /* sin red: seguimos con lo que hay */
+      }
+    };
+    void checkBuild();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void checkBuild();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
   const [terminalToken, setTerminalToken] = useState<string | null>(null);
   const [hasDeviceKey, setHasDeviceKey] = useState(false);
   useEffect(() => {
