@@ -565,6 +565,69 @@ export default function AuditReportPage() {
           </div>
         </div>
 
+        {/* Cuadre de efectivo del turno: explica de dónde sale el número final */}
+        {report.shift && (() => {
+          const shift = report.shift as Record<string, any>;
+          const openingFloat = Number(shift.openingFloat ?? 0);
+          const cashTotal = Number(summary.paymentBreakdown["CASH"]?.total ?? 0);
+          const withdrawals = Number(summary.totalSafeWithdrawals ?? 0);
+          const expectedInDrawer = Math.round((openingFloat + cashTotal - withdrawals) * 100) / 100;
+          const counted = shift.countedCash != null ? Number(shift.countedCash) : null;
+          const difference = shift.difference != null ? Number(shift.difference) : null;
+          const surplusIfSameFloat = counted != null ? Math.round((counted - openingFloat) * 100) / 100 : null;
+          const cardTotal = Number(summary.paymentBreakdown["CREDIT_CARD"]?.total ?? 0) + Number(summary.paymentBreakdown["DEBIT_CARD"]?.total ?? 0);
+
+          return (
+            <div className="rounded-2xl p-5 bg-emerald-500/5 border border-emerald-500/20 print:bg-white print:border-gray-300 mb-8">
+              <h3 className="text-sm font-black uppercase tracking-wider text-emerald-300 print:text-emerald-800 mb-3 flex items-center gap-2">
+                <Banknote size={16} /> Cuadre de efectivo del turno
+              </h3>
+
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between py-1 border-b border-white/5 print:border-gray-200">
+                  <span className="text-gray-400 print:text-gray-600">Fondo inicial (declarado en la apertura)</span>
+                  <span className="font-bold text-white print:text-gray-900">${openingFloat.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5 print:border-gray-200">
+                  <span className="text-gray-400 print:text-gray-600">+ Ventas cobradas en efectivo</span>
+                  <span className="font-bold text-white print:text-gray-900">${cashTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5 print:border-gray-200">
+                  <span className="text-gray-400 print:text-gray-600">− Retiros / sangría a caja fuerte</span>
+                  <span className="font-bold text-amber-300 print:text-amber-700">${withdrawals.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-white/10 print:border-gray-300 font-black text-sm">
+                  <span className="text-white print:text-black">= Efectivo que debe haber en gaveta</span>
+                  <span className="text-emerald-300 print:text-emerald-800">${expectedInDrawer.toFixed(2)}</span>
+                </div>
+                {counted != null && (
+                  <div className="flex justify-between py-1">
+                    <span className="text-gray-400 print:text-gray-600">Contado declarado en el cierre</span>
+                    <span className="font-bold text-white print:text-gray-900">${counted.toFixed(2)}</span>
+                  </div>
+                )}
+                {difference != null && (
+                  <div className={`flex justify-between py-1 font-black ${Math.abs(difference) < 0.01 ? "text-emerald-400 print:text-emerald-700" : difference > 0 ? "text-cyan-300" : "text-red-400"}`}>
+                    <span>{Math.abs(difference) < 0.01 ? "Cuadrado" : difference > 0 ? "Sobrante" : "Faltante"}</span>
+                    <span>${Math.abs(difference).toFixed(2)}</span>
+                  </div>
+                )}
+                {surplusIfSameFloat != null && (
+                  <div className="flex justify-between py-1 text-[11px] text-gray-400 print:text-gray-600">
+                    <span>Si dejas el mismo fondo para mañana, sobrante</span>
+                    <span className="font-bold text-white print:text-gray-900">${surplusIfSameFloat.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="mt-3 text-[10px] text-gray-500 print:text-gray-600">
+                Tarjetas: <strong className="text-cyan-300 print:text-cyan-700">${cardTotal.toFixed(2)}</strong> ·
+                no entran en la gaveta, se cotejan contra el voucher/liquidación de la terminal bancaria.
+              </p>
+            </div>
+          );
+        })()}
+
         {/* Fiscal Breakdown & Popular Items */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Fiscal Breakdown */}
