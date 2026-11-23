@@ -27,6 +27,55 @@ const MEMBERSHIP_BENEFIT_LABEL: Record<string, string> = {
   BULK_PACK: "Bolsa de consumos",
 };
 
+/**
+ * Ayuda del POS (Bunzy limitado).
+ * Respuestas operativas fijas: no consulta caja, no cambia configuración y no
+ * otorga accesos. Si el empleado necesita algo de administración, se le dice
+ * que llame al encargado; nunca se le manda al panel.
+ */
+const POS_HELP_FAQS: Array<{ q: string; a: string }> = [
+  {
+    q: "¿Cómo abro el turno de caja?",
+    a: "Toca la tarjeta de caja en la barra superior, elige el cajero y captura su PIN de 4 dígitos. Indica el fondo con el que inicia la gaveta y confirma.",
+  },
+  {
+    q: "¿Cómo cobro en efectivo?",
+    a: "Agrega los productos, toca Cobrar, elige Efectivo, captura con cuánto paga el cliente y confirma. El ticket imprime el cambio.",
+  },
+  {
+    q: "No imprime el ticket",
+    a: "Revisa que la impresora esté encendida y vinculada (ícono Bluetooth en la barra). En iPad solo imprime la app nativa Rabbitty POS; Safari/PWA no tiene Bluetooth.",
+  },
+  {
+    q: "¿Cómo reimprimo un ticket?",
+    a: "En la barra superior toca Reimprimir, elige la orden cobrada y confirma. También puedes abrir Operación y reimprimir desde el detalle.",
+  },
+  {
+    q: "¿Cómo cierro la caja?",
+    a: "Abre la tarjeta de caja → Cerrar turno. El sistema muestra el efectivo esperado (fondo + ventas en efectivo − retiros). Captura lo que contaste; si hay diferencia, escribe la nota y pide el PIN del encargado.",
+  },
+  {
+    q: "¿Por qué la caja dice un número distinto al que conté?",
+    a: "El número incluye el fondo inicial y descuenta los retiros. Revisa la lista de movimientos del turno: ahí está cada retiro con su nota.",
+  },
+  {
+    q: "¿Puedo anular un platillo o un cobro?",
+    a: "Anular requiere el PIN de un Administrador o Gerente. Si no lo tienes, llama al encargado.",
+  },
+  {
+    q: "¿Cómo aplico una membresía?",
+    a: "Vincula al cliente (buscar por nombre o escanear su código) y toca Usar membresía. El sistema aplica el descuento o crédito y lo deja en el ticket.",
+  },
+  {
+    q: "Aparece un pedido de la app 'Por cobrar'",
+    a: "Es un pedido hecho desde la app. Puedes cobrarlo desde Operación o rechazarlo con motivo; si no lo atiendes, se marca como vencido solo.",
+  },
+  {
+    q: "Olvidé mi PIN",
+    a: "Un encargado puede asignarte uno nuevo desde el panel, en Personal & Roles. No compartas tu PIN con nadie.",
+  },
+];
+
 function membershipTicketData(pass: any, applied = false) {
   return {
     planName: pass?.planName,
@@ -603,6 +652,21 @@ export default function PosPage() {
 
   // ── Permisos por rol (servidor y UI comparten la misma matriz) ──
   const posRole = operatorStatus?.role ?? posSession?.role ?? null;
+  // Identidad discreta en el header: rol corto + primer nombre (nada de
+  // "ADMINISTRADOR" completo ni el nombre del comercio ocupando espacio).
+  const POS_ROLE_SHORT: Record<string, string> = {
+    OWNER: "Dueño",
+    ADMIN: "Admin",
+    MANAGER: "Gerente",
+    CASHIER: "Cajero",
+    WAITER: "Mesero",
+    KITCHEN: "Cocina",
+  };
+  const shortRole = POS_ROLE_SHORT[String(posRole ?? "").toUpperCase()] ?? (posRole ? String(posRole) : "");
+  const operatorFirstName = String(operatorStatus?.operator?.name ?? "")
+    .trim()
+    .split(/\s+/)[0] ?? "";
+
   const posPermissions = (operatorStatus?.permissions ?? posSession?.permissions ?? []) as PosPermission[];
   // La terminal siempre aplica la matriz; el panel admin solo con
   // POS_ROLE_ENFORCEMENT=1. Así no se ocultan botones a admins actuales.
@@ -1422,6 +1486,9 @@ export default function PosPage() {
 
   const [corteModalOpen, setCorteModalOpen] = useState(false);
   const [corteInitialMode, setCorteInitialMode] = useState<"open" | "partial" | undefined>(undefined);
+  const [posHelpOpen, setPosHelpOpen] = useState(false);
+  const [posHelpQuery, setPosHelpQuery] = useState("");
+  const [posHelpOpenItem, setPosHelpOpenItem] = useState<string | null>(null);
 
   const activeBranchId = ticketContext?.branch?.id;
   const isSandboxActive =
@@ -2400,31 +2467,21 @@ export default function PosPage() {
           </button>
 
 
-          {/* Business & Status Pill */}
-          <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 shrink-0">
-            <span className="text-xs font-black text-white">{ticketContext?.restaurant?.name || "Rabbitty POS"}</span>
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Online</span>
-            </div>
-          </div>
 
-          {/* Rol del turno: la UI y el servidor comparten la misma matriz */}
+          {/* Identidad del turno: discreta. Solo rol corto + primer nombre.
+              El detalle completo queda en el tooltip. */}
           {posRole && (
             <div
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 shrink-0"
+              className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/10 shrink-0"
               title={`Turno: ${posRoleLabel(posRole)}${operatorStatus?.operator?.name ? ` · ${operatorStatus.operator.name}` : ""}`}
             >
-              <UserRound className="h-3.5 w-3.5 text-cyan-300" />
-              <span className="text-[10px] font-black uppercase tracking-wider text-cyan-200">
-                {posRoleLabel(posRole)}
+              <UserRound className="h-3 w-3 text-gray-500" />
+              <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
+                {shortRole}
               </span>
-              {operatorStatus?.operator?.name && (
-                <span className="max-w-[120px] truncate text-[10px] font-bold text-gray-300">
-                  {operatorStatus.operator.name}
+              {operatorFirstName && (
+                <span className="max-w-[70px] truncate text-[9px] font-medium text-gray-500">
+                  · {operatorFirstName}
                 </span>
               )}
             </div>
@@ -2479,18 +2536,16 @@ export default function PosPage() {
             </button>
           </div>
 
-          {/* Ayuda: abre el mismo hilo de soporte del admin (sin Telegram) */}
+          {/* Ayuda: Bunzy limitado DENTRO del POS. Nunca manda al panel admin:
+              un empleado no debe aterrizar en la administración del negocio. */}
           <button
             type="button"
-            onClick={() => {
-              const win = window.open('/?chat=support', '_blank');
-              if (!win) window.location.assign('/?chat=support');
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/20 text-xs font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95"
-            title="Soporte Rabbitty · chat directo con el equipo"
+            onClick={() => setPosHelpOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/20 text-xs font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95"
+            title="Bunzy · ayuda del POS (sin acceso al panel)"
           >
             <LifeBuoy className="h-3.5 w-3.5 text-cyan-300" />
-            <span className="hidden xl:inline">Ayuda</span>
+            <span className="hidden sm:inline">Ayuda</span>
           </button>
 
           {/* Hardware & History */}
@@ -6532,6 +6587,58 @@ export default function PosPage() {
             >
               {sendBillMutation.isPending ? "Despachando..." : selectedRabbitter ? "📲 Enviar pago in-app" : "Despachar por WhatsApp"}
             </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── Ayuda del POS (Bunzy limitado) ── */}
+      <Dialog open={posHelpOpen} onClose={() => setPosHelpOpen(false)} title="Bunzy · Ayuda del POS" className="max-w-lg w-full">
+        <div className="space-y-3">
+          <p className="m-0 text-[11px] text-gray-400">
+            Asistente limitado: responde dudas de operación del punto de venta.
+            <strong className="text-gray-300"> No ve la caja, no cambia configuración y no da accesos.</strong>{" "}
+            Para eso, llama a tu encargado.
+          </p>
+
+          <Input
+            placeholder="Buscar: caja, ticket, impresora, membresía…"
+            value={posHelpQuery}
+            onChange={(e) => {
+              setPosHelpQuery(e.target.value);
+              setPosHelpOpenItem(null);
+            }}
+          />
+
+          <div className="max-h-[55vh] space-y-1.5 overflow-y-auto pr-1">
+            {POS_HELP_FAQS.filter((f) => {
+              const q = posHelpQuery.trim().toLowerCase();
+              if (!q) return true;
+              return f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q);
+            }).map((f) => {
+              const open = posHelpOpenItem === f.q;
+              return (
+                <button
+                  key={f.q}
+                  type="button"
+                  onClick={() => setPosHelpOpenItem(open ? null : f.q)}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-left transition-colors hover:bg-white/[0.07]"
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-[12px] font-bold text-gray-200">{f.q}</span>
+                    <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform", open && "rotate-180")} />
+                  </span>
+                  {open && <span className="mt-1 block text-[11px] leading-relaxed text-gray-400">{f.a}</span>}
+                </button>
+              );
+            })}
+            {POS_HELP_FAQS.filter((f) => {
+              const q = posHelpQuery.trim().toLowerCase();
+              return !q || f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q);
+            }).length === 0 && (
+              <p className="m-0 px-1 py-3 text-[11px] text-gray-500">
+                No tengo esa respuesta. Pídele ayuda a tu encargado o al dueño del negocio.
+              </p>
+            )}
           </div>
         </div>
       </Dialog>
