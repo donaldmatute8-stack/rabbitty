@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@rabbitty/auth";
 import { getRestaurantDb } from "@rabbitty/api/db";
 import { sql, type SQL } from "drizzle-orm";
+import { naiveUtcToIso } from "@rabbitty/api/services/time";
 import crypto from "crypto";
 
 export async function GET(req: NextRequest) {
@@ -305,10 +306,25 @@ export async function GET(req: NextRequest) {
 
     const sha256Fingerprint = crypto.createHash("sha256").update(payloadForHashing).digest("hex");
 
+    // SQL crudo entrega los timestamps sin zona; se marcan como UTC para que el
+    // navegador no los interprete como hora local (bug: ventas de la tarde
+    // aparecían 6 h en el futuro o en el día siguiente).
+    const ordersWithIso = ordersList.map((o) => ({
+      ...o,
+      order_date: naiveUtcToIso(o.order_date),
+    }));
+    const shiftWithIso = shiftInfo
+      ? {
+          ...shiftInfo,
+          openedAt: naiveUtcToIso(shiftInfo.openedAt),
+          closedAt: naiveUtcToIso(shiftInfo.closedAt),
+        }
+      : null;
+
     return NextResponse.json({
       success: true,
       business: businessInfo,
-      shift: shiftInfo,
+      shift: shiftWithIso,
       filter: {
         branchId: branchId || null,
         from: fromDate ? fromDate.toISOString() : null,
@@ -330,7 +346,7 @@ export async function GET(req: NextRequest) {
           .map(([name, data]) => ({ name, ...data }))
           .sort((a, b) => b.revenue - a.revenue),
       },
-      orders: ordersList,
+      orders: ordersWithIso,
     });
   } catch (error) {
     console.error("Audit Report API Error:", error);

@@ -10,6 +10,7 @@ import * as dbSchema from "@rabbitty/database-restaurant";
 import { bus, EventTypes } from "@rabbitty/events";
 import { withOrderMutation, withOrderCreate, withOrderRollback } from "../services/orderIntegrity";
 import { resolveStationsForItems } from "../services/stationRouting";
+import { naiveUtcToIso } from "../services/time";
 import { enqueueRealtimeEvent, stationChannel, drainRealtimeInBackground } from "../services/realtimeOutbox";
 import { resolveBusinessIdFromBranch } from "../services/businessContext";
 import { deductOrderInventory, checkStockForItems } from "../services/inventoryDeduction";
@@ -265,7 +266,7 @@ export const posRouter = router({
       out.push({
         userId: row.userId,
         name: [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.username || "Rabbitter",
-        at: row.at,
+        at: naiveUtcToIso(row.at) as string,
       });
     }
     return out;
@@ -784,7 +785,8 @@ export const posRouter = router({
         channel: (r.channel ?? r.externalProvider ?? null) as string | null,
         customerName: (r.customerName ?? null) as string | null,
         total: Number(r.total ?? 0),
-        createdAt: r.createdAt as string,
+        // SQL crudo entrega "YYYY-MM-DD HH:mm:ss" sin zona; se marca UTC.
+        createdAt: naiveUtcToIso(r.createdAt) as string,
         itemsCount: Number(r.itemsCount ?? 0),
       })),
       paidToday: {
