@@ -30,7 +30,13 @@ export default function ConsentGate() {
   }, [user?.id]);
 
   if (loading || !user?.id || accepted) return null;
-  if (user.termsAcceptedAt) return null;
+  // Aceptado = hay evidencia de aceptación Y corresponde a la versión vigente.
+  // Si la fila es antigua y no guardó versión, se toma como aceptada para no
+  // volver a preguntar por datos históricos.
+  const acceptedCurrentVersion =
+    Boolean(user.termsAcceptedAt) &&
+    (!user.termsVersion || user.termsVersion === CONSENT_VERSION);
+  if (acceptedCurrentVersion) return null;
   if (pathname && SKIP_PREFIXES.some((p) => pathname.startsWith(p))) return null;
 
   const submit = async () => {

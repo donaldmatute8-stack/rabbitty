@@ -237,7 +237,14 @@ export async function POST(req: Request) {
         telegramId: user.telegramId,
         username: user.username,
         tonWalletAddress: user.tonWalletAddress,
-        totalBunzEarned: user.totalBunzEarned
+        totalBunzEarned: user.totalBunzEarned,
+        // Evidencia de aceptación legal: si el fetch del perfil completo falla,
+        // el gate de re-consentimiento se disparaba aunque ya hubiera aceptado
+        // (626 Café lo reportó varias veces). Con esto el gate decide bien
+        // incluso con el payload mínimo del login por Telegram.
+        termsAcceptedAt: user.termsAcceptedAt ?? null,
+        termsVersion: user.termsVersion ?? null,
+        privacyAcceptedAt: user.privacyAcceptedAt ?? null,
       }
     });
 
