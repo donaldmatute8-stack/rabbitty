@@ -1,12 +1,19 @@
 'use client';
 
+import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Store, Users, Settings, ScanLine } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
+import { PlatformBridge } from '@/lib/platform';
 
 export default function BusinessLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+
+  // App nativa = app de consumo. El portal de negocio solo vive en web/Telegram.
+  useEffect(() => {
+    if (PlatformBridge.isNative()) router.replace('/');
+  }, [router]);
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Panel Principal', icon: Store, href: '/business' },

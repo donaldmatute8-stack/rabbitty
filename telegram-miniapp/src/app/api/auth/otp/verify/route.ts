@@ -17,14 +17,6 @@ export async function POST(req: NextRequest) {
   try {
     const ipKey = `otp_verify_ip:${getClientIp(req)}`;
 
-    const ipCheck = await rateLimit(ipKey, VERIFY_IP_LIMIT, VERIFY_IP_WINDOW_MS);
-    if (!ipCheck.ok) {
-      return NextResponse.json(
-        { error: `Demasiados intentos. Espera ${ipCheck.retryAfterSec} segundos.` },
-        { status: 429, headers: { 'Retry-After': String(ipCheck.retryAfterSec) } }
-      );
-    }
-
     const body = await req.json();
     const rawInput = (body?.input || body?.email || '').trim();
     const code = body?.code?.trim();
@@ -32,9 +24,20 @@ export async function POST(req: NextRequest) {
     const consentVersion = typeof body?.consentVersion === 'string' ? body.consentVersion.slice(0, 40) : null;
 
     // Demo de App Review (también en producción): tester@rabbitty.me + 123456.
+    // Se excluye de los límites: el revisor reportó que no podía entrar.
     const demoInput = rawInput.toLowerCase();
     const isTesterDemo = ['tester', 'tester@rabbitty.me', 'appreview', 'appreview@rabbitty.me'].includes(demoInput);
     const isAcceptedDemoCode = isTesterDemo && code === '123456';
+
+    if (!isTesterDemo) {
+      const ipCheck = await rateLimit(ipKey, VERIFY_IP_LIMIT, VERIFY_IP_WINDOW_MS);
+      if (!ipCheck.ok) {
+        return NextResponse.json(
+          { error: `Demasiados intentos. Espera ${ipCheck.retryAfterSec} segundos.` },
+          { status: 429, headers: { 'Retry-After': String(ipCheck.retryAfterSec) } }
+        );
+      }
+    }
 
     if (!rawInput || !code) {
       return NextResponse.json({ error: 'Identificador y código son obligatorios' }, { status: 400 });
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     const failKey = `otp_verify_fail:${email}`;
-    if (!(await checkOnly(failKey, MAX_FAILED_ATTEMPTS))) {
+    if (!isTesterDemo && !(await checkOnly(failKey, MAX_FAILED_ATTEMPTS))) {
       const wait = await retryAfterSec(failKey);
       return NextResponse.json(
         { error: `Demasiados intentos fallidos. Solicita un nuevo código en ${wait} segundos.` },

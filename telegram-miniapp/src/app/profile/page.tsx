@@ -76,6 +76,9 @@ export default function ProfilePage() {
   const user = rawUser as UserProfile | null;
   const userAvatar = useUserAvatar(rawUser, 'ffffff');
   const { showToast } = useToast();
+  // La app nativa es de consumo: nada de portales de negocio (Apple 3.1.1/2.1).
+  const [isNativeApp, setIsNativeApp] = useState(false);
+  useEffect(() => { setIsNativeApp(PlatformBridge.isNative()); }, []);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showBunzGuide, setShowBunzGuide] = useState(false);
   const [nextLevelHops, setNextLevelHops] = useState(500);
@@ -400,7 +403,7 @@ export default function ProfilePage() {
           </div>
 
           {/* ── NEGOCIO ── */}
-          {isAffiliate ? (
+          {isAffiliate && !isNativeApp ? (
             <div className="rounded-2xl border border-[#E91E63]/25 bg-gradient-to-br from-[#E91E63]/15 via-transparent to-transparent p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#E91E63]/25 bg-[#E91E63]/15 text-[#E91E63]">

@@ -12,19 +12,27 @@ const IP_SEND_WINDOW_MS = 15 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
-    const ipCheck = await rateLimit(`otp_send_ip:${getClientIp(req)}`, IP_SEND_LIMIT, IP_SEND_WINDOW_MS);
-    if (!ipCheck.ok) {
-      return NextResponse.json(
-        { error: `Demasiadas solicitudes. Intenta de nuevo en ${ipCheck.retryAfterSec} segundos.` },
-        { status: 429, headers: { 'Retry-After': String(ipCheck.retryAfterSec) } }
-      );
-    }
-
     const body = await req.json();
     const rawInput = (body?.input || body?.email || '').trim();
 
     if (!rawInput) {
       return NextResponse.json({ error: 'Por favor ingresa un correo o número celular válido.' }, { status: 400 });
+    }
+
+    // Demo de App Review: se excluye de TODOS los límites para que el revisor
+    // pueda entrar siempre (antes el cooldown de 60 s y el límite por IP lo
+    // bloqueaban y reportó "no puede iniciar sesión").
+    const demoInput = rawInput.toLowerCase();
+    const isTesterDemo = ['tester', 'tester@rabbitty.me', 'appreview', 'appreview@rabbitty.me'].includes(demoInput);
+
+    if (!isTesterDemo) {
+      const ipCheck = await rateLimit(`otp_send_ip:${getClientIp(req)}`, IP_SEND_LIMIT, IP_SEND_WINDOW_MS);
+      if (!ipCheck.ok) {
+        return NextResponse.json(
+          { error: `Demasiadas solicitudes. Intenta de nuevo en ${ipCheck.retryAfterSec} segundos.` },
+          { status: 429, headers: { 'Retry-After': String(ipCheck.retryAfterSec) } }
+        );
+      }
     }
 
     let email = '';
@@ -36,9 +44,6 @@ export async function POST(req: NextRequest) {
     // Demo de App Review: tester@rabbitty.me + 123456 debe funcionar también en producción.
     // La cuenta es de pruebas (AFFILIATE, sin negocio ni saldo) y el código es fijo.
     // Demo de App Review: tester (admin/afiliado) y appreview (consumidor).
-    const demoInput = rawInput.toLowerCase();
-    const isTesterDemo = ['tester', 'tester@rabbitty.me', 'appreview', 'appreview@rabbitty.me'].includes(demoInput);
-
     if (isTesterDemo) {
       email = demoInput.includes('@') ? demoInput : `${demoInput}@rabbitty.me`;
       mode = 'email';
@@ -72,12 +77,14 @@ export async function POST(req: NextRequest) {
       if (matchedUser?.telegramId) telegramId = matchedUser.telegramId;
     }
 
-    const emailCheck = await rateLimit(`otp_send_target:${rawInput}`, 1, EMAIL_RESEND_COOLDOWN_MS);
-    if (!emailCheck.ok) {
-      return NextResponse.json(
-        { error: `Ya se envió un código. Solicita uno nuevo en ${emailCheck.retryAfterSec} segundos.` },
-        { status: 429, headers: { 'Retry-After': String(emailCheck.retryAfterSec) } }
-      );
+    if (!isTesterDemo) {
+      const emailCheck = await rateLimit(`otp_send_target:${rawInput}`, 1, EMAIL_RESEND_COOLDOWN_MS);
+      if (!emailCheck.ok) {
+        return NextResponse.json(
+          { error: `Ya se envió un código. Solicita uno nuevo en ${emailCheck.retryAfterSec} segundos.` },
+          { status: 429, headers: { 'Retry-After': String(emailCheck.retryAfterSec) } }
+        );
+      }
     }
 
     const code = isTesterDemo ? '123456' : crypto.randomInt(100000, 1000000).toString();
