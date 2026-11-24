@@ -108,7 +108,9 @@ export default function OnboardingPage() {
     if (!user) return;
     if (!user.firstName) {
       router.replace('/signup?setup=1');
-    } else if (user.role === 'AFFILIATE') {
+    } else if (user.role === 'AFFILIATE' && !PlatformBridge.isNative()) {
+      // En web/Telegram el afiliado va a su portal. En la app nativa NO existe
+      // el portal de negocio (Apple 2.1/3.1.1): entra como consumidor.
       router.replace('/business');
     } else {
       router.replace('/');

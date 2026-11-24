@@ -40,7 +40,7 @@ export default function SupportPage() {
               ¿Cómo te puede ayudar el equipo de Rabbitty?
             </h2>
             <p className="text-white/85 text-[13px] leading-[1.6] m-0 mb-5">
-              Soporte humano dentro de la app para tu cuenta, tu negocio y el POS. Sin grupos externos.
+              Soporte humano dentro de la app para tu cuenta y tus pedidos. Sin grupos externos.
             </p>
             <div className="inline-flex items-center gap-2 bg-white/15 rounded-[16px] px-4 py-[10px]">
               <div className="w-2 h-2 rounded-full bg-white" style={{ animation: 'pulse 2s infinite' }} />

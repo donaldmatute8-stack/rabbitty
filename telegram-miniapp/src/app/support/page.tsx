@@ -60,7 +60,7 @@ export default function SupportHubPage() {
           }]),
     {
       title: 'Avisos oficiales',
-      desc: 'Novedades, mantenimiento y tips de tu negocio.',
+      desc: 'Novedades, mantenimiento y tips para tus salidas.',
       icon: '📣',
       href: '/chat/bunzy',
     },
