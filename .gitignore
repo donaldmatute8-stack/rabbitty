@@ -106,6 +106,9 @@ DOCS/*
 # Sistema de diseño (tokens, jerarquía): sí se versiona
 !DOCS/design/
 !Docs/design/
+# Conceptos de producto (experiencias y lanzamientos): sí se versiona
+!DOCS/CONCEPTOS/
+!Docs/CONCEPTOS/
 MB-REFERENCE.md
 \!LEEME.md
 
