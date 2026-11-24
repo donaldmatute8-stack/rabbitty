@@ -87,6 +87,7 @@ const godPillars: MenuPillar[] = [
       { href: "/god/tenants", label: "Tenants & Vista Prueba", icon: Store },
       { href: "/god/comisiones", label: "Comisión de plataforma", icon: Percent, badge: "God" },
       { href: "/god/soporte", label: "Soporte", icon: LifeBuoy, badge: "Chat" },
+      { href: "/god/rabbit-chair", label: "Rabbit Chair", icon: Sparkles, badge: "Invite" },
     ],
   },
   {

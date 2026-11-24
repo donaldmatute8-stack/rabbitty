@@ -1565,3 +1565,24 @@ export const notificationDeliveries = pgTable("notificationDeliveries", {
   reason: text("reason"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RABBIT CHAIR — solicitudes de acceso a la landing privada (migración 0024)
+// ─────────────────────────────────────────────────────────────────────────────
+export const rabbitChairRequests = pgTable("rabbit_chair_requests", {
+  id: id(),
+  businessId: text("businessId"),
+  businessName: text("businessName"),
+  email: text("email").notNull(),
+  name: text("name"),
+  note: text("note"),
+  /** PENDING | APPROVED | REJECTED */
+  status: text("status").default("PENDING").notNull(),
+  /** Token firmado entregado al aprobar (null mientras esté pendiente). */
+  token: text("token"),
+  resolvedAt: timestamp("resolvedAt"),
+  resolvedBy: text("resolvedBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("rabbit_chair_requests_status_idx").on(t.status, t.createdAt),
+]);

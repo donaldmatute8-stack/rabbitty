@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { verifyRabbitChairInvite } from "@/lib/rabbit-chair-token";
+import { RequestAccessForm } from "./RequestAccessForm";
 
 /**
  * ── Rabbit Chair · landing privada ──────────────────────────────────────────
@@ -23,8 +24,6 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
-const CONTACT_EMAIL = "hola@rabbitty.me";
-
 export default async function RabbitChairPage({
   searchParams,
 }: {
@@ -43,12 +42,9 @@ export default async function RabbitChairPage({
           <p className="mt-3 text-sm leading-relaxed text-white/50">
             Este enlace es personal y no está activo. Si crees que deberías tener acceso, escríbenos y lo revisamos.
           </p>
-          <a
-            href={`mailto:${CONTACT_EMAIL}?subject=Rabbit%20Chair%20%C2%B7%20acceso`}
-            className="mt-6 inline-block rounded-full border border-white/15 px-5 py-2.5 text-xs font-bold text-white/80 hover:bg-white/5"
-          >
-            Pedir acceso
-          </a>
+          <div className="mt-8">
+            <RequestAccessForm compact />
+          </div>
         </div>
       </main>
     );
@@ -88,13 +84,7 @@ export default async function RabbitChairPage({
 
             <div className="mt-8 flex flex-wrap gap-3">
               <a
-                href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-                  `Rabbit Chair · quiero activarlo para ${firstName}`,
-                )}&body=${encodeURIComponent(
-                  isGift
-                    ? `Hola, soy ${firstName}. Recibí la invitación de Rabbit Chair y quiero agendar mis activaciones.`
-                    : `Hola, soy ${firstName}. Quiero activar Rabbit Chair en mi negocio.`,
-                )}`}
+                href="#activar"
                 className="rounded-full bg-red-600 px-6 py-3 text-sm font-black text-white transition-colors hover:bg-red-500"
               >
                 {isGift ? "Agendar mis activaciones" : "Quiero activarlo"}
@@ -222,15 +212,14 @@ export default async function RabbitChairPage({
           </>
         )}
 
-        <div className="mt-8 flex flex-wrap gap-3">
-          <a
-            href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(
-              `Rabbit Chair · ${isGift ? "mis activaciones" : "activación"} · ${firstName}`,
-            )}`}
-            className="rounded-full bg-red-600 px-6 py-3 text-sm font-black text-white hover:bg-red-500"
-          >
-            {isGift ? "Agendar mis activaciones" : "Quiero activarlo"}
-          </a>
+        <div id="activar" className="mt-8 scroll-mt-24">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+            Confirmar y pedir activación
+          </p>
+          <RequestAccessForm defaultBusinessName={firstName} compact />
+        </div>
+
+        <div className="mt-6">
           <Link
             href="/settings"
             className="rounded-full border border-white/20 px-6 py-3 text-sm font-bold text-white/80 hover:bg-white/5"
@@ -265,10 +254,10 @@ export default async function RabbitChairPage({
         <h2 className="text-4xl font-black leading-tight sm:text-6xl">Hay una silla esperando.</h2>
         <p className="mt-4 text-sm text-white/50">La pregunta es si vas a ser tú.</p>
         <a
-          href={`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Rabbit Chair · ${firstName}`)}`}
+          href="#activar"
           className="mt-8 inline-block rounded-full bg-white px-7 py-3 text-sm font-black text-black hover:bg-white/90"
         >
-          Hablar con nosotros
+          Pedir mi acceso
         </a>
         <p className="mt-16 text-[10px] uppercase tracking-[0.3em] text-white/20">
           Invitación privada · {firstName} · no compartir
