@@ -104,7 +104,8 @@ export async function POST(req: NextRequest) {
   void notifySupportStaff(db, {
     title: "Rabbit Chair · nueva solicitud",
     message: `${label} pidió acceso${businessId ? "" : " (sin negocio vinculado)"} · ${email}`,
-    route: "/god/rabbit-chair",
+    // La app no tiene el panel de God: se abre un puente que lanza el admin.
+    route: "/admin-link?to=rabbit-chair",
   }).catch(() => undefined);
 
   // Telegram (si GOD_TELEGRAM_CHAT_ID está configurado).
