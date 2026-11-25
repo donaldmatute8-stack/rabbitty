@@ -1,7 +1,7 @@
 import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
-import { and, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
 import { orders, orderItems, menuItems, menuCategories, payments, branches, customers, restaurants, paymentIntents, staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
 
 // ─── ZONA HORARIA DEL NEGOCIO ──────────────────────────────────────────────
@@ -408,6 +408,245 @@ export const analyticsRouter = router({
           cfdiStatus: order.cfdiStatus,
         };
       });
+    }),
+
+
+  // ── Reporte por producto (contabilidad / administración) ──────────────────
+  /** Catálogo unificado para el selector: platillos y productos de tienda. */
+  listReportProducts: protectedProcedure
+    .input(z.object({ branchId: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const rows = await ctx.restaurantDb
+        .select({
+          id: menuItems.id,
+          name: menuItems.name,
+          kind: menuItems.kind,
+          price: menuItems.price,
+          cost: menuItems.cost,
+          category: menuCategories.name,
+          isActive: menuItems.isActive,
+        })
+        .from(menuItems)
+        .leftJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
+        .where(eq(menuItems.branchId, branchId))
+        .orderBy(asc(menuItems.name));
+      return rows;
+    }),
+
+  /**
+   * Reporte por producto y rango: unidades, ingreso, costo, margen e IVA,
+   * con serie diaria y desglose por canal y método de pago.
+   * scope = branch (sucursal) | business (consolidado del tenant).
+   */
+  getProductReport: protectedProcedure
+    .input(
+      z.object({
+        branchId: z.string().optional(),
+        scope: z.enum(["branch", "business"]).default("branch"),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        days: z.number().optional(),
+        productIds: z.array(z.string()).optional(),
+        kind: z.enum(["DISH", "PRODUCT"]).optional(),
+        channel: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const branchId = await resolveBranchId(ctx, input.branchId);
+      const [branch] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1);
+      if (!branch) return { products: [], series: [], channels: [], methods: [], totals: null };
+
+      const branchIds =
+        input.scope === "business"
+          ? (
+              await ctx.restaurantDb
+                .select({ id: branches.id })
+                .from(branches)
+                .where(eq(branches.restaurantId, branch.restaurantId))
+            ).map((b) => b.id)
+          : [branchId];
+
+      const { startDate, endDate } = effectiveDateRange(input);
+
+      const channelFilter =
+        input.channel && input.channel !== "ALL"
+          ? input.channel === "POS"
+            ? sql`(${orders.channel} IS NULL OR ${orders.channel} = 'POS')`
+            : eq(orders.channel, input.channel)
+          : undefined;
+
+      const ordersList = await ctx.restaurantDb
+        .select({
+          id: orders.id,
+          tax: orders.tax,
+          subtotal: orders.subtotal,
+          channel: orders.channel,
+          createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .where(
+          and(
+            inArray(orders.branchId, branchIds),
+            inArray(orders.status, ["COMPLETED", "PAID"]),
+            gte(orders.createdAt, startDate),
+            ...(endDate ? [lte(orders.createdAt, endDate)] : []),
+            ...(channelFilter ? [channelFilter] : []),
+          ),
+        );
+
+      if (ordersList.length === 0) {
+        return { products: [], series: [], channels: [], methods: [], totals: null };
+      }
+
+      const orderIds = ordersList.map((o) => o.id);
+      const orderById = new Map(ordersList.map((o) => [o.id, o]));
+
+      const itemsList = await ctx.restaurantDb
+        .select()
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, orderIds));
+
+      const menuList = await ctx.restaurantDb
+        .select({
+          id: menuItems.id,
+          name: menuItems.name,
+          kind: menuItems.kind,
+          cost: menuItems.cost,
+          category: menuCategories.name,
+        })
+        .from(menuItems)
+        .leftJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
+        .where(inArray(menuItems.branchId, branchIds));
+      const menuById = new Map(menuList.map((m) => [m.id, m]));
+
+      const payList = await ctx.restaurantDb
+        .select({ orderId: payments.orderId, method: payments.method })
+        .from(payments)
+        .where(inArray(payments.orderId, orderIds));
+      const methodsByOrder = new Map<string, string[]>();
+      for (const pay of payList) {
+        const list = methodsByOrder.get(pay.orderId) ?? [];
+        list.push(pay.method);
+        methodsByOrder.set(pay.orderId, list);
+      }
+
+      const [restaurant] = await ctx.restaurantDb
+        .select({ taxRate: restaurants.taxRate })
+        .from(restaurants)
+        .where(eq(restaurants.id, branch.restaurantId))
+        .limit(1);
+      const defaultRate = Number(restaurant?.taxRate ?? 0.16);
+
+      const productMap = new Map<
+        string,
+        { name: string; kind: string; category: string; qty: number; revenue: number; cost: number; tax: number }
+      >();
+      const seriesMap = new Map<string, { date: string; revenue: number; qty: number }>();
+      const channelMap = new Map<string, { revenue: number; qty: number }>();
+      const methodMap = new Map<string, { revenue: number; qty: number }>();
+
+      for (const item of itemsList) {
+        if (item.status === "VOIDED" || item.voidedAt) continue;
+        const order = orderById.get(item.orderId);
+        if (!order) continue;
+        const menu = menuById.get(item.menuItemId);
+        const name = item.nameSnapshot || menu?.name || "Artículo";
+        const key = `${menu?.id ?? "snap"}::${name}`;
+        const qty = Number(item.quantity) || 0;
+        const lineTotal = Number(item.totalPrice) || 0;
+        const rate =
+          Number(order.tax) > 0 && Number(order.subtotal) > 0
+            ? Number(order.tax) / Number(order.subtotal)
+            : defaultRate;
+        const tax =
+          item.taxAmount != null
+            ? Number(item.taxAmount)
+            : Math.round((lineTotal - lineTotal / (1 + rate)) * 100) / 100;
+
+        if (input.productIds?.length) {
+          const matches = input.productIds.includes(String(item.menuItemId)) || input.productIds.includes(key);
+          if (!matches) continue;
+        }
+        if (input.kind && (menu?.kind ?? "DISH") !== input.kind) continue;
+
+        const current = productMap.get(key) ?? {
+          name,
+          kind: menu?.kind ?? "DISH",
+          category: menu?.category ?? "Sin categoría",
+          qty: 0,
+          revenue: 0,
+          cost: 0,
+          tax: 0,
+        };
+        current.qty += qty;
+        current.revenue += lineTotal;
+        current.cost += Number(menu?.cost ?? 0) * qty;
+        current.tax += tax;
+        productMap.set(key, current);
+
+        const { date } = tzDayAndHour(new Date(order.createdAt as unknown as string));
+        const day = seriesMap.get(date) ?? { date, revenue: 0, qty: 0 };
+        day.revenue += lineTotal;
+        day.qty += qty;
+        seriesMap.set(date, day);
+
+        const channelKey = String(order.channel || "POS");
+        const channelRow = channelMap.get(channelKey) ?? { revenue: 0, qty: 0 };
+        channelRow.revenue += lineTotal;
+        channelRow.qty += qty;
+        channelMap.set(channelKey, channelRow);
+
+        for (const method of methodsByOrder.get(order.id) ?? ["SIN_PAGO"]) {
+          const methodRow = methodMap.get(method) ?? { revenue: 0, qty: 0 };
+          methodRow.revenue += lineTotal;
+          methodRow.qty += qty;
+          methodMap.set(method, methodRow);
+        }
+      }
+
+      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+      const products = Array.from(productMap.values())
+        .map((row) => ({
+          ...row,
+          revenue: round2(row.revenue),
+          cost: round2(row.cost),
+          tax: round2(row.tax),
+          margin: round2(row.revenue - row.cost),
+          marginPct: row.revenue > 0 ? Math.round(((row.revenue - row.cost) / row.revenue) * 100) : 0,
+        }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      const totals = products.reduce(
+        (acc, p) => {
+          acc.qty += p.qty;
+          acc.revenue += p.revenue;
+          acc.cost += p.cost;
+          acc.tax += p.tax;
+          acc.margin += p.margin;
+          return acc;
+        },
+        { qty: 0, revenue: 0, cost: 0, tax: 0, margin: 0 },
+      );
+
+      return {
+        products,
+        series: Array.from(seriesMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
+        channels: Array.from(channelMap.entries()).map(([channel, v]) => ({ channel, ...v })),
+        methods: Array.from(methodMap.entries()).map(([method, v]) => ({ method, ...v })),
+        totals: {
+          ...totals,
+          revenue: round2(totals.revenue),
+          cost: round2(totals.cost),
+          tax: round2(totals.tax),
+          margin: round2(totals.margin),
+          marginPct: totals.revenue > 0 ? Math.round((totals.margin / totals.revenue) * 100) : 0,
+        },
+      };
     }),
 
   // ═══════════ ANALÍTICAS PRO (plan vendible — apagado por defecto) ═══════════

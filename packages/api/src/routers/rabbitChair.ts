@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { rabbitChairSlots } from "@rabbitty/database-restaurant/schema";
 import { presenceSessions, users } from "@rabbitty/database-core/schema";
@@ -136,6 +136,97 @@ async function slotInBranch(ctx: { restaurantDb: Db }, slotId: string, branchId:
 }
 
 export const rabbitChairRouter = router({
+  /** Métricas de La Silla: ocupación, aporte, servicio y fila. */
+  metrics: adminOnlyProcedure
+    .input(
+      z.object({
+        activationId: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+      }),
+    )
+    .query(({ ctx, input }) =>
+      run(async () => {
+        const rows = (await ctx.restaurantDb.execute(sql`
+          SELECT a."id", a."name", a."status", a."capacity", a."startsAt",
+                 COUNT(s."id") FILTER (WHERE s."status" IN ('PAID','SEATED','SERVED','DONE'))::int AS sold,
+                 COALESCE(SUM(s."paidCents") FILTER (WHERE s."paidCents" IS NOT NULL), 0)::int AS revenue_cents,
+                 AVG(EXTRACT(EPOCH FROM (s."servedAt" - s."seatedAt")) / 60.0)
+                   FILTER (WHERE s."servedAt" IS NOT NULL AND s."seatedAt" IS NOT NULL) AS avg_service_min
+            FROM "rabbitChairActivations" a
+            LEFT JOIN "rabbitChairSlots" s ON s."activationId" = a."id"
+           WHERE a."branchId" = ${ctx.branchId}
+             ${input.activationId ? sql`AND a."id" = ${input.activationId}` : sql``}
+             ${input.from ? sql`AND COALESCE(a."startsAt", a."createdAt") >= ${input.from}::date` : sql``}
+             ${input.to ? sql`AND COALESCE(a."startsAt", a."createdAt") < (${input.to}::date + interval '1 day')` : sql``}
+           GROUP BY a."id", a."name", a."status", a."capacity", a."startsAt"
+           ORDER BY COALESCE(a."startsAt", a."createdAt") DESC
+           LIMIT 50
+        `)) as any;
+        const list = (rows?.rows ?? rows ?? []) as Array<Record<string, any>>;
+
+        const waitRows = (await ctx.restaurantDb.execute(sql`
+          SELECT w."activationId",
+                 COUNT(*) FILTER (WHERE w."status" IN ('WAITING','INVITED'))::int AS waiting,
+                 COUNT(*) FILTER (WHERE w."status" = 'CONVERTED')::int AS converted
+            FROM "rabbitChairWaitlist" w
+            JOIN "rabbitChairActivations" a ON a."id" = w."activationId"
+           WHERE a."branchId" = ${ctx.branchId}
+           GROUP BY w."activationId"
+        `)) as any;
+        const waitMap = new Map<string, { waiting: number; converted: number }>();
+        for (const row of (waitRows?.rows ?? waitRows ?? [])) {
+          waitMap.set(String(row.activationId), {
+            waiting: Number(row.waiting ?? 0),
+            converted: Number(row.converted ?? 0),
+          });
+        }
+
+        const activations = list.map((row) => {
+          const capacity = Number(row.capacity ?? 0);
+          const sold = Number(row.sold ?? 0);
+          const revenue = Number(row.revenue_cents ?? 0) / 100;
+          const wait = waitMap.get(String(row.id)) ?? { waiting: 0, converted: 0 };
+          return {
+            id: String(row.id),
+            name: row.name,
+            status: row.status,
+            capacity,
+            sold,
+            occupancyPct: capacity > 0 ? Math.round((sold / capacity) * 100) : 0,
+            revenue,
+            avgContribution: sold > 0 ? Math.round((revenue / sold) * 100) / 100 : 0,
+            avgServiceMin: row.avg_service_min ? Math.round(Number(row.avg_service_min) * 10) / 10 : null,
+            waiting: wait.waiting,
+            converted: wait.converted,
+          };
+        });
+
+        const totals = activations.reduce(
+          (acc, a) => {
+            acc.capacity += a.capacity;
+            acc.sold += a.sold;
+            acc.revenue += a.revenue;
+            acc.waiting += a.waiting;
+            acc.converted += a.converted;
+            return acc;
+          },
+          { capacity: 0, sold: 0, revenue: 0, waiting: 0, converted: 0 },
+        );
+
+        return {
+          totals: {
+            ...totals,
+            revenue: Math.round(totals.revenue * 100) / 100,
+            occupancyPct: totals.capacity > 0 ? Math.round((totals.sold / totals.capacity) * 100) : 0,
+            avgContribution: totals.sold > 0 ? Math.round((totals.revenue / totals.sold) * 100) / 100 : 0,
+            activations: activations.length,
+          },
+          activations,
+        };
+      }),
+    ),
+
   /** ¿El dueño activó la experiencia en este negocio? */
   status: posProcedure.query(({ ctx }) =>
     run(async () => ({ enabled: await isRabbitChairEnabled(db(ctx), ctx.branchId) })),

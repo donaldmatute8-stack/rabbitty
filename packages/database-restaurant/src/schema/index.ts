@@ -401,6 +401,9 @@ export const orderItems = pgTable("order_items", {
    * mostraban el UUID del item placeholder.
    */
   nameSnapshot: text("nameSnapshot"),
+  /** IVA del renglón: tasa e importe. NULL en históricos (se prorratea). */
+  taxRate: real("taxRate"),
+  taxAmount: real("taxAmount"),
 });
 
 export const payments = pgTable("payments", {

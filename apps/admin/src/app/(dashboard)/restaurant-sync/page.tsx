@@ -334,6 +334,15 @@ function UberEatsCard() {
         )}
       </div>
 
+      <div className="mt-3">
+        <a
+          href="/reports/products?channel=UBER_EATS"
+          className="text-[11px] font-bold text-cyan-300 underline"
+        >
+          Ver ventas por producto de Uber Eats →
+        </a>
+      </div>
+
       {status?.recentEvents && status.recentEvents.length > 0 && (
         <div className="mt-4">
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Últimos webhooks</p>

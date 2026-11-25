@@ -338,7 +338,13 @@ export default function ReportsPage() {
               <tr><td style="padding:8px 0;border-top:1px solid #333;font-weight:900">Utilidad neta</td><td style="padding:8px 0;border-top:1px solid #333;text-align:right;font-weight:900;color:#6EE7B7">${fmt(pandl?.netProfit)}</td></tr>
             </table>
 
-            <h2 style="margin:22px 0 8px;font-size:14px;color:#fff">Productos más vendidos</h2>
+            <a
+            href="/reports/products"
+            className="ml-auto flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-bold text-cyan-200 no-underline hover:bg-white/10"
+          >
+            Reporte por producto y fecha →
+          </a>
+          <h2 style="margin:22px 0 8px;font-size:14px;color:#fff">Productos más vendidos</h2>
             <table style="width:100%;border-collapse:collapse;font-size:12px;color:#CBD5E1">
               <thead><tr><th style="text-align:left;padding:6px 8px">Producto</th><th style="text-align:left;padding:6px 8px">Categoría</th><th style="text-align:right;padding:6px 8px">Cant.</th><th style="text-align:right;padding:6px 8px">Ingresos</th></tr></thead>
               <tbody>${productRows || '<tr><td colspan="4" style="padding:8px;color:#64748B">Sin datos</td></tr>'}</tbody>

@@ -15,6 +15,7 @@ export default function RabbitChairAdminPage() {
   const utils = trpc.useUtils();
   const credits = trpc.rabbitChair.credits.useQuery(undefined, { retry: false });
   const status = trpc.rabbitChair.status.useQuery(undefined, { retry: false });
+  const metrics = trpc.rabbitChair.metrics.useQuery({}, { retry: false });
   const toggle = trpc.rabbitChair.enable.useMutation({
     onSuccess: (res) => {
       toast.success(res.enabled ? "Rabbit Chair activado" : "Rabbit Chair desactivado");
@@ -160,6 +161,63 @@ export default function RabbitChairAdminPage() {
             Abrir vista del POS
           </Link>
         </div>
+      </Card>
+
+      {/* Métricas de La Silla */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="m-0 text-sm font-black text-white">Cómo va La Silla</p>
+          <Link
+            href="/reports/products?channel=RABBIT_CHAIR"
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-bold text-cyan-200 hover:bg-white/10"
+          >
+            Ver ingresos de La Silla
+          </Link>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            ["Ocupación", `${metrics.data?.totals.occupancyPct ?? 0}%`],
+            ["Lugares vendidos", metrics.data?.totals.sold ?? 0],
+            ["Ingreso", `$${(metrics.data?.totals.revenue ?? 0).toFixed(2)}`],
+            ["Aporte promedio", `$${(metrics.data?.totals.avgContribution ?? 0).toFixed(2)}`],
+            ["En fila", metrics.data?.totals.waiting ?? 0],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="m-0 text-[10px] font-bold uppercase tracking-wider text-gray-500">{label}</p>
+              <p className="m-0 text-sm font-black text-white">{value}</p>
+            </div>
+          ))}
+        </div>
+        {(metrics.data?.activations ?? []).length > 0 && (
+          <div className="mt-3 overflow-x-auto rounded-xl border border-white/10">
+            <table className="w-full text-left text-[11px]">
+              <thead className="bg-white/[0.03] text-[9px] uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-2 py-1.5">Activación</th>
+                  <th className="px-2 py-1.5">Estado</th>
+                  <th className="px-2 py-1.5 text-right">Vendidos</th>
+                  <th className="px-2 py-1.5 text-right">Ocupación</th>
+                  <th className="px-2 py-1.5 text-right">Ingreso</th>
+                  <th className="px-2 py-1.5 text-right">Servicio prom.</th>
+                  <th className="px-2 py-1.5 text-right">Fila</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-gray-300">
+                {(metrics.data?.activations ?? []).map((a: any) => (
+                  <tr key={a.id}>
+                    <td className="px-2 py-1.5 font-bold text-white">{a.name}</td>
+                    <td className="px-2 py-1.5">{a.status}</td>
+                    <td className="px-2 py-1.5 text-right">{a.sold}/{a.capacity}</td>
+                    <td className="px-2 py-1.5 text-right">{a.occupancyPct}%</td>
+                    <td className="px-2 py-1.5 text-right">${Number(a.revenue).toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right">{a.avgServiceMin ? `${a.avgServiceMin} min` : "—"}</td>
+                    <td className="px-2 py-1.5 text-right">{a.waiting}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
 
       <Card className="p-4">
