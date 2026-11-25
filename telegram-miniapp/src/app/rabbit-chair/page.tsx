@@ -48,6 +48,7 @@ export default function RabbitChairPage() {
   const [slot, setSlot] = useState<any>(null);
   const [config, setConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [waitlisted, setWaitlisted] = useState<{ position: number } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -101,6 +102,30 @@ export default function RabbitChairPage() {
         return;
       }
       setSlot(data.slot);
+      await PlatformBridge.hapticFeedback("success");
+    } catch {
+      setError("Error de conexión.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const joinQueue = async () => {
+    if (!state?.activation) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/rabbit-chair/waitlist", {
+        method: "POST",
+        headers: { ...(await headers()), "Content-Type": "application/json" },
+        body: JSON.stringify({ activationId: state.activation.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setError(data?.error || "No se pudo entrar a la fila.");
+        return;
+      }
+      setWaitlisted({ position: Number(data.position) });
       await PlatformBridge.hapticFeedback("success");
     } catch {
       setError("Error de conexión.");
@@ -180,13 +205,32 @@ export default function RabbitChairPage() {
             Entra a tu cuenta de Rabbitty para tomar la silla.
           </p>
         ) : !slot ? (
-          <button
-            onClick={claim}
-            disabled={saving || state.freeSlots <= 0}
-            className="mt-6 w-full rounded-full bg-red-600 px-6 py-3.5 text-sm font-black text-white disabled:opacity-50"
-          >
-            {state.freeSlots <= 0 ? "Silla llena" : saving ? "Tomando lugar…" : "Tomar la silla"}
-          </button>
+          state.freeSlots <= 0 ? (
+            waitlisted ? (
+              <div className="mt-6 rounded-2xl border border-purple-500/30 bg-purple-500/10 p-5 text-center">
+                <p className="m-0 text-sm font-black text-purple-200">Estás en la fila (#{waitlisted.position})</p>
+                <p className="m-0 mt-1 text-xs text-purple-300/80">
+                  Si se libera un lugar, te avisamos por push y tendrás 10 minutos para tomarlo.
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={joinQueue}
+                disabled={saving}
+                className="mt-6 w-full rounded-full border border-purple-500/40 bg-purple-500/10 px-6 py-3.5 text-sm font-black text-purple-200 disabled:opacity-50"
+              >
+                {saving ? "Entrando a la fila…" : "Silla llena · entrar a la lista de espera"}
+              </button>
+            )
+          ) : (
+            <button
+              onClick={claim}
+              disabled={saving}
+              className="mt-6 w-full rounded-full bg-red-600 px-6 py-3.5 text-sm font-black text-white disabled:opacity-50"
+            >
+              {saving ? "Tomando lugar…" : "Tomar la silla"}
+            </button>
+          )
         ) : (
           <>
             {/* Configurador silencioso */}
