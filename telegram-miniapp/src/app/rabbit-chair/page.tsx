@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { PlatformBridge } from "@/lib/platform";
@@ -11,6 +12,30 @@ import { PlatformBridge } from "@/lib/platform";
  * El Rabbiter ve si hay una silla abierta, toma su lugar, configura la bebida
  * sin hablar y recibe su pase con QR.
  */
+
+/**
+ * Salida visible de la pantalla. En nativo el gesto de swipe-right funciona,
+ * pero no es descubrible: esta flecha da una salida explícita a cualquiera.
+ */
+function BackButton() {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      aria-label="Volver atrás"
+      onClick={() => {
+        void PlatformBridge.hapticFeedback("light");
+        if (typeof window !== "undefined" && window.history.length > 1) router.back();
+        else router.push("/");
+      }}
+      style={{ top: "max(1rem, env(safe-area-inset-top))" }}
+      className="absolute left-4 z-20 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/60 px-3 py-2 text-xs font-black text-white backdrop-blur-md active:scale-95"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      Volver
+    </button>
+  );
+}
 
 const CONFIG_STEPS: Array<{ key: string; label: string; options: string[] }> = [
   { key: "base", label: "Base", options: ["Espresso", "Filtrado", "Cold brew"] },
@@ -219,7 +244,8 @@ export default function RabbitChairPage() {
 
   if (!businessId) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-center">
+      <main className="relative flex min-h-screen items-center justify-center bg-black px-6 text-center">
+        <BackButton />
         <p className="text-sm text-gray-400">Este enlace no tiene negocio. Pide el enlace al local.</p>
       </main>
     );
@@ -228,7 +254,8 @@ export default function RabbitChairPage() {
   const openActivations = state?.activations ?? [];
   if (state?.enabled && openActivations.length > 1 && !branch) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-black px-5 py-10 text-white">
+      <main className="relative flex min-h-screen items-center justify-center bg-black px-5 py-10 text-white">
+        <BackButton />
         <div className="w-full max-w-lg">
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-500">Rabbit Chair</p>
           <h1 className="mt-2 text-3xl font-black">¿En qué sucursal?</h1>
@@ -261,7 +288,8 @@ export default function RabbitChairPage() {
 
   if (!state?.enabled || !state?.activation) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-black px-6 text-center">
+      <main className="relative flex min-h-screen items-center justify-center bg-black px-6 text-center">
+        <BackButton />
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-500">Rabbit Chair</p>
           <h1 className="mt-3 text-3xl font-black text-white">No hay una silla abierta</h1>
@@ -277,7 +305,8 @@ export default function RabbitChairPage() {
   const configComplete = CONFIG_STEPS.every((step) => Boolean(config[step.key]));
 
   return (
-    <main className="min-h-screen bg-black px-5 py-8 text-white">
+    <main className="relative min-h-screen bg-black px-5 pb-8 pt-16 text-white">
+      <BackButton />
       <div className="mx-auto max-w-lg">
         <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-500">Rabbit Chair · La Silla</p>
         <h1 className="mt-2 text-3xl font-black">{activation.name}</h1>
