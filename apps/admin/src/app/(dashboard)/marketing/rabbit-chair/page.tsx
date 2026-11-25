@@ -55,10 +55,22 @@ export default function RabbitChairAdminPage() {
   });
   const launch = trpc.rabbitChair.launch.useMutation({
     onSuccess: (res: any) => {
-      toast.success(`La Silla abierta · aviso a ${res.notified}/${res.audience}`);
+      toast.success(
+        `La Silla abierta · aviso a ${res.notified}/${res.audience}${res.broadcast ? " (masivo)" : ""}`,
+      );
       utils.rabbitChair.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e, vars: any) => {
+      // Sin presencia reciente no se manda masivo sin confirmar.
+      if (/masivo/i.test(e.message)) {
+        const ok = window.confirm(
+          "No hay audiencia reciente en el negocio.\n\n¿Mandar el aviso a los Rabbitters con push activo (máximo 100) y abrir La Silla?",
+        );
+        if (ok) launch.mutate({ activationId: vars.activationId, allowBroadcast: true });
+        return;
+      }
+      toast.error(e.message);
+    },
   });
   const cancel = trpc.rabbitChair.cancel.useMutation({
     onSuccess: () => {

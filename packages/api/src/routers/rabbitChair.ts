@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import { rabbitChairSlots } from "@rabbitty/database-restaurant/schema";
 import { presenceSessions, users } from "@rabbitty/database-core/schema";
 import { sendRabbitChairDrop, sendRabbitChairInvite } from "../services/rabbitChairDrop";
+import { logAudit } from "../middleware/auditLog";
 import {
   adminOnlyProcedure,
   godAdminProcedure,
@@ -155,7 +156,22 @@ export const rabbitChairRouter = router({
             403,
           );
         }
-        return setRabbitChairEnabled(db(ctx), ctx.branchId, input.enabled, ctx.userId ?? null);
+        const result = await setRabbitChairEnabled(
+          db(ctx),
+          ctx.branchId,
+          input.enabled,
+          ctx.userId ?? null,
+        );
+
+        logAudit({
+          userId: ctx.userId ?? null,
+          action: input.enabled ? "RABBIT_CHAIR_ENABLE" : "RABBIT_CHAIR_DISABLE",
+          resource: "restaurants",
+          resourceId: ctx.branchId,
+          details: { enabled: input.enabled, branchId: ctx.branchId },
+        });
+
+        return result;
       }),
     ),
 
@@ -173,15 +189,31 @@ export const rabbitChairRouter = router({
       }),
     )
     .mutation(({ ctx, input }) =>
-      run(() =>
-        createGrant(db(ctx), {
+      run(async () => {
+        const grant = await createGrant(db(ctx), {
           businessId: input.businessId,
           credits: input.credits,
           days: input.days,
           requestId: input.requestId ?? null,
           createdBy: ctx.userId ?? null,
-        }),
-      ),
+        });
+
+        // Evidencia: quién otorgó, a qué negocio y cuántos créditos.
+        logAudit({
+          userId: ctx.userId ?? null,
+          action: "RABBIT_CHAIR_GRANT",
+          resource: "rabbitChairGrants",
+          resourceId: grant?.id ?? input.businessId,
+          details: {
+            businessId: input.businessId,
+            credits: input.credits,
+            days: input.days,
+            requestId: input.requestId ?? null,
+          },
+        });
+
+        return grant;
+      }),
     ),
 
   /** Admin del negocio: resumen de créditos (módulo La Silla). */
@@ -247,7 +279,9 @@ export const rabbitChairRouter = router({
    * Lanzar el drop: abre la activación y avisa a los Rabbitters.
    * Destino: presencia reciente en el negocio; si no hay, usuarios con push.
    */
-  launch: adminOnlyProcedure.input(activationInput).mutation(({ ctx, input }) =>
+  launch: adminOnlyProcedure
+    .input(activationInput.extend({ allowBroadcast: z.boolean().optional() }))
+    .mutation(({ ctx, input }) =>
     run(async () => {
       if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
         throw new RabbitChairError("INVALID_STATE", "Rabbit Chair no está activado en este negocio.");
@@ -258,8 +292,8 @@ export const rabbitChairRouter = router({
       }
 
       const businessId = await resolveBusinessId(db(ctx), ctx.branchId);
-      const opened = await openActivation(db(ctx), input.activationId);
 
+      // 1) Audiencia por presencia reciente (lo natural del drop).
       let userIds: string[] = [];
       try {
         const since = new Date(Date.now() - 60 * 86400_000);
@@ -269,25 +303,44 @@ export const rabbitChairRouter = router({
           .where(and(eq(presenceSessions.businessId, businessId), gte(presenceSessions.lastPingAt, since)))
           .limit(500);
         userIds = rows.map((r) => r.userId).filter(Boolean) as string[];
-
-        if (userIds.length === 0) {
-          const fallback = await ctx.coreDb
-            .select({ id: users.id })
-            .from(users)
-            .where(eq(users.pushInAppEnabled, true))
-            .limit(300);
-          userIds = fallback.map((u) => u.id);
-        }
       } catch (err) {
-        console.warn("[rabbitChair.launch] no se pudo resolver audiencia:", err);
+        console.warn("[rabbitChair.launch] presencia falló:", err);
       }
+
+      // 2) Sin presencia: NO se manda un masivo sin confirmación explícita.
+      let broadcast = false;
+      if (userIds.length === 0) {
+        if (!input.allowBroadcast) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            "Sin audiencia reciente en el negocio. Confirma el envío masivo (allowBroadcast) para avisar a los Rabbitters con push.",
+          );
+        }
+        broadcast = true;
+        const fallback = await ctx.coreDb
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.pushInAppEnabled, true))
+          .limit(100);
+        userIds = fallback.map((u) => u.id);
+      }
+
+      const opened = await openActivation(db(ctx), input.activationId);
 
       const notified = await sendRabbitChairDrop(userIds, {
         businessId,
         name: activation.name,
       });
 
-      return { activation: opened, notified, audience: userIds.length };
+      logAudit({
+        userId: ctx.userId ?? null,
+        action: "RABBIT_CHAIR_LAUNCH",
+        resource: "rabbitChairActivations",
+        resourceId: input.activationId,
+        details: { businessId, audience: userIds.length, notified, broadcast },
+      });
+
+      return { activation: opened, notified, audience: userIds.length, broadcast };
     }),
   ),
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, sql } from "drizzle-orm";
 import { restaurantDb } from "@/db/restaurant";
+import { getClientIp, rateLimit } from "@/lib/otp";
 import {
   rabbitChairActivations,
   rabbitChairSlots,
@@ -15,6 +16,15 @@ export const dynamic = "force-dynamic";
  * abierta. No requiere sesión: solo datos públicos de la activación.
  */
 export async function GET(req: NextRequest) {
+  // Límite por IP: es público y lo consulta la app al abrir.
+  const limited = await rateLimit(`rabbit_chair_activation_ip:${getClientIp(req)}`, 60, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Demasiadas consultas. Intenta de nuevo en unos segundos." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } },
+    );
+  }
+
   const businessId = String(new URL(req.url).searchParams.get("businessId") || "").trim();
   if (!businessId) return NextResponse.json({ error: "businessId requerido" }, { status: 400 });
 
