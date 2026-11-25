@@ -949,10 +949,12 @@ export async function scheduleRandomActivation(db: Db, activationId: string) {
 /** Entra a la fila cuando la activación está llena. */
 export async function joinWaitlist(db: Db, activationId: string, input: ClaimInput) {
   return db.transaction(async (tx: any) => {
+    // Lock de la activación: las posiciones de la fila se asignan en serie.
     const [activation] = await tx
       .select({ status: rabbitChairActivations.status })
       .from(rabbitChairActivations)
       .where(eq(rabbitChairActivations.id, activationId))
+      .for("update")
       .limit(1);
 
     if (!activation) throw new RabbitChairError("NOT_FOUND", "Activación no encontrada", 404);
@@ -1018,6 +1020,14 @@ export async function listWaitlist(db: Db, activationId: string) {
  */
 export async function inviteNextWaiter(db: Db, activationId: string, ttlMinutes = 10) {
   return db.transaction(async (tx: any) => {
+    // Lock de la activación: dos terminales no invitan a la vez.
+    await tx
+      .select({ id: rabbitChairActivations.id })
+      .from(rabbitChairActivations)
+      .where(eq(rabbitChairActivations.id, activationId))
+      .for("update")
+      .limit(1);
+
     await tx
       .update(rabbitChairWaitlist)
       .set({ status: "EXPIRED", updatedAt: sql`now()` })
@@ -1145,10 +1155,12 @@ export type PosCheckoutInput = {
 
 export async function checkoutSlotAtPos(db: Db, input: PosCheckoutInput) {
   return db.transaction(async (tx: any) => {
+    // Lock de la fila: dos cajas no pueden cobrar el mismo lugar a la vez.
     const [slot] = await tx
       .select()
       .from(rabbitChairSlots)
       .where(eq(rabbitChairSlots.id, input.slotId))
+      .for("update")
       .limit(1);
     if (!slot) throw new RabbitChairError("NOT_FOUND", "Lugar no encontrado", 404);
 

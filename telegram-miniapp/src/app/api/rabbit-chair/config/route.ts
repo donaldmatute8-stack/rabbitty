@@ -18,6 +18,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slotId y config requeridos" }, { status: 400 });
   }
 
+  // Solo las claves del configurador y texto corto: no es un cajón libre.
+  const ALLOWED = ["base", "intensidad", "textura", "temperatura", "dulzor", "aroma", "extra"];
+  const clean: Record<string, string> = {};
+  for (const key of ALLOWED) {
+    const value = (config as Record<string, unknown>)[key];
+    if (value === undefined) continue;
+    if (typeof value !== "string" || value.length > 40) {
+      return NextResponse.json({ error: "Configuración inválida" }, { status: 400 });
+    }
+    clean[key] = value;
+  }
+  if (Object.keys(clean).length === 0) {
+    return NextResponse.json({ error: "Configuración vacía" }, { status: 400 });
+  }
+
   const [slot] = await restaurantDb
     .select({ id: rabbitChairSlots.id, userId: rabbitChairSlots.userId })
     .from(rabbitChairSlots)
@@ -27,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   await restaurantDb
     .update(rabbitChairSlots)
-    .set({ config, updatedAt: new Date() })
+    .set({ config: clean, updatedAt: new Date() })
     .where(eq(rabbitChairSlots.id, slotId));
 
   return NextResponse.json({ success: true });
