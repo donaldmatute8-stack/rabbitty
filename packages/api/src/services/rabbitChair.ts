@@ -897,3 +897,39 @@ export async function setRabbitChairEnabled(
 
   return { enabled };
 }
+
+/**
+ * ── Fecha aleatoria (Bunzy) ────────────────────────────────────────────────
+ * Toma la ventana configurada y elige un instante al azar, redondeado a 15
+ * minutos y con al menos 15 minutos de margen. No abre la activación: solo
+ * fija cuándo se revela.
+ */
+export async function scheduleRandomActivation(db: Db, activationId: string) {
+  const activation = await getActivation(db, activationId);
+  if (activation.status !== "DRAFT") {
+    throw new RabbitChairError("INVALID_STATE", "Solo se puede sortear una activación en borrador");
+  }
+
+  const from = activation.randomWindowFrom ? new Date(activation.randomWindowFrom).getTime() : 0;
+  const to = activation.randomWindowTo ? new Date(activation.randomWindowTo).getTime() : 0;
+  if (!from || !to || to <= from) {
+    throw new RabbitChairError("INVALID_STATE", "Define la ventana (desde / hasta) antes de sortear");
+  }
+
+  const earliest = Math.max(from, Date.now() + 15 * 60_000);
+  if (to <= earliest) {
+    throw new RabbitChairError("INVALID_STATE", "La ventana ya no tiene tiempo disponible");
+  }
+
+  const step = 15 * 60_000;
+  const slots = Math.max(1, Math.floor((to - earliest) / step));
+  const pick = earliest + Math.floor(Math.random() * slots) * step;
+  const startsAt = new Date(pick);
+
+  await db
+    .update(rabbitChairActivations)
+    .set({ startsAt, revealAt: startsAt, updatedAt: new Date() })
+    .where(eq(rabbitChairActivations.id, activationId));
+
+  return { startsAt };
+}

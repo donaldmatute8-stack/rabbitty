@@ -39,6 +39,9 @@ describe("Rabbit Chair — integración (fase 0/1)", () => {
   });
 
   beforeEach(async () => {
+    // La experiencia exige activación explícita del dueño (Marketing). El test
+    // corre contra la base local, así que la encendemos para probar el núcleo.
+    await ctx.restaurantDb.execute(sql`UPDATE "restaurants" SET "rabbitChairEnabled" = true`);
     await ctx.restaurantDb.delete(rabbitChairGrantUses);
     await ctx.restaurantDb.delete(rabbitChairSlots);
     await ctx.restaurantDb.delete(rabbitChairActivations);

@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { rabbitChairSlots } from "@rabbitty/database-restaurant/schema";
+import { presenceSessions, users } from "@rabbitty/database-core/schema";
+import { sendRabbitChairDrop } from "../services/rabbitChairDrop";
 import {
   adminOnlyProcedure,
   godAdminProcedure,
@@ -26,6 +28,7 @@ import {
   markServed,
   openActivation,
   isRabbitChairEnabled,
+  scheduleRandomActivation,
   RabbitChairError,
   resolveBusinessId,
   setRabbitChairEnabled,
@@ -224,6 +227,62 @@ export const rabbitChairRouter = router({
       }
       await activationInBranch(ctx, input.activationId, ctx.branchId);
       return openActivation(db(ctx), input.activationId);
+    }),
+  ),
+
+  /** Sortear fecha dentro de la ventana (Bunzy). */
+  scheduleRandom: adminOnlyProcedure.input(activationInput).mutation(({ ctx, input }) =>
+    run(async () => {
+      await activationInBranch(ctx, input.activationId, ctx.branchId);
+      return scheduleRandomActivation(db(ctx), input.activationId);
+    }),
+  ),
+
+  /**
+   * Lanzar el drop: abre la activación y avisa a los Rabbitters.
+   * Destino: presencia reciente en el negocio; si no hay, usuarios con push.
+   */
+  launch: adminOnlyProcedure.input(activationInput).mutation(({ ctx, input }) =>
+    run(async () => {
+      if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
+        throw new RabbitChairError("INVALID_STATE", "Rabbit Chair no está activado en este negocio.");
+      }
+      const activation = await activationInBranch(ctx, input.activationId, ctx.branchId);
+      if (activation.status !== "DRAFT") {
+        throw new RabbitChairError("INVALID_STATE", "Solo se puede lanzar una activación en borrador");
+      }
+
+      const businessId = await resolveBusinessId(db(ctx), ctx.branchId);
+      const opened = await openActivation(db(ctx), input.activationId);
+
+      let userIds: string[] = [];
+      try {
+        const since = new Date(Date.now() - 60 * 86400_000);
+        const rows = await ctx.coreDb
+          .selectDistinct({ userId: presenceSessions.userId })
+          .from(presenceSessions)
+          .where(and(eq(presenceSessions.businessId, businessId), gte(presenceSessions.lastPingAt, since)))
+          .limit(500);
+        userIds = rows.map((r) => r.userId).filter(Boolean) as string[];
+
+        if (userIds.length === 0) {
+          const fallback = await ctx.coreDb
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.pushInAppEnabled, true))
+            .limit(300);
+          userIds = fallback.map((u) => u.id);
+        }
+      } catch (err) {
+        console.warn("[rabbitChair.launch] no se pudo resolver audiencia:", err);
+      }
+
+      const notified = await sendRabbitChairDrop(userIds, {
+        businessId,
+        name: activation.name,
+      });
+
+      return { activation: opened, notified, audience: userIds.length };
     }),
   ),
 

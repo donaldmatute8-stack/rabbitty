@@ -46,6 +46,20 @@ export default function RabbitChairAdminPage() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const scheduleRandom = trpc.rabbitChair.scheduleRandom.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(`Fecha sorteada: ${new Date(res.startsAt).toLocaleString("es-MX")}`);
+      utils.rabbitChair.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const launch = trpc.rabbitChair.launch.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(`La Silla abierta · aviso a ${res.notified}/${res.audience}`);
+      utils.rabbitChair.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const cancel = trpc.rabbitChair.cancel.useMutation({
     onSuccess: () => {
       toast.success("Borrador cancelado. Crédito devuelto.");
@@ -303,13 +317,31 @@ export default function RabbitChairAdminPage() {
                   </p>
                   <p className="m-0 text-[10px] text-gray-500">
                     {a.format} · {a.capacity} lugares · {a.durationMinutes} min
+                    {a.startsAt ? ` · ${new Date(a.startsAt).toLocaleString("es-MX")}` : ""}
                   </p>
                 </div>
                 <div className="flex gap-2">
                   {a.status === "DRAFT" && (
                     <>
-                      <Button size="sm" onClick={() => open.mutate({ activationId: a.id })}>
-                        <Play className="mr-1 h-3 w-3" /> Abrir
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => scheduleRandom.mutate({ activationId: a.id })}
+                        disabled={scheduleRandom.isPending}
+                        title="Bunzy elige día y hora dentro de la ventana"
+                      >
+                        <Sparkles className="mr-1 h-3 w-3" /> Sortear
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => launch.mutate({ activationId: a.id })}
+                        disabled={launch.isPending}
+                        title="Abre La Silla y avisa a los Rabbitters"
+                      >
+                        <Play className="mr-1 h-3 w-3" /> Lanzar ahora
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => open.mutate({ activationId: a.id })}>
+                        Abrir sin aviso
                       </Button>
                       <Button size="sm" variant="secondary" onClick={() => cancel.mutate({ activationId: a.id })}>
                         <XCircle className="mr-1 h-3 w-3" /> Cancelar
