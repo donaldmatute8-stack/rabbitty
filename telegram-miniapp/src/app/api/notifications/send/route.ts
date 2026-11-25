@@ -24,6 +24,8 @@ const bodySchema = z
     body: z.string().min(1).max(500),
     data: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
     badge: z.number().int().nonnegative().optional(),
+    /** "high" usa time-sensitive (atraviesa Focus) para avisos con ventana. */
+    priority: z.enum(["high", "normal", "low"]).optional(),
   })
   .refine((v) => Boolean(v.userId) || (v.userIds && v.userIds.length > 0), {
     message: "Debes indicar userId o userIds",
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
         route: (parsed.data?.route as string) || null,
         data: parsed.data ?? undefined,
         dedupeKey: null,
-        priority: parsed.badge ? "high" : "normal",
+        priority: parsed.priority ?? (parsed.badge ? "high" : "normal"),
       });
     }
     const summary = await processOutboxBatch(userIds.length);

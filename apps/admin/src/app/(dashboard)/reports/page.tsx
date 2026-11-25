@@ -5,7 +5,7 @@ import Link from "next/link";
 import { trpc } from "../../../lib/trpc-client";
 import { Card, cn, Button, toast } from "@rabbitty/ui";
 import { motion } from "framer-motion";
-import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap, Printer, Mail, FileText, Banknote, Coffee, Receipt, X, Users, Package, Clock, CalendarDays, Percent } from "lucide-react";
+import { Download, TrendingUp, CreditCard, Activity, UtensilsCrossed, Zap, Printer, Mail, FileText, Banknote, Coffee, Receipt, X, Users, Package, Clock, CalendarDays, Percent, Armchair } from "lucide-react";
 import { useBranch } from "../../../components/DashboardClientWrapper";
 
 /** Teaser del gate: lo que ve el afiliado sin el plan. */
@@ -585,6 +585,14 @@ export default function ReportsPage() {
             >
               <Activity className="mr-1.5 h-3.5 w-3.5" />
               Reporte Auditoría PDF
+            </Link>
+
+            <Link
+              href="/reports/rabbit-chair"
+              className="inline-flex items-center justify-center px-3.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold text-xs rounded-xl transition-all cursor-pointer no-underline"
+            >
+              <Armchair className="mr-1.5 h-3.5 w-3.5 text-red-400" />
+              Reporte La Silla
             </Link>
           </div>
         </div>

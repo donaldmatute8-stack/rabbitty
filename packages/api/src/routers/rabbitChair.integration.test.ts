@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
+  orderItems,
+  payments,
   rabbitChairActivations,
   rabbitChairGrants,
   rabbitChairGrantUses,
   rabbitChairSlots,
+  staff,
 } from "@rabbitty/database-restaurant/schema";
 import { createTestContext, closeTestDb } from "../test/setup";
 import { rabbitChairRouter } from "./rabbitChair";
@@ -312,5 +315,172 @@ describe("Rabbit Chair — integración (fase 0/1)", () => {
     });
 
     expect(activation.requiresAgeCheck).toBe(true);
+  });
+
+  it("A1: llenar el último lugar no congela la activación (sigue LIVE)", async () => {
+    const activation = await activationWithSlots({
+      format: "SINGLE",
+      capacity: 1,
+      chargeMode: "PREPAID",
+    });
+
+    await caller.claim({ activationId: activation.id });
+
+    const [row] = await ctx.restaurantDb
+      .select({ status: rabbitChairActivations.status })
+      .from(rabbitChairActivations)
+      .where(eq(rabbitChairActivations.id, activation.id))
+      .limit(1);
+    expect(row?.status).toBe("LIVE");
+
+    // El POS conserva el tablero y sabe que está agotada (derivado).
+    const board = await caller.active();
+    expect(board.activation?.id).toBe(activation.id);
+    expect((board as any).soldOut).toBe(true);
+  });
+
+  it("cobra en efectivo solo si la activación lo permite, con IVA por renglón", async () => {
+    const activation = await activationWithSlots({
+      format: "SINGLE",
+      capacity: 1,
+      chargeMode: "POSTPAID",
+      cardOnly: false,
+      minContributionCents: 5000,
+    });
+    const slot = await caller.claimAtPos({
+      activationId: activation.id,
+      guestName: "Efectivo",
+    });
+
+    const charged = await caller.checkoutAtPos({
+      slotId: slot.id,
+      amountCents: 5000,
+      method: "CASH",
+    });
+    expect(charged.alreadyPaid).toBe(false);
+
+    const [item] = await ctx.restaurantDb
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.orderId, charged.orderId))
+      .limit(1);
+    expect(Number(item?.taxRate)).toBeCloseTo(0.16, 2);
+    // 50.00 con IVA incluido → 6.90 de IVA.
+    expect(Number(item?.taxAmount)).toBeCloseTo(6.9, 1);
+
+    const [payment] = await ctx.restaurantDb
+      .select()
+      .from(payments)
+      .where(eq(payments.orderId, charged.orderId))
+      .limit(1);
+    expect(payment?.method).toBe("CASH");
+  });
+
+  it("con cardOnly el POS rechaza efectivo", async () => {
+    const activation = await activationWithSlots({
+      format: "SINGLE",
+      capacity: 1,
+      chargeMode: "POSTPAID",
+      minContributionCents: 5000,
+    });
+    const slot = await caller.claimAtPos({ activationId: activation.id });
+
+    await expect(
+      caller.checkoutAtPos({ slotId: slot.id, amountCents: 5000, method: "CASH" }),
+    ).rejects.toThrow(/solo con tarjeta/i);
+  });
+
+  it("el historial de créditos muestra el uso y el restante", async () => {
+    const activation = await activationWithSlots({ format: "SINGLE", capacity: 1 });
+
+    const history = await caller.grants();
+    expect(history.creditsRemaining).toBe(4);
+    const use = history.grants[0]?.uses?.[0];
+    expect(use?.activationId).toBe(activation.id);
+    expect(use?.activationName).toBe(activation.name);
+  });
+
+  it("congela el costo del staff extra al crear la activación", async () => {
+    const inserted = await ctx.restaurantDb
+      .insert(staff)
+      .values({
+        userId: "staff-chair",
+        branchId: "b1",
+        name: "Barista de La Silla",
+        email: `chair-staff-${Date.now()}@test.me`,
+        role: "WAITER",
+        hourlyRate: 120,
+      })
+      .returning();
+    const member = inserted[0];
+    if (!member) throw new Error("No se pudo crear el empleado de prueba");
+
+    const activation = await activationWithSlots({
+      format: "SINGLE",
+      capacity: 1,
+      staffId: member.id,
+      staffMinutes: 90,
+    });
+
+    expect(activation.staffId).toBe(member.id);
+    expect(activation.staffMinutes).toBe(90);
+    // 120/h × 1.5 h = 180.00
+    expect(activation.staffCostCents).toBe(18000);
+  });
+
+  it("permite cambiar solo tarjeta sin recompensar crédito", async () => {
+    const activation = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+    expect(activation.cardOnly).toBe(true);
+
+    const updated = await caller.settings({ activationId: activation.id, cardOnly: false });
+    expect(updated.cardOnly).toBe(false);
+
+    const [grant] = await ctx.restaurantDb.select().from(rabbitChairGrants).limit(1);
+    expect(grant?.creditsUsed).toBe(1);
+  });
+
+  it("las métricas responden por sucursal y por negocio", async () => {
+    await activationWithSlots({ format: "BLOCK", capacity: 2 });
+
+    const branch = await caller.metrics({ scope: "branch" });
+    expect(branch.scope).toBe("branch");
+    expect(branch.totals.activations).toBeGreaterThan(0);
+    expect(branch.activations[0]?.capacity).toBe(2);
+
+    const business = await caller.metrics({ scope: "business" });
+    expect(business.scope).toBe("business");
+    expect(business.totals.activations).toBeGreaterThan(0);
+  });
+
+  it("la audiencia de lista de espera avisa solo a quienes estuvieron en la fila", async () => {
+    const previous = await activationWithSlots({ format: "SINGLE", capacity: 1 });
+    await caller.joinWaitlist({ activationId: previous.id });
+    await caller.close({ activationId: previous.id });
+
+    const draft = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+    const launched = await caller.launch({
+      activationId: draft.id,
+      audience: "WAITLIST",
+    });
+
+    expect(launched.audienceType).toBe("WAITLIST");
+    expect(launched.audience).toBe(1);
+    expect(launched.activation.status).toBe("LIVE");
+  });
+
+  it("sin nadie en la fila, la audiencia de espera no cae en un masivo", async () => {
+    const draft = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+
+    await expect(
+      caller.launch({ activationId: draft.id, audience: "WAITLIST" }),
+    ).rejects.toThrow(/fila de este negocio/i);
+  });
+
+  it("la audiencia “todos” exige confirmación explícita", async () => {
+    const draft = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+
+    await expect(caller.launch({ activationId: draft.id, audience: "ALL" })).rejects.toThrow(
+      /masivo/i,
+    );
   });
 });

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { restaurantDb } from "@/db/restaurant";
 import { getClientIp, rateLimit } from "@/lib/otp";
 import {
+  branches,
   rabbitChairActivations,
   rabbitChairSlots,
   restaurants,
@@ -12,8 +13,12 @@ export const dynamic = "force-dynamic";
 
 /**
  * ── Rabbit Chair · activación pública ──────────────────────────────────────
- * La app consulta si el negocio activó la experiencia y si hay una silla
- * abierta. No requiere sesión: solo datos públicos de la activación.
+ * La app consulta si el negocio activó la experiencia y qué sillas hay
+ * abiertas. No requiere sesión: solo datos públicos de la activación.
+ *
+ * Multi-sucursal: acepta `branchId` (enlace del drop) y, si no viene, devuelve
+ * la lista de activaciones abiertas para que la app elija. `activation` sigue
+ * siendo la primera para compatibilidad con la app vieja.
  */
 export async function GET(req: NextRequest) {
   // Límite por IP: es público y lo consulta la app al abrir.
@@ -25,7 +30,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const businessId = String(new URL(req.url).searchParams.get("businessId") || "").trim();
+  const url = new URL(req.url);
+  const businessId = String(url.searchParams.get("businessId") || "").trim();
+  const branchId = String(url.searchParams.get("branchId") || "").trim();
   if (!businessId) return NextResponse.json({ error: "businessId requerido" }, { status: 400 });
 
   const [restaurant] = await restaurantDb
@@ -35,48 +42,76 @@ export async function GET(req: NextRequest) {
     .limit(1);
 
   if (!restaurant?.enabled) {
-    return NextResponse.json({ enabled: false, activation: null, freeSlots: 0 });
+    return NextResponse.json({ enabled: false, activation: null, freeSlots: 0, activations: [] });
   }
 
-  const [activation] = await restaurantDb
-    .select()
+  const rows = await restaurantDb
+    .select({
+      id: rabbitChairActivations.id,
+      branchId: rabbitChairActivations.branchId,
+      branchName: branches.name,
+      name: rabbitChairActivations.name,
+      status: rabbitChairActivations.status,
+      format: rabbitChairActivations.format,
+      capacity: rabbitChairActivations.capacity,
+      minContributionCents: rabbitChairActivations.minContributionCents,
+      durationMinutes: rabbitChairActivations.durationMinutes,
+      menuMode: rabbitChairActivations.menuMode,
+      chargeMode: rabbitChairActivations.chargeMode,
+      requiresAgeCheck: rabbitChairActivations.requiresAgeCheck,
+      playlist: rabbitChairActivations.playlist,
+    })
     .from(rabbitChairActivations)
+    .leftJoin(branches, eq(branches.id, rabbitChairActivations.branchId))
     .where(
       and(
         eq(rabbitChairActivations.businessId, businessId),
-        eq(rabbitChairActivations.status, "LIVE"),
+        // A1: LIVE es el estado normal; SOLD_OUT solo por filas legadas.
+        inArray(rabbitChairActivations.status, ["LIVE", "SOLD_OUT"]),
+        branchId ? eq(rabbitChairActivations.branchId, branchId) : sql`true`,
       ),
     )
-    .limit(1);
-
-  if (!activation) {
-    return NextResponse.json({ enabled: true, activation: null, freeSlots: 0 });
-  }
-
-  const [free] = await restaurantDb
-    .select({ count: sql<number>`count(*)::int` })
-    .from(rabbitChairSlots)
-    .where(
-      and(
-        eq(rabbitChairSlots.activationId, activation.id),
-        eq(rabbitChairSlots.status, "FREE"),
-      ),
+    // LIVE primero; el resto queda por antigüedad de creación.
+    .orderBy(
+      sql`(${rabbitChairActivations.status} = 'LIVE') DESC`,
+      sql`${rabbitChairActivations.createdAt} ASC`,
     );
+
+  const activationIds = rows.map((row) => row.id);
+  const freeRows = activationIds.length
+    ? await restaurantDb
+        .select({
+          activationId: rabbitChairSlots.activationId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(rabbitChairSlots)
+        .where(
+          and(
+            inArray(rabbitChairSlots.activationId, activationIds),
+            eq(rabbitChairSlots.status, "FREE"),
+          ),
+        )
+        .groupBy(rabbitChairSlots.activationId)
+    : [];
+  const freeByActivation = new Map(
+    freeRows.map((row) => [String(row.activationId), Number(row.count ?? 0)]),
+  );
+
+  const activations = rows.map((row) => {
+    const freeSlots = freeByActivation.get(String(row.id)) ?? 0;
+    return { ...row, freeSlots, soldOut: freeSlots === 0 };
+  });
+
+  const first = activations[0] ?? null;
 
   return NextResponse.json({
     enabled: true,
-    activation: {
-      id: activation.id,
-      name: activation.name,
-      format: activation.format,
-      capacity: activation.capacity,
-      minContributionCents: activation.minContributionCents,
-      durationMinutes: activation.durationMinutes,
-      menuMode: activation.menuMode,
-      chargeMode: activation.chargeMode,
-      requiresAgeCheck: activation.requiresAgeCheck,
-      playlist: activation.playlist,
-    },
-    freeSlots: Number(free?.count ?? 0),
+    businessId,
+    branchId: branchId || null,
+    // Compatibilidad: la app vieja lee `activation` y `freeSlots`.
+    activation: first,
+    freeSlots: first?.freeSlots ?? 0,
+    soldOut: first?.soldOut ?? false,
+    activations,
   });
 }

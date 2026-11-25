@@ -2,7 +2,7 @@ import { settledPaymentStatuses } from "../services/payments/settled";
 import { z } from "zod";
 import { router, protectedProcedure, resolveBranchId } from "../trpc";
 import { and, asc, desc, eq, gte, lte, inArray, sql } from "drizzle-orm";
-import { orders, orderItems, menuItems, menuCategories, payments, branches, customers, restaurants, paymentIntents, staff as staffTable, staffShifts } from "@rabbitty/database-restaurant/schema";
+import { orders, orderItems, menuItems, menuCategories, payments, branches, customers, restaurants, paymentIntents, staff as staffTable, staffShifts, rabbitChairSlots, rabbitChairActivations } from "@rabbitty/database-restaurant/schema";
 
 // ─── ZONA HORARIA DEL NEGOCIO ──────────────────────────────────────────────
 // Los reportes financieros y por hora se agrupan por el día/hora LOCAL del
@@ -431,7 +431,12 @@ export const analyticsRouter = router({
         .leftJoin(menuCategories, eq(menuCategories.id, menuItems.categoryId))
         .where(eq(menuItems.branchId, branchId))
         .orderBy(asc(menuItems.name));
-      return rows;
+      // El placeholder "La Silla" (categoría Rabbit Chair, inactivo) no debe
+      // aparecer en el selector: tiene su propio reporte. Sigue en el reporte
+      // cuando se filtra por canal RABBIT_CHAIR.
+      return rows.filter(
+        (row) => !(row.category === "Rabbit Chair" && row.isActive === false),
+      );
     }),
 
   /**
@@ -537,6 +542,56 @@ export const analyticsRouter = router({
         methodsByOrder.set(pay.orderId, list);
       }
 
+      // ── La Silla: costo del staff extra prorrateado por lugar vendido ──
+      // El aporte no tiene COGS; el único costo real es el empleado extra
+      // (bartender/barista) congelado en la activación.
+      const chairSlots = await ctx.restaurantDb
+        .select({ orderId: rabbitChairSlots.orderId, activationId: rabbitChairSlots.activationId })
+        .from(rabbitChairSlots)
+        .where(inArray(rabbitChairSlots.orderId, orderIds));
+      const chairCostByOrder = new Map<string, number>();
+      const chairActivationIds = Array.from(
+        new Set(chairSlots.map((slot) => String(slot.activationId))),
+      );
+      if (chairActivationIds.length > 0) {
+        const chairActivations = await ctx.restaurantDb
+          .select({
+            id: rabbitChairActivations.id,
+            staffCostCents: rabbitChairActivations.staffCostCents,
+          })
+          .from(rabbitChairActivations)
+          .where(inArray(rabbitChairActivations.id, chairActivationIds));
+        const soldRows = await ctx.restaurantDb
+          .select({
+            activationId: rabbitChairSlots.activationId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(rabbitChairSlots)
+          .where(
+            and(
+              inArray(rabbitChairSlots.activationId, chairActivationIds),
+              inArray(rabbitChairSlots.status, ["PAID", "SEATED", "SERVED", "DONE"]),
+            ),
+          )
+          .groupBy(rabbitChairSlots.activationId);
+        const soldByActivation = new Map(
+          soldRows.map((row) => [String(row.activationId), Number(row.count ?? 0)]),
+        );
+        const costPerSeat = new Map<string, number>();
+        for (const chair of chairActivations) {
+          const sold = Math.max(1, soldByActivation.get(String(chair.id)) ?? 1);
+          costPerSeat.set(String(chair.id), Number(chair.staffCostCents ?? 0) / 100 / sold);
+        }
+        for (const slot of chairSlots) {
+          const order = orderById.get(String(slot.orderId));
+          if (!order || order.channel !== "RABBIT_CHAIR") continue;
+          chairCostByOrder.set(
+            String(slot.orderId),
+            costPerSeat.get(String(slot.activationId)) ?? 0,
+          );
+        }
+      }
+
       const [restaurant] = await ctx.restaurantDb
         .select({ taxRate: restaurants.taxRate })
         .from(restaurants)
@@ -585,9 +640,10 @@ export const analyticsRouter = router({
           cost: 0,
           tax: 0,
         };
+        const chairCost = chairCostByOrder.get(String(item.orderId));
         current.qty += qty;
         current.revenue += lineTotal;
-        current.cost += Number(menu?.cost ?? 0) * qty;
+        current.cost += (chairCost ?? Number(menu?.cost ?? 0)) * qty;
         current.tax += tax;
         productMap.set(key, current);
 

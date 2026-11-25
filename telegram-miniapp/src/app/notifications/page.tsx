@@ -62,6 +62,12 @@ export default function NotificationsPage() {
     if (!route.startsWith('/') || route.startsWith('//')) return null;
     if (route === '/pos' || route.startsWith('/pos/')) return '/business';
     if (route === '/business-dashboard' || route.startsWith('/business-dashboard/')) return '/business';
+    // Avisos creados antes del arreglo: el panel de Marketing vive en el admin
+    // web, no en la app. En nativo /business redirige al inicio; La Silla sí
+    // existe y evita el 404.
+    if (route === '/marketing/rabbit-chair' || route.startsWith('/marketing/rabbit-chair/')) {
+      return '/rabbit-chair';
+    }
     return route;
   };
 
@@ -256,7 +262,7 @@ export default function NotificationsPage() {
           </button>
         </div>
       ) : (
-      <div className="flex flex-col gap-3">
+      <div className="mt-5 flex flex-col gap-3">
         {loading ? (
           <div className="flex justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>
         ) : notifications.length === 0 ? (

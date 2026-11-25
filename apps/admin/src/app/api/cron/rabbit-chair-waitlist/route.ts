@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   const db = getRestaurantDb();
 
   const rows = (await db.execute(sql`
-    SELECT a."id" AS id, a."businessId" AS "businessId", a."name" AS name
+    SELECT a."id" AS id, a."businessId" AS "businessId", a."branchId" AS "branchId", a."name" AS name
       FROM "rabbitChairActivations" a
      WHERE a."status" = 'LIVE'
        AND EXISTS (
@@ -36,7 +36,12 @@ export async function GET(req: NextRequest) {
        )
      LIMIT 100
   `)) as any;
-  const activations = (rows?.rows ?? rows ?? []) as Array<{ id: string; businessId: string; name: string }>;
+  const activations = (rows?.rows ?? rows ?? []) as Array<{
+    id: string;
+    businessId: string;
+    branchId?: string | null;
+    name: string;
+  }>;
 
   let invited = 0;
   let pushed = 0;
@@ -50,6 +55,7 @@ export async function GET(req: NextRequest) {
         const ok = await sendRabbitChairInvite(waiter.userId, {
           businessId: activation.businessId,
           name: activation.name,
+          branchId: activation.branchId ?? null,
         });
         if (ok) pushed += 1;
       }

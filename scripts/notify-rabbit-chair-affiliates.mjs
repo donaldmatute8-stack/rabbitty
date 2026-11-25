@@ -30,7 +30,6 @@ const resendKey =
   process.env.RESEND_API_KEY || process.env.AUTH_RESEND_KEY || process.env.RESEND_KEY;
 
 const TITLE = "Rabbit Chair: la experiencia ya está en tu panel";
-const ROUTE = "/marketing/rabbit-chair";
 const MESSAGE =
   "Ya puedes activar Rabbit Chair (La Silla): una silla, una luz, diez minutos y diez lugares. " +
   "Configura formato, cupo, carta y bartender; lanza el aviso con push y cobra el aporte en caja. " +
@@ -116,9 +115,10 @@ for (const r of audience) {
       INSERT INTO "notifications_outbox"
         ("id","userId","type","title","message","route","data","dedupeKey","priority","status","runAfter")
       VALUES
-        (gen_random_uuid()::text, ${r.user_id}, 'SYSTEM', ${TITLE}, ${MESSAGE}, ${ROUTE},
+        (gen_random_uuid()::text, ${r.user_id}, 'SYSTEM', ${TITLE}, ${MESSAGE},
+         ${`/rabbit-chair?business=${r.business_id}`},
          ${JSON.stringify({ kind: "rabbit_chair_launch" })}::jsonb,
-         ${`rabbit_chair_launch:${r.business_id}`}, 'normal', 'QUEUED', now())
+         ${`rabbit_chair_launch:${r.business_id}`}, 'high', 'QUEUED', now())
       ON CONFLICT ("dedupeKey") DO NOTHING
     `;
     inbox++;

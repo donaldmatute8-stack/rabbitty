@@ -14,8 +14,10 @@ import { Button, Card, Input, Select, toast } from "@rabbitty/ui";
 export default function RabbitChairAdminPage() {
   const utils = trpc.useUtils();
   const credits = trpc.rabbitChair.credits.useQuery(undefined, { retry: false });
+  const grants = trpc.rabbitChair.grants.useQuery(undefined, { retry: false });
   const status = trpc.rabbitChair.status.useQuery(undefined, { retry: false });
   const metrics = trpc.rabbitChair.metrics.useQuery({}, { retry: false });
+  const staffList = trpc.staff.getStaff.useQuery({}, { retry: false });
   const toggle = trpc.rabbitChair.enable.useMutation({
     onSuccess: (res) => {
       toast.success(res.enabled ? "Rabbit Chair activado" : "Rabbit Chair desactivado");
@@ -30,6 +32,7 @@ export default function RabbitChairAdminPage() {
       toast.success("Activación creada");
       utils.rabbitChair.list.invalidate();
       utils.rabbitChair.credits.invalidate();
+      utils.rabbitChair.grants.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -62,26 +65,44 @@ export default function RabbitChairAdminPage() {
       utils.rabbitChair.list.invalidate();
     },
     onError: (e, vars: any) => {
-      // Sin presencia reciente no se manda masivo sin confirmar.
+      // Sin audiencia o envío a todos: nunca se manda masivo sin confirmar.
       if (/masivo/i.test(e.message)) {
         const ok = window.confirm(
-          "No hay audiencia reciente en el negocio.\n\n¿Mandar el aviso a los Rabbitters con push activo (máximo 100) y abrir La Silla?",
+          "Esta audiencia no tiene historial suficiente o elegiste a todos.\n\n¿Mandar el aviso a los Rabbitters con push activo (máximo 100) y abrir La Silla?",
         );
-        if (ok) launch.mutate({ activationId: vars.activationId, allowBroadcast: true });
+        if (ok)
+          launch.mutate({
+            activationId: vars.activationId,
+            allowBroadcast: true,
+            audience: vars.audience ?? "ALL",
+          });
         return;
       }
       toast.error(e.message);
     },
+  });
+  const settings = trpc.rabbitChair.settings.useMutation({
+    onSuccess: () => {
+      toast.success("Ajustes guardados");
+      utils.rabbitChair.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
   });
   const cancel = trpc.rabbitChair.cancel.useMutation({
     onSuccess: () => {
       toast.success("Borrador cancelado. Crédito devuelto.");
       utils.rabbitChair.list.invalidate();
       utils.rabbitChair.credits.invalidate();
+      utils.rabbitChair.grants.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
 
+  const [audience, setAudience] = useState<
+    "PRESENCE" | "RADIO" | "WAITLIST" | "MEMBERS" | "ALL"
+  >(
+    "PRESENCE",
+  );
   const [form, setForm] = useState({
     name: "La Silla",
     format: "BLOCK",
@@ -89,6 +110,7 @@ export default function RabbitChairAdminPage() {
     partySize: "2",
     waveMinutes: "20",
     chargeMode: "PREPAID",
+    cardOnly: true,
     minContribution: "50",
     durationMinutes: "10",
     menuMode: "BOTH",
@@ -97,6 +119,9 @@ export default function RabbitChairAdminPage() {
     bartenderMode: "ROTATING",
     windowFrom: "",
     windowTo: "",
+    radiusMeters: "1000",
+    staffId: "",
+    staffMinutes: "",
   });
 
   const remaining = credits.data?.creditsRemaining ?? 0;
@@ -161,18 +186,90 @@ export default function RabbitChairAdminPage() {
             Abrir vista del POS
           </Link>
         </div>
+
+        {/* Historial: de dónde salió cada crédito y en qué activación se usó */}
+        {(grants.data?.grants ?? []).length > 0 ? (
+          <div className="mt-4 overflow-x-auto rounded-xl border border-white/10">
+            <table className="w-full text-left text-[11px]">
+              <thead className="bg-white/[0.03] text-[9px] uppercase tracking-wider text-gray-500">
+                <tr>
+                  <th className="px-2 py-1.5">Otorgado</th>
+                  <th className="px-2 py-1.5 text-right">Créditos</th>
+                  <th className="px-2 py-1.5 text-right">Usados</th>
+                  <th className="px-2 py-1.5 text-right">Restantes</th>
+                  <th className="px-2 py-1.5">Vence</th>
+                  <th className="px-2 py-1.5">Origen</th>
+                  <th className="px-2 py-1.5">Se usó en</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(grants.data?.grants ?? []).map((grant: any) => {
+                  const left = Math.max(0, Number(grant.creditsTotal) - Number(grant.creditsUsed));
+                  const expires = grant.expiresAt ? new Date(grant.expiresAt) : null;
+                  const expired = Boolean(expires && expires.getTime() <= Date.now());
+                  const revoked = Boolean(grant.revokedAt);
+                  const uses = (grant.uses ?? []) as Array<{ activationName?: string | null }>;
+                  return (
+                    <tr key={grant.id} className="border-t border-white/5">
+                      <td className="px-2 py-1.5 text-gray-300">
+                        {new Date(grant.createdAt).toLocaleDateString("es-MX")}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-bold text-gray-200">
+                        {grant.creditsTotal}
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-gray-400">{grant.creditsUsed}</td>
+                      <td
+                        className={`px-2 py-1.5 text-right font-black ${
+                          revoked || expired ? "text-gray-500" : left > 0 ? "text-emerald-300" : "text-gray-400"
+                        }`}
+                      >
+                        {revoked ? "Revocado" : expired ? "Vencido" : left}
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-400">
+                        {expires ? expires.toLocaleDateString("es-MX") : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-400">
+                        {grant.requestId ? "Solicitud" : "Rabbitty"}
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-300">
+                        {uses.length > 0
+                          ? uses
+                              .map((use) => use.activationName || "Activación")
+                              .filter(Boolean)
+                              .join(", ")
+                          : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-[11px] text-gray-500">
+            Aún no hay movimientos. Rabbitty otorga créditos por hito.
+          </p>
+        )}
       </Card>
 
       {/* Métricas de La Silla */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="m-0 text-sm font-black text-white">Cómo va La Silla</p>
-          <Link
-            href="/reports/products?channel=RABBIT_CHAIR"
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-bold text-cyan-200 hover:bg-white/10"
-          >
-            Ver ingresos de La Silla
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/reports/rabbit-chair"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-bold text-red-200 hover:bg-white/10"
+            >
+              Reporte de La Silla
+            </Link>
+            <Link
+              href="/reports/products?channel=RABBIT_CHAIR"
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-bold text-cyan-200 hover:bg-white/10"
+            >
+              Ver ingresos de La Silla
+            </Link>
+          </div>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {[
@@ -291,6 +388,67 @@ export default function RabbitChairAdminPage() {
               ]}
             />
           </label>
+          <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+            <input
+              type="checkbox"
+              checked={form.cardOnly}
+              onChange={(e) => setForm({ ...form, cardOnly: e.target.checked })}
+              className="h-4 w-4 accent-red-500"
+            />
+            <span className="text-[11px] font-bold text-gray-300">
+              Solo tarjeta (sin efectivo en el POS)
+            </span>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">
+              Empleado extra (opcional)
+            </span>
+            <Select
+              value={form.staffId}
+              onChange={(e) => setForm({ ...form, staffId: e.target.value })}
+              options={[
+                { value: "", label: "Sin staff extra" },
+                ...((staffList.data ?? []) as any[])
+                  .filter((member) => member.isActive)
+                  .map((member) => ({
+                    value: member.id,
+                    label: `${member.name}${Number(member.hourlyRate) > 0 ? ` · $${Number(member.hourlyRate).toFixed(0)}/h` : ""}`,
+                  })),
+              ]}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">
+              Minutos de staff
+            </span>
+            <Input
+              inputMode="numeric"
+              placeholder="= duración"
+              value={form.staffMinutes}
+              onChange={(e) => setForm({ ...form, staffMinutes: e.target.value.replace(/\D/g, "") })}
+            />
+            {form.staffId && (() => {
+              const member = ((staffList.data ?? []) as any[]).find((m) => m.id === form.staffId);
+              const minutes =
+                Number(form.staffMinutes) || Number(form.durationMinutes) || 10;
+              const cost = (Number(member?.hourlyRate ?? 0) * minutes) / 60;
+              return (
+                <span className="mt-1 block text-[10px] text-gray-500">
+                  Costo estimado: ${cost.toFixed(2)}
+                </span>
+              );
+            })()}
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">
+              Radio de proximidad (m)
+            </span>
+            <Input
+              inputMode="numeric"
+              value={form.radiusMeters}
+              onChange={(e) => setForm({ ...form, radiusMeters: e.target.value.replace(/\D/g, "") })}
+            />
+          </label>
           <label className="block">
             <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Bartender</span>
             <Select
@@ -346,6 +504,7 @@ export default function RabbitChairAdminPage() {
                 partySize: Number(form.partySize) || undefined,
                 waveMinutes: form.format === "WAVES" ? Number(form.waveMinutes) || null : null,
                 chargeMode: form.chargeMode as any,
+                cardOnly: form.cardOnly,
                 minContributionCents: Math.max(5000, (Number(form.minContribution) || 50) * 100),
                 durationMinutes: Number(form.durationMinutes) || 10,
                 menuMode: form.menuMode as any,
@@ -354,6 +513,9 @@ export default function RabbitChairAdminPage() {
                 bartenderMode: form.bartenderMode as any,
                 randomWindowFrom: form.windowFrom ? new Date(form.windowFrom).toISOString() : null,
                 randomWindowTo: form.windowTo ? new Date(form.windowTo).toISOString() : null,
+                radiusMeters: Number(form.radiusMeters) || 1000,
+                staffId: form.staffId || null,
+                staffMinutes: form.staffMinutes ? Number(form.staffMinutes) : null,
               })
             }
             disabled={activate.isPending || remaining <= 0 || !status.data?.enabled}
@@ -374,7 +536,33 @@ export default function RabbitChairAdminPage() {
       </Card>
 
       <Card className="p-4">
-        <p className="m-0 mb-3 text-sm font-black text-white">Activaciones</p>
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <p className="m-0 text-sm font-black text-white">Activaciones</p>
+          <div className="w-full max-w-xs">
+            <Select
+              value={audience}
+              onChange={(e) => setAudience(e.target.value as any)}
+              options={[
+                { value: "PRESENCE", label: "Presencia reciente" },
+                { value: "RADIO", label: "Radio / proximidad" },
+                { value: "WAITLIST", label: "Lista de espera" },
+                { value: "MEMBERS", label: "Miembros activos" },
+                { value: "ALL", label: "Todos con push (masivo)" },
+              ]}
+            />
+            <p className="m-0 mt-1 text-[10px] text-gray-500">
+              {audience === "PRESENCE"
+                ? "Quienes han estado en el negocio en los últimos 60 días."
+                : audience === "RADIO"
+                  ? "Quienes han estado en negocios dentro del radio (usa la ubicación del local)."
+                  : audience === "WAITLIST"
+                  ? "Quienes alguna vez entraron a la fila de La Silla."
+                  : audience === "MEMBERS"
+                    ? "Miembros con membresía activa y vigente."
+                    : "Todos con push activo (máx. 100). Pide confirmación."}
+            </p>
+          </div>
+        </div>
         {(list.data ?? []).length === 0 ? (
           <p className="m-0 text-xs text-gray-500">Todavía no hay activaciones.</p>
         ) : (
@@ -388,8 +576,25 @@ export default function RabbitChairAdminPage() {
                   <p className="m-0 text-[10px] text-gray-500">
                     {a.format} · {a.capacity} lugares · {a.durationMinutes} min
                     {a.startsAt ? ` · ${new Date(a.startsAt).toLocaleString("es-MX")}` : ""}
+                    {Number(a.staffCostCents) > 0
+                      ? ` · staff $${(Number(a.staffCostCents) / 100).toFixed(0)}`
+                      : ""}
                   </p>
                 </div>
+                {["DRAFT", "LIVE"].includes(String(a.status)) && (
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400">
+                    <input
+                      type="checkbox"
+                      checked={a.cardOnly !== false}
+                      disabled={settings.isPending}
+                      onChange={(e) =>
+                        settings.mutate({ activationId: a.id, cardOnly: e.target.checked })
+                      }
+                      className="h-3.5 w-3.5 accent-red-500"
+                    />
+                    Solo tarjeta
+                  </label>
+                )}
                 <div className="flex gap-2">
                   {a.status === "DRAFT" && (
                     <>
@@ -404,7 +609,7 @@ export default function RabbitChairAdminPage() {
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => launch.mutate({ activationId: a.id })}
+                        onClick={() => launch.mutate({ activationId: a.id, audience })}
                         disabled={launch.isPending}
                         title="Abre La Silla y avisa a los Rabbitters"
                       >

@@ -141,7 +141,9 @@ export async function processOutboxBatch(limit = 20): Promise<{
     // sigue saliendo y el ícono iOS marca el badge. El plano CATEGORÍA apaga
     // ambos (ver bloque SKIPPED abajo).
     let notificationId: string | null = null;
-    if (!pushMuted && inAppEnabled) {
+    // En reintentos el in-app YA se insertó en el primer intento: volver a
+    // insertarlo duplicaba la campana (p. ej. usuario sin device tokens).
+    if (!pushMuted && inAppEnabled && item.attempts === 0) {
       const [inApp] = await db
         .insert(notifications)
         .values({ userId: item.userId, title: item.title, message: item.message, type: item.type, ...(item.route ? { route: item.route } : {}) })

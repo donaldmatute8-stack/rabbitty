@@ -1428,6 +1428,10 @@ export const rabbitChairActivations = pgTable("rabbitChairActivations", {
   lightPreset: text("lightPreset"),
   /** FIXED | ROTATING */
   bartenderMode: text("bartenderMode").default("ROTATING").notNull(),
+  /** Empleado extra asignado (bartender/barista) y costo congelado al crear. */
+  staffId: text("staffId"),
+  staffMinutes: integer("staffMinutes").default(0).notNull(),
+  staffCostCents: integer("staffCostCents").default(0).notNull(),
   createdBy: text("createdBy"),
   ...timestamps,
 }, (t) => [
@@ -1471,6 +1475,8 @@ export const rabbitChairSlots = pgTable("rabbitChairSlots", {
     t.wave,
     t.index,
   ),
+  // Reporte por producto: cruza la orden con su lugar de La Silla.
+  index("rabbitChairSlots_order_idx").on(t.orderId),
 ]);
 
 /** Fila de espera de una activación de Rabbit Chair. */

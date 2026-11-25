@@ -8,7 +8,7 @@
  */
 export async function sendRabbitChairDrop(
   userIds: string[],
-  params: { businessId: string; name?: string | null },
+  params: { businessId: string; name?: string | null; branchId?: string | null },
 ): Promise<number> {
   const base = process.env.RABBITTY_MINIAPP_URL;
   const secret = process.env.PUSH_SEND_SECRET;
@@ -22,7 +22,12 @@ export async function sendRabbitChairDrop(
         userIds: userIds.slice(0, 500),
         title: "Hay una silla",
         body: `${params.name || "La Silla"} está abierta. Entra a Rabbitty y toma tu lugar.`,
-        data: { type: "SYSTEM", route: `/rabbit-chair?business=${params.businessId}` },
+        // Evento con ventana: no debe quedar enterrado por Focus.
+        priority: "high",
+        data: {
+          type: "SYSTEM",
+          route: `/rabbit-chair?business=${params.businessId}${params.branchId ? `&branch=${params.branchId}` : ""}`,
+        },
       }),
     });
     if (!res.ok) return 0;
@@ -36,7 +41,7 @@ export async function sendRabbitChairDrop(
 /** Aviso personal: le tocó su lugar en la fila. */
 export async function sendRabbitChairInvite(
   userId: string | null | undefined,
-  params: { businessId: string; name?: string | null },
+  params: { businessId: string; name?: string | null; branchId?: string | null },
 ): Promise<boolean> {
   if (!userId) return false;
   const base = process.env.RABBITTY_MINIAPP_URL;
@@ -50,7 +55,11 @@ export async function sendRabbitChairInvite(
         userId,
         title: "Te toca la silla",
         body: `Se liberó un lugar en ${params.name || "La Silla"}. Tienes 10 minutos para tomarlo.`,
-        data: { type: "SYSTEM", route: `/rabbit-chair?business=${params.businessId}` },
+        priority: "high",
+        data: {
+          type: "SYSTEM",
+          route: `/rabbit-chair?business=${params.businessId}${params.branchId ? `&branch=${params.branchId}` : ""}`,
+        },
       }),
     });
     return res.ok;

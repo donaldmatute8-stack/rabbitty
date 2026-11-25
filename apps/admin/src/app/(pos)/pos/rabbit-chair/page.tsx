@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Armchair, Clock, RefreshCw, UserPlus } from "lucide-react";
 import { trpc } from "../../../../lib/trpc-client";
 import { Button, Input, toast } from "@rabbitty/ui";
+import { ChargeSlotModal, type ChargeMethod } from "./ChargeSlotModal";
 
 /**
  * ── POS · Rabbit Chair (La Silla) ───────────────────────────────────────────
@@ -71,6 +72,7 @@ export default function RabbitChairPosPage() {
   const checkout = trpc.rabbitChair.checkoutAtPos.useMutation({
     onSuccess: () => {
       toast.success("Aporte cobrado y registrado en caja");
+      setChargeSlot(null);
       utils.rabbitChair.active.invalidate();
     },
     onError: (e) => toast.error(e.message),
@@ -84,6 +86,11 @@ export default function RabbitChairPosPage() {
   });
 
   const [guest, setGuest] = useState("");
+  const [chargeSlot, setChargeSlot] = useState<{
+    id: string;
+    index: number;
+    guestName?: string | null;
+  } | null>(null);
   const [, forceTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => forceTick((n) => n + 1), 1000);
@@ -92,6 +99,8 @@ export default function RabbitChairPosPage() {
 
   const activation = data?.activation ?? null;
   const slots = (data?.slots ?? []) as Array<Record<string, any>>;
+  // A1: agotada derivada (no se persiste SOLD_OUT).
+  const soldOut = Boolean((data as any)?.soldOut);
   const waitlist = trpc.rabbitChair.waitlist.useQuery(
     { activationId: activation?.id ?? "" },
     { enabled: Boolean(activation?.id), refetchInterval: 10000, retry: false },
@@ -157,6 +166,11 @@ export default function RabbitChairPosPage() {
                 <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
                   {CHARGE_LABEL[activation.chargeMode] ?? activation.chargeMode}
                 </span>
+                {soldOut && (
+                  <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-red-300">
+                    Agotada
+                  </span>
+                )}
                 {waiting.length > 0 && (
                   <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-purple-200">
                     En espera: {waiting.length}
@@ -187,9 +201,9 @@ export default function RabbitChairPosPage() {
                   claim.mutate({ activationId: activation.id, guestName: guest.trim() || undefined });
                   setGuest("");
                 }}
-                disabled={claim.isPending}
+                disabled={claim.isPending || soldOut}
               >
-                <UserPlus className="mr-1.5 h-4 w-4" /> Apartar lugar
+                <UserPlus className="mr-1.5 h-4 w-4" /> {soldOut ? "Sin lugares" : "Apartar lugar"}
               </Button>
             </div>
 
@@ -227,24 +241,13 @@ export default function RabbitChairPosPage() {
                       {status === "HELD" && (
                         <Button
                           size="sm"
-                          onClick={() => {
-                            const min = Number(activation.minContributionCents) / 100;
-                            const raw = window.prompt(
-                              `Aporte a cobrar (mínimo $${min.toFixed(0)})`,
-                              String(min),
-                            );
-                            if (!raw) return;
-                            const amount = Number(raw);
-                            if (!Number.isFinite(amount) || amount * 100 < Number(activation.minContributionCents)) {
-                              toast.error("El aporte está por debajo del mínimo");
-                              return;
-                            }
-                            checkout.mutate({
-                              slotId: slot.id,
-                              amountCents: Math.round(amount * 100),
-                              method: "CARD",
-                            });
-                          }}
+                          onClick={() =>
+                            setChargeSlot({
+                              id: slot.id,
+                              index: Number(slot.index),
+                              guestName: slot.guestName ?? null,
+                            })
+                          }
                           disabled={checkout.isPending}
                         >
                           Cobrar aporte
@@ -268,6 +271,19 @@ export default function RabbitChairPosPage() {
           </>
         )}
       </main>
+
+      <ChargeSlotModal
+        open={Boolean(chargeSlot)}
+        slot={chargeSlot}
+        minContributionCents={Number(activation?.minContributionCents ?? 5000)}
+        cardOnly={activation?.cardOnly !== false}
+        pending={checkout.isPending}
+        onClose={() => setChargeSlot(null)}
+        onConfirm={({ amountCents, method }: { amountCents: number; method: ChargeMethod }) => {
+          if (!chargeSlot) return;
+          checkout.mutate({ slotId: chargeSlot.id, amountCents, method });
+        }}
+      />
     </div>
   );
 }

@@ -24,6 +24,10 @@ const CONFIG_STEPS: Array<{ key: string; label: string; options: string[] }> = [
 
 type Activation = {
   id: string;
+  branchId?: string | null;
+  branchName?: string | null;
+  freeSlots?: number;
+  soldOut?: boolean;
   name: string;
   format: string;
   capacity: number;
@@ -38,12 +42,16 @@ type Activation = {
 export default function RabbitChairPage() {
   const params = useSearchParams();
   const businessId = params.get("business") || "";
+  const branchFromLink = params.get("branch") || "";
   const { user, loading: authLoading } = useAuth();
 
+  const [branch, setBranch] = useState(branchFromLink);
   const [state, setState] = useState<{
     enabled: boolean;
     activation: Activation | null;
     freeSlots: number;
+    soldOut?: boolean;
+    activations?: Activation[];
   } | null>(null);
   const [slot, setSlot] = useState<any>(null);
   const [config, setConfig] = useState<Record<string, string>>({});
@@ -63,7 +71,9 @@ export default function RabbitChairPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/rabbit-chair?businessId=${encodeURIComponent(businessId)}`, {
+      const query = new URLSearchParams({ businessId });
+      if (branch) query.set("branchId", branch);
+      const res = await fetch(`/api/rabbit-chair?${query.toString()}`, {
         cache: "no-store",
       });
       const data = await res.json();
@@ -74,13 +84,15 @@ export default function RabbitChairPage() {
           { headers: await headers(), cache: "no-store" },
         ).then((r) => r.json());
         if (pass?.slot) setSlot(pass.slot);
+      } else {
+        setSlot(null);
       }
     } catch {
       setError("No se pudo cargar La Silla.");
     } finally {
       setLoading(false);
     }
-  }, [businessId, user?.id, headers]);
+  }, [businessId, branch, user?.id, headers]);
 
   useEffect(() => {
     void load();
@@ -212,6 +224,40 @@ export default function RabbitChairPage() {
     );
   }
 
+  const openActivations = state?.activations ?? [];
+  if (state?.enabled && openActivations.length > 1 && !branch) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black px-5 py-10 text-white">
+        <div className="w-full max-w-lg">
+          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-500">Rabbit Chair</p>
+          <h1 className="mt-2 text-3xl font-black">¿En qué sucursal?</h1>
+          <p className="mt-2 text-sm text-gray-400">
+            Hay más de una silla abierta. Elige la sucursal donde estás.
+          </p>
+          <div className="mt-6 space-y-2">
+            {openActivations.map((candidate) => (
+              <button
+                key={candidate.id}
+                onClick={() => setBranch(String(candidate.branchId || ""))}
+                className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left hover:bg-white/[0.08]"
+              >
+                <span>
+                  <span className="block text-sm font-black">{candidate.branchName || candidate.name}</span>
+                  <span className="block text-[11px] text-gray-400">
+                    {candidate.soldOut
+                      ? "Silla llena · lista de espera"
+                      : `${candidate.freeSlots ?? 0} lugares libres`}
+                  </span>
+                </span>
+                <span className="text-xs font-black text-red-400">Entrar</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (!state?.enabled || !state?.activation) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black px-6 text-center">
@@ -235,8 +281,8 @@ export default function RabbitChairPage() {
         <p className="text-[10px] font-black uppercase tracking-[0.35em] text-red-500">Rabbit Chair · La Silla</p>
         <h1 className="mt-2 text-3xl font-black">{activation.name}</h1>
         <p className="mt-2 text-sm text-gray-400">
-          {state.freeSlots} lugares libres · mínimo ${(activation.minContributionCents / 100).toFixed(0)} ·{" "}
-          {activation.durationMinutes} min
+          {state.freeSlots > 0 ? `${state.freeSlots} lugares libres` : "Silla llena"} · mínimo $
+          {(activation.minContributionCents / 100).toFixed(0)} · {activation.durationMinutes} min
           {activation.requiresAgeCheck ? " · +18" : ""}
         </p>
 

@@ -1,10 +1,23 @@
 import { z } from "zod";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { rabbitChairSlots } from "@rabbitty/database-restaurant/schema";
-import { presenceSessions, users } from "@rabbitty/database-core/schema";
+import {
+  branches,
+  rabbitChairActivations,
+  rabbitChairGrants,
+  rabbitChairGrantUses,
+  rabbitChairSlots,
+  rabbitChairWaitlist,
+} from "@rabbitty/database-restaurant/schema";
+import {
+  membershipSubscriptions,
+  ownedBusinesses,
+  presenceSessions,
+  users,
+} from "@rabbitty/database-core/schema";
 import { sendRabbitChairDrop, sendRabbitChairInvite } from "../services/rabbitChairDrop";
 import { logAudit } from "../middleware/auditLog";
+import { naiveUtcToIso } from "../services/time";
 import {
   adminOnlyProcedure,
   godAdminProcedure,
@@ -38,6 +51,7 @@ import {
   RabbitChairError,
   resolveBusinessId,
   setRabbitChairEnabled,
+  updateActivationSettings,
   type Db,
 } from "../services/rabbitChair";
 
@@ -79,6 +93,18 @@ async function run<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Distancia en metros entre dos coordenadas (haversine). */
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (n: number) => (n * Math.PI) / 180;
+  const R = 6_371_000;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function db(ctx: { restaurantDb: Db }): Db {
   return ctx.restaurantDb;
 }
@@ -98,6 +124,8 @@ const activateInput = z.object({
   partySize: z.number().int().min(1).max(4).optional(),
   waveMinutes: z.number().int().min(5).max(240).nullish(),
   chargeMode: chargeModeSchema.default("PREPAID"),
+  // false = el POS puede cobrar en efectivo. Default true (solo tarjeta).
+  cardOnly: z.boolean().optional(),
   minContributionCents: z.number().int().min(5000).max(1_000_000).default(5000),
   durationMinutes: z.number().int().min(1).max(60).default(10),
   menuMode: menuModeSchema.default("BOTH"),
@@ -108,6 +136,9 @@ const activateInput = z.object({
   randomWindowFrom: z.string().datetime().nullish(),
   randomWindowTo: z.string().datetime().nullish(),
   radiusMeters: z.number().int().min(50).max(20_000).nullish(),
+  // Empleado extra (bartender/barista) y minutos pagados.
+  staffId: z.string().min(1).nullish(),
+  staffMinutes: z.number().int().min(0).max(1440).nullish(),
 });
 
 async function activationInBranch(ctx: { restaurantDb: Db }, activationId: string, branchId: string) {
@@ -143,23 +174,43 @@ export const rabbitChairRouter = router({
         activationId: z.string().optional(),
         from: z.string().optional(),
         to: z.string().optional(),
+        // branch = sucursal actual; business = consolidado del tenant.
+        scope: z.enum(["branch", "business"]).default("branch"),
       }),
     )
     .query(({ ctx, input }) =>
       run(async () => {
+        // Alcance: sucursal o todo el negocio (mismo patrón que el reporte por producto).
+        let branchCondition = sql`a."branchId" = ${ctx.branchId}`;
+        if (input.scope === "business") {
+          const [branch] = await ctx.restaurantDb
+            .select({ restaurantId: branches.restaurantId })
+            .from(branches)
+            .where(eq(branches.id, ctx.branchId))
+            .limit(1);
+          if (branch?.restaurantId) {
+            branchCondition = sql`a."branchId" IN (
+              SELECT "id" FROM "branches"
+               WHERE "restaurantId" = ${branch.restaurantId} AND "isActive" = true
+            )`;
+          }
+        }
+
         const rows = (await ctx.restaurantDb.execute(sql`
-          SELECT a."id", a."name", a."status", a."capacity", a."startsAt",
+          SELECT a."id", a."name", a."status", a."capacity", a."startsAt", a."createdAt",
+                 COALESCE(a."staffCostCents", 0)::int AS staff_cost_cents,
                  COUNT(s."id") FILTER (WHERE s."status" IN ('PAID','SEATED','SERVED','DONE'))::int AS sold,
                  COALESCE(SUM(s."paidCents") FILTER (WHERE s."paidCents" IS NOT NULL), 0)::int AS revenue_cents,
                  AVG(EXTRACT(EPOCH FROM (s."servedAt" - s."seatedAt")) / 60.0)
                    FILTER (WHERE s."servedAt" IS NOT NULL AND s."seatedAt" IS NOT NULL) AS avg_service_min
             FROM "rabbitChairActivations" a
             LEFT JOIN "rabbitChairSlots" s ON s."activationId" = a."id"
-           WHERE a."branchId" = ${ctx.branchId}
+           WHERE ${branchCondition}
              ${input.activationId ? sql`AND a."id" = ${input.activationId}` : sql``}
              ${input.from ? sql`AND COALESCE(a."startsAt", a."createdAt") >= ${input.from}::date` : sql``}
              ${input.to ? sql`AND COALESCE(a."startsAt", a."createdAt") < (${input.to}::date + interval '1 day')` : sql``}
-           GROUP BY a."id", a."name", a."status", a."capacity", a."startsAt"
+           GROUP BY a."id", a."name", a."status", a."capacity", a."startsAt", a."createdAt",
+                    a."staffCostCents"
            ORDER BY COALESCE(a."startsAt", a."createdAt") DESC
            LIMIT 50
         `)) as any;
@@ -171,7 +222,7 @@ export const rabbitChairRouter = router({
                  COUNT(*) FILTER (WHERE w."status" = 'CONVERTED')::int AS converted
             FROM "rabbitChairWaitlist" w
             JOIN "rabbitChairActivations" a ON a."id" = w."activationId"
-           WHERE a."branchId" = ${ctx.branchId}
+           WHERE ${branchCondition}
            GROUP BY w."activationId"
         `)) as any;
         const waitMap = new Map<string, { waiting: number; converted: number }>();
@@ -186,15 +237,20 @@ export const rabbitChairRouter = router({
           const capacity = Number(row.capacity ?? 0);
           const sold = Number(row.sold ?? 0);
           const revenue = Number(row.revenue_cents ?? 0) / 100;
+          const staffCost = Number(row.staff_cost_cents ?? 0) / 100;
           const wait = waitMap.get(String(row.id)) ?? { waiting: 0, converted: 0 };
           return {
             id: String(row.id),
             name: row.name,
             status: row.status,
             capacity,
+            startsAt: naiveUtcToIso(row.startsAt),
+            createdAt: naiveUtcToIso(row.createdAt),
             sold,
             occupancyPct: capacity > 0 ? Math.round((sold / capacity) * 100) : 0,
             revenue,
+            staffCost: Math.round(staffCost * 100) / 100,
+            netMargin: Math.round((revenue - staffCost) * 100) / 100,
             avgContribution: sold > 0 ? Math.round((revenue / sold) * 100) / 100 : 0,
             avgServiceMin: row.avg_service_min ? Math.round(Number(row.avg_service_min) * 10) / 10 : null,
             waiting: wait.waiting,
@@ -207,17 +263,21 @@ export const rabbitChairRouter = router({
             acc.capacity += a.capacity;
             acc.sold += a.sold;
             acc.revenue += a.revenue;
+            acc.staffCost += a.staffCost;
             acc.waiting += a.waiting;
             acc.converted += a.converted;
             return acc;
           },
-          { capacity: 0, sold: 0, revenue: 0, waiting: 0, converted: 0 },
+          { capacity: 0, sold: 0, revenue: 0, waiting: 0, converted: 0, staffCost: 0 },
         );
 
         return {
+          scope: input.scope,
           totals: {
             ...totals,
             revenue: Math.round(totals.revenue * 100) / 100,
+            staffCost: Math.round(totals.staffCost * 100) / 100,
+            netMargin: Math.round((totals.revenue - totals.staffCost) * 100) / 100,
             occupancyPct: totals.capacity > 0 ? Math.round((totals.sold / totals.capacity) * 100) : 0,
             avgContribution: totals.sold > 0 ? Math.round((totals.revenue / totals.sold) * 100) / 100 : 0,
             activations: activations.length,
@@ -315,6 +375,65 @@ export const rabbitChairRouter = router({
     }),
   ),
 
+  /**
+   * Admin del negocio: historial de créditos con su uso real (a qué activación
+   * se aplicó cada crédito). Solo lectura; no toca Bunz ni caja.
+   */
+  grants: adminOnlyProcedure.query(({ ctx }) =>
+    run(async () => {
+      const businessId = await resolveBusinessId(db(ctx), ctx.branchId);
+
+      const grants = await db(ctx)
+        .select()
+        .from(rabbitChairGrants)
+        .where(eq(rabbitChairGrants.businessId, businessId))
+        .orderBy(desc(rabbitChairGrants.createdAt))
+        .limit(50);
+
+      const uses = await db(ctx)
+        .select({
+          grantId: rabbitChairGrantUses.grantId,
+          activationId: rabbitChairGrantUses.activationId,
+          usedAt: rabbitChairGrantUses.createdAt,
+          activationName: rabbitChairActivations.name,
+          activationStatus: rabbitChairActivations.status,
+          startsAt: rabbitChairActivations.startsAt,
+        })
+        .from(rabbitChairGrantUses)
+        .leftJoin(
+          rabbitChairActivations,
+          eq(rabbitChairActivations.id, rabbitChairGrantUses.activationId),
+        )
+        .where(eq(rabbitChairGrantUses.businessId, businessId))
+        .orderBy(desc(rabbitChairGrantUses.createdAt));
+
+      const usesByGrant = new Map<string, typeof uses>();
+      for (const use of uses) {
+        const list = usesByGrant.get(use.grantId) ?? [];
+        list.push(use);
+        usesByGrant.set(use.grantId, list);
+      }
+
+      const now = Date.now();
+      const remaining = grants
+        .filter(
+          (grant) =>
+            !grant.revokedAt &&
+            (!grant.expiresAt || grant.expiresAt.getTime() > now) &&
+            grant.creditsUsed < grant.creditsTotal,
+        )
+        .reduce((total, grant) => total + (grant.creditsTotal - grant.creditsUsed), 0);
+
+      return {
+        creditsRemaining: remaining,
+        grants: grants.map((grant) => ({
+          ...grant,
+          uses: usesByGrant.get(grant.id) ?? [],
+        })),
+      };
+    }),
+  ),
+
   activate: adminOnlyProcedure.input(activateInput).mutation(({ ctx, input }) =>
     run(async () => {
       if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
@@ -331,6 +450,7 @@ export const rabbitChairRouter = router({
         partySize: input.partySize,
         waveMinutes: input.waveMinutes ?? null,
         chargeMode: input.chargeMode,
+        cardOnly: input.cardOnly,
         minContributionCents: input.minContributionCents,
         durationMinutes: input.durationMinutes,
         menuMode: input.menuMode,
@@ -341,6 +461,8 @@ export const rabbitChairRouter = router({
         randomWindowFrom: input.randomWindowFrom ? new Date(input.randomWindowFrom) : null,
         randomWindowTo: input.randomWindowTo ? new Date(input.randomWindowTo) : null,
         radiusMeters: input.radiusMeters ?? null,
+        staffId: input.staffId ?? null,
+        staffMinutes: input.staffMinutes ?? null,
         createdBy: ctx.userId ?? null,
       });
     }),
@@ -371,7 +493,15 @@ export const rabbitChairRouter = router({
    * Destino: presencia reciente en el negocio; si no hay, usuarios con push.
    */
   launch: adminOnlyProcedure
-    .input(activationInput.extend({ allowBroadcast: z.boolean().optional() }))
+    .input(
+      activationInput.extend({
+        allowBroadcast: z.boolean().optional(),
+        // Audiencia del aviso. PRESENCE es la natural (quien ya estuvo aquí).
+        audience: z.enum(["PRESENCE", "RADIO", "WAITLIST", "MEMBERS", "ALL"]).default(
+          "PRESENCE",
+        ),
+      }),
+    )
     .mutation(({ ctx, input }) =>
     run(async () => {
       if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
@@ -383,37 +513,173 @@ export const rabbitChairRouter = router({
       }
 
       const businessId = await resolveBusinessId(db(ctx), ctx.branchId);
-
-      // 1) Audiencia por presencia reciente (lo natural del drop).
       let userIds: string[] = [];
-      try {
+      let broadcast = false;
+
+      if (input.audience === "PRESENCE") {
+        // 1) Presencia reciente (lo natural del drop).
+        try {
+          const since = new Date(Date.now() - 60 * 86400_000);
+          const rows = await ctx.coreDb
+            .selectDistinct({ userId: presenceSessions.userId })
+            .from(presenceSessions)
+            .where(and(eq(presenceSessions.businessId, businessId), gte(presenceSessions.lastPingAt, since)))
+            .limit(500);
+          userIds = rows.map((r) => r.userId).filter(Boolean) as string[];
+        } catch (err) {
+          console.warn("[rabbitChair.launch] presencia falló:", err);
+        }
+
+        // Sin presencia: NO se manda un masivo sin confirmación explícita.
+        if (userIds.length === 0) {
+          if (!input.allowBroadcast) {
+            throw new RabbitChairError(
+              "INVALID_STATE",
+              "Sin audiencia reciente en el negocio. Confirma el envío masivo (allowBroadcast) para avisar a los Rabbitters con push.",
+            );
+          }
+          broadcast = true;
+          const fallback = await ctx.coreDb
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.pushInAppEnabled, true))
+            .limit(100);
+          userIds = fallback.map((u) => u.id);
+        }
+      } else if (input.audience === "RADIO") {
+        // 1b) Radio / proximidad: Rabbitters con presencia reciente en algún
+        // negocio dentro del radio del local (no guardamos ubicación personal).
+        const radius = Math.min(
+          20_000,
+          Math.max(50, Number(activation.radiusMeters ?? 1000)),
+        );
+        const [branch] = await db(ctx)
+          .select({ lat: branches.lat, lng: branches.lng })
+          .from(branches)
+          .where(eq(branches.id, ctx.branchId))
+          .limit(1);
+        let lat = branch?.lat ?? null;
+        let lng = branch?.lng ?? null;
+        if (lat == null || lng == null) {
+          const [biz] = await ctx.coreDb
+            .select({ lat: ownedBusinesses.lat, lng: ownedBusinesses.lng })
+            .from(ownedBusinesses)
+            .where(eq(ownedBusinesses.id, businessId))
+            .limit(1);
+          lat = biz?.lat ?? null;
+          lng = biz?.lng ?? null;
+        }
+        if (lat == null || lng == null) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            "El local no tiene ubicación configurada. No se puede usar el radio.",
+            409,
+          );
+        }
+        const targetLat = lat;
+        const targetLng = lng;
+        const businesses = await ctx.coreDb
+          .select({ id: ownedBusinesses.id, lat: ownedBusinesses.lat, lng: ownedBusinesses.lng })
+          .from(ownedBusinesses);
+        const nearbyIds = businesses
+          .filter(
+            (biz) =>
+              biz.lat != null &&
+              biz.lng != null &&
+              distanceMeters(targetLat, targetLng, biz.lat, biz.lng) <= radius,
+          )
+          .map((biz) => biz.id);
+
+        if (nearbyIds.length === 0) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            "No hay negocios con ubicación dentro del radio. Elige otra audiencia.",
+          );
+        }
+
         const since = new Date(Date.now() - 60 * 86400_000);
         const rows = await ctx.coreDb
           .selectDistinct({ userId: presenceSessions.userId })
           .from(presenceSessions)
-          .where(and(eq(presenceSessions.businessId, businessId), gte(presenceSessions.lastPingAt, since)))
+          .where(
+            and(
+              inArray(presenceSessions.businessId, nearbyIds),
+              gte(presenceSessions.lastPingAt, since),
+            ),
+          )
           .limit(500);
         userIds = rows.map((r) => r.userId).filter(Boolean) as string[];
-      } catch (err) {
-        console.warn("[rabbitChair.launch] presencia falló:", err);
-      }
 
-      // 2) Sin presencia: NO se manda un masivo sin confirmación explícita.
-      let broadcast = false;
-      if (userIds.length === 0) {
+        if (userIds.length === 0) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            "No hay Rabbitters con presencia dentro del radio. Elige otra audiencia.",
+          );
+        }
+      } else if (input.audience === "WAITLIST") {
+        // 2) Quienes alguna vez entraron a la fila de La Silla del negocio.
+        const rows = await db(ctx)
+          .selectDistinct({ userId: rabbitChairWaitlist.userId })
+          .from(rabbitChairWaitlist)
+          .innerJoin(
+            rabbitChairActivations,
+            eq(rabbitChairActivations.id, rabbitChairWaitlist.activationId),
+          )
+          .where(
+            and(
+              eq(rabbitChairActivations.businessId, businessId),
+              isNotNull(rabbitChairWaitlist.userId),
+            ),
+          )
+          .limit(500);
+        userIds = rows.map((r) => r.userId).filter(Boolean) as string[];
+
+        if (userIds.length === 0) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            "No hay Rabbitters en la fila de este negocio. Elige otra audiencia.",
+          );
+        }
+      } else if (input.audience === "MEMBERS") {
+        // 3) Miembros activos del negocio (membresía vigente, no revocada).
+        const rows = await ctx.coreDb
+          .selectDistinct({ userId: membershipSubscriptions.userId })
+          .from(membershipSubscriptions)
+          .where(
+            and(
+              eq(membershipSubscriptions.businessId, businessId),
+              eq(membershipSubscriptions.status, "ACTIVE"),
+              isNull(membershipSubscriptions.revokedAt),
+              or(
+                isNull(membershipSubscriptions.currentPeriodEnd),
+                gt(membershipSubscriptions.currentPeriodEnd, new Date()),
+              ),
+            ),
+          )
+          .limit(500);
+        userIds = rows.map((r) => r.userId).filter(Boolean) as string[];
+
+        if (userIds.length === 0) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            "No hay miembros activos en este negocio. Elige otra audiencia.",
+          );
+        }
+      } else {
+        // 4) Todos con push: solo con confirmación explícita (masivo).
         if (!input.allowBroadcast) {
           throw new RabbitChairError(
             "INVALID_STATE",
-            "Sin audiencia reciente en el negocio. Confirma el envío masivo (allowBroadcast) para avisar a los Rabbitters con push.",
+            "El envío masivo a todos los Rabbitters exige confirmación (allowBroadcast).",
           );
         }
         broadcast = true;
-        const fallback = await ctx.coreDb
+        const rows = await ctx.coreDb
           .select({ id: users.id })
           .from(users)
           .where(eq(users.pushInAppEnabled, true))
           .limit(100);
-        userIds = fallback.map((u) => u.id);
+        userIds = rows.map((u) => u.id);
       }
 
       const opened = await openActivation(db(ctx), input.activationId);
@@ -421,6 +687,7 @@ export const rabbitChairRouter = router({
       const notified = await sendRabbitChairDrop(userIds, {
         businessId,
         name: activation.name,
+        branchId: ctx.branchId,
       });
 
       logAudit({
@@ -428,12 +695,59 @@ export const rabbitChairRouter = router({
         action: "RABBIT_CHAIR_LAUNCH",
         resource: "rabbitChairActivations",
         resourceId: input.activationId,
-        details: { businessId, audience: userIds.length, notified, broadcast },
+        details: {
+          businessId,
+          audienceType: input.audience,
+          audience: userIds.length,
+          notified,
+          broadcast,
+        },
       });
 
-      return { activation: opened, notified, audience: userIds.length, broadcast };
+      return {
+        activation: opened,
+        notified,
+        audience: userIds.length,
+        audienceType: input.audience,
+        broadcast,
+      };
     }),
   ),
+
+  /**
+   * Ajustes editables sin recompensar ni consumir crédito: solo tarjeta
+   * (efectivo en POS) y radio de proximidad. Aplica a borradores y abiertas.
+   */
+  settings: adminOnlyProcedure
+    .input(
+      z.object({
+        activationId: z.string().min(1),
+        cardOnly: z.boolean().optional(),
+        radiusMeters: z.number().int().min(50).max(20_000).nullish(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      run(async () => {
+        await activationInBranch(ctx, input.activationId, ctx.branchId);
+        const updated = await updateActivationSettings(db(ctx), input.activationId, {
+          cardOnly: input.cardOnly,
+          radiusMeters: input.radiusMeters,
+        });
+
+        logAudit({
+          userId: ctx.userId ?? null,
+          action: "RABBIT_CHAIR_SETTINGS",
+          resource: "rabbitChairActivations",
+          resourceId: input.activationId,
+          details: {
+            cardOnly: input.cardOnly ?? null,
+            radiusMeters: input.radiusMeters ?? null,
+          },
+        });
+
+        return updated;
+      }),
+    ),
 
   close: adminOnlyProcedure.input(activationInput).mutation(({ ctx, input }) =>
     run(async () => {
@@ -453,10 +767,10 @@ export const rabbitChairRouter = router({
   active: posProcedure.query(({ ctx }) =>
     run(async () => {
       const enabled = await isRabbitChairEnabled(db(ctx), ctx.branchId);
-      if (!enabled) return { enabled: false, activation: null, slots: [] };
+      if (!enabled) return { enabled: false, activation: null, slots: [], soldOut: false };
 
       const activation = await getActiveActivation(db(ctx), ctx.branchId);
-      if (!activation) return { enabled: true, activation: null, slots: [] };
+      if (!activation) return { enabled: true, activation: null, slots: [], soldOut: false };
 
       const slots = await listSlots(db(ctx), activation.id);
 
@@ -469,6 +783,7 @@ export const rabbitChairRouter = router({
             void sendRabbitChairInvite(invited.userId, {
               businessId,
               name: activation.name,
+              branchId: ctx.branchId,
             });
           }
         } catch (err) {
@@ -476,7 +791,14 @@ export const rabbitChairRouter = router({
         }
       }
 
-      return { enabled: true, activation, slots };
+      return {
+        enabled: true,
+        activation,
+        slots,
+        // A1: "agotada" derivada. La activación sigue LIVE para que la app
+        // ofrezca la fila y el POS conserve el tablero.
+        soldOut: slots.every((slot) => slot.status !== "FREE"),
+      };
     }),
   ),
 

@@ -13,6 +13,7 @@ import {
   rabbitChairSlots,
   rabbitChairWaitlist,
   restaurants,
+  staff,
 } from "@rabbitty/database-restaurant/schema";
 import type { getRestaurantDb } from "../db";
 import { withOrderCreate } from "./orderIntegrity";
@@ -82,6 +83,12 @@ export type CreateActivationInput = {
   partySize?: number;
   waveMinutes?: number | null;
   chargeMode?: RabbitChairChargeMode;
+  /** Si es true, el POS no ofrece efectivo. Default true (seguro). */
+  cardOnly?: boolean;
+  /** Empleado extra (bartender/barista) asignado a la activación. */
+  staffId?: string | null;
+  /** Minutos pagados del empleado extra. Sin valor = duración de la activación. */
+  staffMinutes?: number | null;
   minContributionCents?: number;
   durationMinutes?: number;
   menuMode?: RabbitChairMenuMode;
@@ -219,6 +226,32 @@ export async function createActivation(db: Db, input: CreateActivationInput) {
   // Ley seca no: si hay alcohol, la experiencia exige verificación de edad.
   const requiresAgeCheck = menuMode === "COFFEE" ? Boolean(input.requiresAgeCheck) : true;
 
+  // Costo del empleado extra: se congela al crear (si cambia su tarifa después,
+  // la activación conserva el costo con el que se planeó).
+  const staffMinutes = Math.min(
+    24 * 60,
+    Math.max(0, Math.round(Number(input.staffMinutes ?? durationMinutes) || 0)),
+  );
+  let staffCostCents = 0;
+  if (input.staffId) {
+    const [member] = await db
+      .select({ branchId: staff.branchId, hourlyRate: staff.hourlyRate, isActive: staff.isActive })
+      .from(staff)
+      .where(eq(staff.id, input.staffId))
+      .limit(1);
+    if (!member || member.branchId !== input.branchId) {
+      throw new RabbitChairError(
+        "INVALID_STATE",
+        "El empleado asignado no pertenece a esta sucursal",
+        400,
+      );
+    }
+    if (!member.isActive) {
+      throw new RabbitChairError("INVALID_STATE", "El empleado asignado está inactivo", 400);
+    }
+    staffCostCents = Math.round(Number(member.hourlyRate ?? 0) * (staffMinutes / 60) * 100);
+  }
+
   return db.transaction(async (tx: any) => {
     const [grant] = await tx
       .select()
@@ -282,7 +315,7 @@ export async function createActivation(db: Db, input: CreateActivationInput) {
         chargeMode,
         minContributionCents,
         currency: "MXN",
-        cardOnly: true,
+        cardOnly: input.cardOnly ?? true,
         durationMinutes,
         requiresAgeCheck,
         menuMode,
@@ -294,6 +327,9 @@ export async function createActivation(db: Db, input: CreateActivationInput) {
         playlist: input.playlist ?? null,
         lightPreset: input.lightPreset ?? null,
         bartenderMode: input.bartenderMode ?? "ROTATING",
+        staffId: input.staffId ?? null,
+        staffMinutes: input.staffId ? staffMinutes : 0,
+        staffCostCents,
         createdBy: input.createdBy ?? null,
       })
       .returning();
@@ -326,15 +362,19 @@ export async function getActivation(db: Db, activationId: string) {
 }
 
 export async function getActiveActivation(db: Db, branchId: string) {
+  // A1: la activación sigue LIVE aunque no queden lugares (la UI deriva
+  // "agotada"). Se acepta SOLD_OUT solo por filas legadas del checkout sandbox,
+  // para que el POS no pierda el tablero en plena operación.
   const [activation] = await db
     .select()
     .from(rabbitChairActivations)
     .where(
       and(
         eq(rabbitChairActivations.branchId, branchId),
-        eq(rabbitChairActivations.status, "LIVE"),
+        inArray(rabbitChairActivations.status, ["LIVE", "SOLD_OUT"]),
       ),
     )
+    .orderBy(sql`(${rabbitChairActivations.status} = 'LIVE') DESC`)
     .limit(1);
 
   return activation ?? null;
@@ -492,14 +532,8 @@ export async function claimSlot(db: Db, activationId: string, input: ClaimInput)
         throw new RabbitChairError("NOT_FOUND", "Activación no encontrada", 404);
       }
 
-      if (activation.status !== "LIVE") {
-        throw new RabbitChairError(
-          activation.status === "SOLD_OUT" ? "SOLD_OUT" : "INVALID_STATE",
-          activation.status === "SOLD_OUT"
-            ? "La silla está agotada"
-            : "La activación no está abierta",
-          409,
-        );
+      if (!["LIVE", "SOLD_OUT"].includes(activation.status)) {
+        throw new RabbitChairError("INVALID_STATE", "La activación no está abierta", 409);
       }
 
       await expireStale(tx, activationId);
@@ -657,23 +691,8 @@ export async function checkoutSandbox(db: Db, input: CheckoutInput) {
         .where(eq(rabbitChairSlots.id, input.slotId))
         .returning();
 
-      const [remaining] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(rabbitChairSlots)
-        .where(
-          and(
-            eq(rabbitChairSlots.activationId, activation.id),
-            inArray(rabbitChairSlots.status, ["FREE", "HELD"]),
-          ),
-        );
-
-      if ((remaining?.count ?? 0) === 0) {
-        await tx
-          .update(rabbitChairActivations)
-          .set({ status: "SOLD_OUT", updatedAt: sql`now()` })
-          .where(eq(rabbitChairActivations.id, activation.id));
-      }
-
+      // A1: "agotada" se deriva en lectura (slots libres = 0). No se persiste
+      // SOLD_OUT para no dejar la activación congelada si un hold expira.
       return { slot: paid!, idempotent: false };
     });
   } catch (error) {
@@ -772,6 +791,53 @@ export async function markServed(db: Db, slotId: string) {
         updatedAt: sql`now()`,
       })
       .where(eq(rabbitChairSlots.id, slotId))
+      .returning();
+
+    return updated!;
+  });
+}
+
+/**
+ * Ajustes editables de una activación abierta o en borrador. Hoy: solo tarjeta
+ * (efectivo en POS) y radio de proximidad. No toca cupo, precio ni créditos.
+ */
+export async function updateActivationSettings(
+  db: Db,
+  activationId: string,
+  input: { cardOnly?: boolean; radiusMeters?: number | null },
+) {
+  return db.transaction(async (tx: any) => {
+    const [activation] = await tx
+      .select()
+      .from(rabbitChairActivations)
+      .where(eq(rabbitChairActivations.id, activationId))
+      .for("update")
+      .limit(1);
+
+    if (!activation) {
+      throw new RabbitChairError("NOT_FOUND", "Activación no encontrada", 404);
+    }
+    if (!["DRAFT", "LIVE", "SOLD_OUT"].includes(activation.status)) {
+      throw new RabbitChairError(
+        "INVALID_STATE",
+        "Solo se puede ajustar una activación en borrador o abierta",
+        409,
+      );
+    }
+
+    const patch: Record<string, unknown> = { updatedAt: sql`now()` };
+    if (typeof input.cardOnly === "boolean") patch.cardOnly = input.cardOnly;
+    if (input.radiusMeters !== undefined) {
+      patch.radiusMeters =
+        input.radiusMeters == null
+          ? null
+          : Math.min(20_000, Math.max(50, Math.round(input.radiusMeters)));
+    }
+
+    const [updated] = await tx
+      .update(rabbitChairActivations)
+      .set(patch)
+      .where(eq(rabbitChairActivations.id, activationId))
       .returning();
 
     return updated!;
@@ -1220,6 +1286,10 @@ export async function checkoutSlotAtPos(db: Db, input: PosCheckoutInput) {
           totalPrice: total,
           sortOrder: 0,
           status: "SERVED",
+          // IVA por renglón (columna 0035): contabilidad necesita el dato real
+          // de la línea, no el fallback del negocio.
+          taxRate: 0.16,
+          taxAmount: tax,
         });
 
         await tx.insert(payments).values({
