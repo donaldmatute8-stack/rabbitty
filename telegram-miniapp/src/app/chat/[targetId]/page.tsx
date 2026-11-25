@@ -4611,6 +4611,9 @@ export default function ChatRoomPage() {
         )}
       </footer>
 
+      {/* El menú se arma con handlers que usan refs (audio/scroll); la IIFE
+          solo lee estado, pero React Compiler la marca como acceso a refs. */}
+      {/* eslint-disable-next-line react-hooks/refs */}
       {contextMsg && (() => {
         const msg = messages.find((m) => m.id === contextMsg);
         if (!msg) return null;
