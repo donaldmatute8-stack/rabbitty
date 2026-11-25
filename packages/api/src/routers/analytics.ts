@@ -467,7 +467,7 @@ export const analyticsRouter = router({
               await ctx.restaurantDb
                 .select({ id: branches.id })
                 .from(branches)
-                .where(eq(branches.restaurantId, branch.restaurantId))
+                .where(and(eq(branches.restaurantId, branch.restaurantId), eq(branches.isActive, true)))
             ).map((b) => b.id)
           : [branchId];
 
@@ -477,7 +477,9 @@ export const analyticsRouter = router({
         input.channel && input.channel !== "ALL"
           ? input.channel === "POS"
             ? sql`(${orders.channel} IS NULL OR ${orders.channel} = 'POS')`
-            : eq(orders.channel, input.channel)
+            : input.channel === "APP"
+              ? sql`(${orders.channel} = 'APP' OR (${orders.channel} IS NULL AND ${orders.customerId} IS NOT NULL))`
+              : eq(orders.channel, input.channel)
           : undefined;
 
       const ordersList = await ctx.restaurantDb

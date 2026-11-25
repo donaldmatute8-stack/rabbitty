@@ -442,6 +442,8 @@ export async function POST(req: Request) {
         tip: totalTip,
         deliveryFee,
         total: r2(grandTotal + totalTip + deliveryFee),
+        // Canal del pedido: el POS filtra reportes por canal (POS/APP/…).
+        channel: "APP",
         // Comisión de plataforma congelada al vender. `fromApp` es true aquí por
         // definición (este endpoint es la app del cliente); el POS solo cobra
         // comisión en pedidos que también nacieron en la app.
