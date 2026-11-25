@@ -3,7 +3,7 @@ import { and, eq, gte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { rabbitChairSlots } from "@rabbitty/database-restaurant/schema";
 import { presenceSessions, users } from "@rabbitty/database-core/schema";
-import { sendRabbitChairDrop } from "../services/rabbitChairDrop";
+import { sendRabbitChairDrop, sendRabbitChairInvite } from "../services/rabbitChairDrop";
 import {
   adminOnlyProcedure,
   godAdminProcedure,
@@ -15,6 +15,7 @@ import {
 import {
   cancelActivation,
   checkoutSandbox,
+  checkoutSlotAtPos,
   claimSlot,
   closeActivation,
   createActivation,
@@ -27,7 +28,11 @@ import {
   markSeated,
   markServed,
   openActivation,
+  convertWaitlistEntry,
+  inviteNextWaiter,
   isRabbitChairEnabled,
+  joinWaitlist,
+  listWaitlist,
   scheduleRandomActivation,
   RabbitChairError,
   resolveBusinessId,
@@ -309,11 +314,25 @@ export const rabbitChairRouter = router({
       const activation = await getActiveActivation(db(ctx), ctx.branchId);
       if (!activation) return { enabled: true, activation: null, slots: [] };
 
-      return {
-        enabled: true,
-        activation,
-        slots: await listSlots(db(ctx), activation.id),
-      };
+      const slots = await listSlots(db(ctx), activation.id);
+
+      // Si se liberó un lugar y hay fila, se invita al primero (una sola vez).
+      if (slots.some((slot) => slot.status === "FREE")) {
+        try {
+          const invited = await inviteNextWaiter(db(ctx), activation.id);
+          if (invited?.userId) {
+            const businessId = await resolveBusinessId(db(ctx), ctx.branchId);
+            void sendRabbitChairInvite(invited.userId, {
+              businessId,
+              name: activation.name,
+            });
+          }
+        } catch (err) {
+          console.warn("[rabbitChair.active] invitación falló:", err);
+        }
+      }
+
+      return { enabled: true, activation, slots };
     }),
   ),
 
@@ -329,8 +348,26 @@ export const rabbitChairRouter = router({
     run(() =>
       claimSlot(db(ctx), input.activationId, {
         userId: ctx.userId ?? null,
+      }).then(async (slot) => {
+        await convertWaitlistEntry(db(ctx), input.activationId, ctx.userId ?? null);
+        return slot;
       }),
     ),
+  ),
+
+  /** Entrar a la lista de espera cuando la silla está llena. */
+  joinWaitlist: protectedProcedure.input(activationInput).mutation(({ ctx, input }) =>
+    run(() =>
+      joinWaitlist(db(ctx), input.activationId, { userId: ctx.userId ?? null }),
+    ),
+  ),
+
+  /** POS/admin: quién está en la fila. */
+  waitlist: posProcedure.input(activationInput).query(({ ctx, input }) =>
+    run(async () => {
+      await activationInBranch(ctx, input.activationId, ctx.branchId);
+      return listWaitlist(db(ctx), input.activationId);
+    }),
   ),
 
   /** POS: la casa aparta un lugar para un invitado (sin cuenta en la app). */
@@ -378,6 +415,33 @@ export const rabbitChairRouter = router({
           amountCents: input.amountCents,
           paymentRef: input.paymentRef,
           userId: ctx.userId ?? null,
+        });
+      }),
+    ),
+
+  /**
+   * Cobro real del aporte en caja. Registra una orden normal (entra a caja,
+   * reportes y conciliación) y marca el lugar como pagado.
+   */
+  checkoutAtPos: posPermission("POS_CHARGE")
+    .input(
+      z.object({
+        slotId: z.string().min(1),
+        amountCents: z.number().int().min(100).max(1_000_000),
+        method: z.enum(["CARD", "CASH"]).default("CARD"),
+        reference: z.string().trim().max(120).nullish(),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      run(async () => {
+        await slotInBranch(ctx, input.slotId, ctx.branchId);
+        return checkoutSlotAtPos(db(ctx), {
+          slotId: input.slotId,
+          amountCents: input.amountCents,
+          method: input.method,
+          reference: input.reference ?? null,
+          staffId: ctx.posOperator?.staffId ?? null,
+          terminalId: ctx.posAuth?.terminalId ?? null,
         });
       }),
     ),

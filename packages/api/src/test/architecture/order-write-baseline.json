@@ -141,6 +141,11 @@
       "count": 2,
       "category": "PROTECTED",
       "importsHelper": true
+    },
+    "packages/api/src/services/rabbitChair.ts": {
+      "count": 2,
+      "category": "PROTECTED",
+      "importsHelper": true
     }
   },
   "pendingFiles": [

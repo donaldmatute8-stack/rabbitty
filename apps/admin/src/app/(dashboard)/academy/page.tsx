@@ -230,11 +230,12 @@ Una silla, una luz, diez minutos. El cliente no habla: configura y paga desde el
 - Cerrar la activación la archiva; entra a tu caja como cualquier venta.
 - Cancelar un **borrador** devuelve el crédito.
 
-### 5) Qué falta (fase siguiente)
+### 5) Avanzado
 
-- Drop con push y **fecha aleatoria** desde el panel.
-- Lista de espera automática.
-- **Cobro real** del aporte (hoy el checkout está bloqueado a propósito).
+- **Sortear** fecha con Bunzy o **Lanzar ahora**: el aviso sale por push a los Rabbitters.
+- **Lista de espera**: si la silla se llena, el cliente entra a la fila; al liberarse un lugar se le invita por push.
+- **Cobro del aporte en caja**: se registra como una orden normal (entra a caja y reportes).
+- **App**: el cliente toma su lugar, configura la bebida sin hablar y recibe un **pase con QR**.
 
 > Guía relacionada: **Terminales, cajas y asignaciones** (para dejar el POS listo).`,
   },

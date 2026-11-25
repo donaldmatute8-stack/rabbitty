@@ -2,13 +2,20 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   branches,
+  menuCategories,
+  menuItems,
+  orderItems,
+  orders,
+  payments,
   rabbitChairActivations,
   rabbitChairGrants,
   rabbitChairGrantUses,
   rabbitChairSlots,
+  rabbitChairWaitlist,
   restaurants,
 } from "@rabbitty/database-restaurant/schema";
 import type { getRestaurantDb } from "../db";
+import { withOrderCreate } from "./orderIntegrity";
 
 /**
  * ── Rabbit Chair · La Silla (Fase 0/1) ──────────────────────────────────────
@@ -333,8 +340,8 @@ export async function getActiveActivation(db: Db, branchId: string) {
   return activation ?? null;
 }
 
-async function expireStale(tx: any, activationId: string) {
-  await tx
+async function expireStale(tx: any, activationId: string): Promise<number> {
+  const released = await tx
     .update(rabbitChairSlots)
     .set({
       status: "FREE",
@@ -349,7 +356,8 @@ async function expireStale(tx: any, activationId: string) {
         eq(rabbitChairSlots.status, "HELD"),
         sql`${rabbitChairSlots.heldUntil} < now()`,
       ),
-    );
+    )
+    .returning({ id: rabbitChairSlots.id });
 
   await tx
     .update(rabbitChairSlots)
@@ -361,6 +369,8 @@ async function expireStale(tx: any, activationId: string) {
         sql`${rabbitChairSlots.endsAt} < now()`,
       ),
     );
+
+  return Array.isArray(released) ? released.length : 0;
 }
 
 export async function openActivation(db: Db, activationId: string) {
@@ -932,4 +942,297 @@ export async function scheduleRandomActivation(db: Db, activationId: string) {
     .where(eq(rabbitChairActivations.id, activationId));
 
   return { startsAt };
+}
+
+// ── Lista de espera ─────────────────────────────────────────────────────────
+
+/** Entra a la fila cuando la activación está llena. */
+export async function joinWaitlist(db: Db, activationId: string, input: ClaimInput) {
+  return db.transaction(async (tx: any) => {
+    const [activation] = await tx
+      .select({ status: rabbitChairActivations.status })
+      .from(rabbitChairActivations)
+      .where(eq(rabbitChairActivations.id, activationId))
+      .limit(1);
+
+    if (!activation) throw new RabbitChairError("NOT_FOUND", "Activación no encontrada", 404);
+    if (!["LIVE", "SOLD_OUT"].includes(activation.status)) {
+      throw new RabbitChairError("INVALID_STATE", "La activación no está abierta");
+    }
+
+    if (input.userId) {
+      const [existing] = await tx
+        .select()
+        .from(rabbitChairWaitlist)
+        .where(
+          and(
+            eq(rabbitChairWaitlist.activationId, activationId),
+            eq(rabbitChairWaitlist.userId, input.userId),
+            inArray(rabbitChairWaitlist.status, ["WAITING", "INVITED"]),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        return { id: existing.id, position: existing.position, already: true, status: existing.status };
+      }
+    }
+
+    const [countRow] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(rabbitChairWaitlist)
+      .where(
+        and(
+          eq(rabbitChairWaitlist.activationId, activationId),
+          inArray(rabbitChairWaitlist.status, ["WAITING", "INVITED"]),
+        ),
+      );
+
+    const position = Number(countRow?.count ?? 0) + 1;
+    const [row] = await tx
+      .insert(rabbitChairWaitlist)
+      .values({
+        id: randomUUID(),
+        activationId,
+        userId: input.userId ?? null,
+        guestName: input.guestName?.trim() || null,
+        position,
+        status: "WAITING",
+      })
+      .returning();
+
+    return { id: row.id, position, already: false, status: "WAITING" };
+  });
+}
+
+export async function listWaitlist(db: Db, activationId: string) {
+  return db
+    .select()
+    .from(rabbitChairWaitlist)
+    .where(eq(rabbitChairWaitlist.activationId, activationId))
+    .orderBy(asc(rabbitChairWaitlist.position));
+}
+
+/**
+ * Invita al primero de la fila si hay lugar libre y nadie tiene una invitación
+ * vigente. Devuelve el invitado (o null).
+ */
+export async function inviteNextWaiter(db: Db, activationId: string, ttlMinutes = 10) {
+  return db.transaction(async (tx: any) => {
+    await tx
+      .update(rabbitChairWaitlist)
+      .set({ status: "EXPIRED", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(rabbitChairWaitlist.activationId, activationId),
+          eq(rabbitChairWaitlist.status, "INVITED"),
+          sql`${rabbitChairWaitlist.expiresAt} < now()`,
+        ),
+      );
+
+    const [activeInvite] = await tx
+      .select({ id: rabbitChairWaitlist.id })
+      .from(rabbitChairWaitlist)
+      .where(
+        and(
+          eq(rabbitChairWaitlist.activationId, activationId),
+          eq(rabbitChairWaitlist.status, "INVITED"),
+        ),
+      )
+      .limit(1);
+    if (activeInvite) return null;
+
+    const [freeSlot] = await tx
+      .select({ id: rabbitChairSlots.id })
+      .from(rabbitChairSlots)
+      .where(
+        and(eq(rabbitChairSlots.activationId, activationId), eq(rabbitChairSlots.status, "FREE")),
+      )
+      .limit(1);
+    if (!freeSlot) return null;
+
+    const [next] = await tx
+      .select()
+      .from(rabbitChairWaitlist)
+      .where(
+        and(
+          eq(rabbitChairWaitlist.activationId, activationId),
+          eq(rabbitChairWaitlist.status, "WAITING"),
+        ),
+      )
+      .orderBy(asc(rabbitChairWaitlist.position))
+      .limit(1);
+    if (!next) return null;
+
+    const [invited] = await tx
+      .update(rabbitChairWaitlist)
+      .set({
+        status: "INVITED",
+        invitedAt: sql`now()`,
+        expiresAt: sql`now() + (${ttlMinutes} || ' minutes')::interval`,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(rabbitChairWaitlist.id, next.id))
+      .returning();
+
+    return invited;
+  });
+}
+
+/** Marca la invitación como convertida cuando la persona toma su lugar. */
+export async function convertWaitlistEntry(db: Db, activationId: string, userId: string | null) {
+  if (!userId) return;
+  await db
+    .update(rabbitChairWaitlist)
+    .set({ status: "CONVERTED", updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(rabbitChairWaitlist.activationId, activationId),
+        eq(rabbitChairWaitlist.userId, userId),
+        inArray(rabbitChairWaitlist.status, ["WAITING", "INVITED"]),
+      ),
+    );
+}
+
+// ── Cobro real en el POS ────────────────────────────────────────────────────
+// El aporte se cobra en caja (tarjeta o efectivo si el negocio lo permite) y
+// se registra como una orden normal: entra a caja, reportes y conciliación.
+
+async function ensureChairMenuItem(tx: any, branchId: string): Promise<string> {
+  const [existing] = await tx
+    .select({ id: menuItems.id })
+    .from(menuItems)
+    .where(and(eq(menuItems.branchId, branchId), eq(menuItems.name, "La Silla")))
+    .limit(1);
+  if (existing?.id) return existing.id as string;
+
+  let [category] = await tx
+    .select({ id: menuCategories.id })
+    .from(menuCategories)
+    .where(and(eq(menuCategories.branchId, branchId), eq(menuCategories.name, "Rabbit Chair")))
+    .limit(1);
+  if (!category?.id) {
+    const [created] = await tx
+      .insert(menuCategories)
+      .values({ branchId, name: "Rabbit Chair", sortOrder: 998, isActive: false })
+      .returning({ id: menuCategories.id });
+    category = created;
+  }
+
+  const [createdItem] = await tx
+    .insert(menuItems)
+    .values({
+      branchId,
+      categoryId: category.id,
+      name: "La Silla",
+      description: "Aporte de Rabbit Chair",
+      price: 0,
+      kind: "DISH",
+      isActive: false,
+      isAvailable: false,
+    })
+    .returning({ id: menuItems.id });
+  return createdItem.id as string;
+}
+
+export type PosCheckoutInput = {
+  slotId: string;
+  amountCents: number;
+  method: "CARD" | "CASH";
+  reference?: string | null;
+  staffId?: string | null;
+  terminalId?: string | null;
+};
+
+export async function checkoutSlotAtPos(db: Db, input: PosCheckoutInput) {
+  return db.transaction(async (tx: any) => {
+    const [slot] = await tx
+      .select()
+      .from(rabbitChairSlots)
+      .where(eq(rabbitChairSlots.id, input.slotId))
+      .limit(1);
+    if (!slot) throw new RabbitChairError("NOT_FOUND", "Lugar no encontrado", 404);
+
+    if (slot.status === "PAID") {
+      return { alreadyPaid: true, orderId: slot.orderId, amountCents: Number(slot.paidCents ?? 0) };
+    }
+    if (!["HELD", "SEATED"].includes(slot.status)) {
+      throw new RabbitChairError("INVALID_STATE", "Toma el lugar antes de cobrar");
+    }
+
+    const [activation] = await tx
+      .select()
+      .from(rabbitChairActivations)
+      .where(eq(rabbitChairActivations.id, slot.activationId))
+      .limit(1);
+    if (!activation) throw new RabbitChairError("NOT_FOUND", "Activación no encontrada", 404);
+
+    if (input.amountCents < Number(activation.minContributionCents)) {
+      throw new RabbitChairError("PAYMENT_REQUIRED", "El aporte está por debajo del mínimo");
+    }
+    if (activation.cardOnly && input.method === "CASH") {
+      throw new RabbitChairError("INVALID_STATE", "Esta experiencia es solo con tarjeta");
+    }
+
+    const total = Math.round(input.amountCents) / 100;
+    const subtotal = Math.round((total / 1.16) * 100) / 100;
+    const tax = Math.round((total - subtotal) * 100) / 100;
+    const menuItemId = await ensureChairMenuItem(tx, activation.branchId);
+
+    const order = await withOrderCreate(
+      tx,
+      { actor: { staffId: input.staffId ?? null, terminalId: input.terminalId ?? null } },
+      async () => {
+        const [row] = await tx
+          .insert(orders)
+          .values({
+            branchId: activation.branchId,
+            orderType: "TO_GO",
+            status: "PAID",
+            channel: "RABBIT_CHAIR",
+            customerName: slot.guestName ?? null,
+            notes: `Rabbit Chair · ${activation.name}`,
+            subtotal,
+            tax,
+            total,
+            version: 1,
+          })
+          .returning({ id: orders.id });
+
+        await tx.insert(orderItems).values({
+          orderId: row.id,
+          menuItemId,
+          nameSnapshot: "La Silla",
+          quantity: 1,
+          unitPrice: total,
+          totalPrice: total,
+          sortOrder: 0,
+          status: "SERVED",
+        });
+
+        await tx.insert(payments).values({
+          orderId: row.id,
+          method: input.method === "CASH" ? "CASH" : "CREDIT_CARD",
+          amount: total,
+          status: "COMPLETED",
+          reference: input.reference ?? null,
+          verificationMethod: "CASHIER_CONFIRMED",
+        });
+
+        return row;
+      },
+    );
+
+    await tx
+      .update(rabbitChairSlots)
+      .set({
+        status: "PAID",
+        orderId: order.id,
+        paidCents: input.amountCents,
+        paymentRef: input.reference ?? null,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(rabbitChairSlots.id, input.slotId));
+
+    return { alreadyPaid: false, orderId: order.id, amountCents: input.amountCents };
+  });
 }

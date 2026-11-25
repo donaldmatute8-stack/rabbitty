@@ -1469,3 +1469,22 @@ export const rabbitChairSlots = pgTable("rabbitChairSlots", {
     t.index,
   ),
 ]);
+
+/** Fila de espera de una activación de Rabbit Chair. */
+export const rabbitChairWaitlist = pgTable("rabbitChairWaitlist", {
+  id: id(),
+  activationId: fkId("activationId").references(() => rabbitChairActivations.id, { onDelete: "cascade" }),
+  userId: text("userId"),
+  guestName: text("guestName"),
+  position: integer("position").notNull(),
+  /** WAITING | INVITED | CONVERTED | EXPIRED | CANCELLED */
+  status: text("status").default("WAITING").notNull(),
+  invitedAt: timestamp("invitedAt"),
+  expiresAt: timestamp("expiresAt"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("rabbitChairWaitlist_user_uidx")
+    .on(t.activationId, t.userId)
+    .where(sql`${t.userId} IS NOT NULL`),
+  index("rabbitChairWaitlist_queue_idx").on(t.activationId, t.status, t.position),
+]);

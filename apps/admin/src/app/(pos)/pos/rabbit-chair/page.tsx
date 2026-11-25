@@ -68,6 +68,13 @@ export default function RabbitChairPosPage() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const checkout = trpc.rabbitChair.checkoutAtPos.useMutation({
+    onSuccess: () => {
+      toast.success("Aporte cobrado y registrado en caja");
+      utils.rabbitChair.active.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const serve = trpc.rabbitChair.serve.useMutation({
     onSuccess: () => {
       toast.success("Servido: arranca el cronómetro");
@@ -85,6 +92,11 @@ export default function RabbitChairPosPage() {
 
   const activation = data?.activation ?? null;
   const slots = (data?.slots ?? []) as Array<Record<string, any>>;
+  const waitlist = trpc.rabbitChair.waitlist.useQuery(
+    { activationId: activation?.id ?? "" },
+    { enabled: Boolean(activation?.id), refetchInterval: 10000, retry: false },
+  ).data ?? [];
+  const waiting = (waitlist as any[]).filter((w) => w.status === "WAITING" || w.status === "INVITED");
 
   return (
     <div className="min-h-screen bg-black px-4 py-5 text-white">
@@ -145,6 +157,11 @@ export default function RabbitChairPosPage() {
                 <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
                   {CHARGE_LABEL[activation.chargeMode] ?? activation.chargeMode}
                 </span>
+                {waiting.length > 0 && (
+                  <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-1 text-purple-200">
+                    En espera: {waiting.length}
+                  </span>
+                )}
                 {activation.requiresAgeCheck && (
                   <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-amber-300">
                     +18
@@ -206,7 +223,33 @@ export default function RabbitChairPosPage() {
                         <Clock className="h-3.5 w-3.5" /> {remaining(slot.endsAt)}
                       </p>
                     )}
-                    <div className="mt-3 flex gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {status === "HELD" && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const min = Number(activation.minContributionCents) / 100;
+                            const raw = window.prompt(
+                              `Aporte a cobrar (mínimo $${min.toFixed(0)})`,
+                              String(min),
+                            );
+                            if (!raw) return;
+                            const amount = Number(raw);
+                            if (!Number.isFinite(amount) || amount * 100 < Number(activation.minContributionCents)) {
+                              toast.error("El aporte está por debajo del mínimo");
+                              return;
+                            }
+                            checkout.mutate({
+                              slotId: slot.id,
+                              amountCents: Math.round(amount * 100),
+                              method: "CARD",
+                            });
+                          }}
+                          disabled={checkout.isPending}
+                        >
+                          Cobrar aporte
+                        </Button>
+                      )}
                       {(status === "PAID" || status === "HELD") && (
                         <Button size="sm" variant="secondary" onClick={() => seat.mutate({ slotId: slot.id })}>
                           Sentar

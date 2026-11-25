@@ -54,7 +54,7 @@ export const useAuth = () => useContext(AuthContext);
 const PUBLIC_ROUTES = ['/onboarding', '/signup', '/login', '/welcome', '/privacy', '/magic-link'];
 // Rutas públicas por prefijo: los legales deben abrirse sin sesión para poder
 // compartirse por enlace (antes /legal rebotaba a /onboarding en el navegador).
-const PUBLIC_ROUTE_PREFIXES = ['/legal'];
+const PUBLIC_ROUTE_PREFIXES = ['/legal', '/rabbit-chair'];
 const isPublicRoute = (path: string) =>
   PUBLIC_ROUTES.includes(path) || PUBLIC_ROUTE_PREFIXES.some((prefix) => path.startsWith(prefix));
 

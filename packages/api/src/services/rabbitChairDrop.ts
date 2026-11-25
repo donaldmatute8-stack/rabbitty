@@ -22,7 +22,7 @@ export async function sendRabbitChairDrop(
         userIds: userIds.slice(0, 500),
         title: "Hay una silla",
         body: `${params.name || "La Silla"} está abierta. Entra a Rabbitty y toma tu lugar.`,
-        data: { type: "SYSTEM", route: `/affiliate/${params.businessId}` },
+        data: { type: "SYSTEM", route: `/rabbit-chair?business=${params.businessId}` },
       }),
     });
     if (!res.ok) return 0;
@@ -30,5 +30,31 @@ export async function sendRabbitChairDrop(
     return Number(data.sent ?? 0) || userIds.length;
   } catch {
     return 0;
+  }
+}
+
+/** Aviso personal: le tocó su lugar en la fila. */
+export async function sendRabbitChairInvite(
+  userId: string | null | undefined,
+  params: { businessId: string; name?: string | null },
+): Promise<boolean> {
+  if (!userId) return false;
+  const base = process.env.RABBITTY_MINIAPP_URL;
+  const secret = process.env.PUSH_SEND_SECRET;
+  if (!base || !secret) return false;
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/api/notifications/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-push-secret": secret },
+      body: JSON.stringify({
+        userId,
+        title: "Te toca la silla",
+        body: `Se liberó un lugar en ${params.name || "La Silla"}. Tienes 10 minutos para tomarlo.`,
+        data: { type: "SYSTEM", route: `/rabbit-chair?business=${params.businessId}` },
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
