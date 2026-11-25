@@ -10,6 +10,7 @@ export default defineConfig({
       RESTAURANT_DATABASE_URL: "postgres://rabbitty:rabbitty_dev@localhost:5432/rabbitty_restaurant",
       CORE_DATABASE_URL: "postgres://rabbitty:rabbitty_dev@localhost:5432/rabbitty_core",
       BRANCH_ID: "b1",
+      RABBIT_CHAIR_PAYMENTS: "sandbox",
     },
     coverage: {
       provider: "v8",

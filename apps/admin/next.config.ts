@@ -43,6 +43,17 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // La landing de Rabbit Chair lleva el token de invitación en la URL.
+        // Sin `no-referrer`, cualquier recurso externo o enlace saliente lo
+        // filtraría en el header Referer.
+        source: "/rabbit-chair",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+          { key: "Cache-Control", value: "private, no-cache, no-store, max-age=0, must-revalidate" },
+        ],
+      },
+      {
         // El HTML de /pos se servía con s-maxage=31536000 (cache de 1 año).
         // Eso dejaba iPads corriendo un bundle viejo durante días: el botón de
         // Ayuda seguía abriendo el admin en Safari aunque el código ya estuviera

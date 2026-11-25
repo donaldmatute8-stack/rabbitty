@@ -134,6 +134,8 @@ const TERMINAL_ALLOWED_PREFIXES = [
   "kds.",
   // Comandero: celular/tablet enlazado como terminal (chequeo, mesas, tandas).
   "comandero.",
+  // Rabbit Chair: la pestaña del POS corre en terminales.
+  "rabbitChair.",
 ] as const;
 const TERMINAL_ALLOWED_EXACT = new Set([
   "staff.verifyAdminPin",

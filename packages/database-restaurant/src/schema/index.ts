@@ -1355,3 +1355,113 @@ export const aggregatorWebhookEvents = pgTable("aggregator_webhook_events", {
 }, (t) => [
   uniqueIndex("aggregator_webhook_events_uidx").on(t.provider, t.eventType, t.externalId),
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RABBIT CHAIR — La Silla (migración 0058)
+// ─────────────────────────────────────────────────────────────────────────────
+// El crédito (grant) vive en la misma base que la activación para que
+// consumirlo y crear la activación sea una sola transacción. Las solicitudes
+// de la landing siguen en core DB (`rabbit_chair_requests`).
+
+export const rabbitChairGrants = pgTable("rabbitChairGrants", {
+  id: id(),
+  businessId: text("businessId").notNull(),
+  requestId: text("requestId"),
+  creditsTotal: integer("creditsTotal").notNull(),
+  creditsUsed: integer("creditsUsed").default(0).notNull(),
+  expiresAt: timestamp("expiresAt"),
+  revokedAt: timestamp("revokedAt"),
+  createdBy: text("createdBy"),
+  ...timestamps,
+}, (t) => [
+  index("rabbitChairGrants_business_idx").on(t.businessId, t.revokedAt, t.expiresAt),
+  uniqueIndex("rabbitChairGrants_request_uidx")
+    .on(t.requestId)
+    .where(sql`${t.requestId} IS NOT NULL`),
+]);
+
+export const rabbitChairGrantUses = pgTable("rabbitChairGrantUses", {
+  id: id(),
+  grantId: fkId("grantId").references(() => rabbitChairGrants.id, { onDelete: "cascade" }),
+  activationId: text("activationId").notNull(),
+  businessId: text("businessId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+}, (t) => [
+  uniqueIndex("rabbitChairGrantUses_activation_uidx").on(t.activationId),
+]);
+
+export const rabbitChairActivations = pgTable("rabbitChairActivations", {
+  id: id(),
+  businessId: text("businessId").notNull(),
+  branchId: fkId("branchId").references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name").default("La Silla").notNull(),
+  /** DRAFT | LIVE | SOLD_OUT | DONE | CANCELLED */
+  status: text("status").default("DRAFT").notNull(),
+  grantId: text("grantId"),
+  /** SINGLE | BLOCK | WAVES | COUPLES */
+  format: text("format").default("BLOCK").notNull(),
+  capacity: integer("capacity").default(10).notNull(),
+  partySize: integer("partySize").default(1).notNull(),
+  waveMinutes: integer("waveMinutes"),
+  /** PREPAID (app) | POSTPAID (POS al final) */
+  chargeMode: text("chargeMode").default("PREPAID").notNull(),
+  minContributionCents: integer("minContributionCents").default(5000).notNull(),
+  currency: text("currency").default("MXN").notNull(),
+  cardOnly: boolean("cardOnly").default(true).notNull(),
+  durationMinutes: integer("durationMinutes").default(10).notNull(),
+  requiresAgeCheck: boolean("requiresAgeCheck").default(false).notNull(),
+  /** COFFEE | ALCOHOL | BOTH */
+  menuMode: text("menuMode").default("BOTH").notNull(),
+  startsAt: timestamp("startsAt"),
+  revealAt: timestamp("revealAt"),
+  randomWindowFrom: timestamp("randomWindowFrom"),
+  randomWindowTo: timestamp("randomWindowTo"),
+  radiusMeters: integer("radiusMeters"),
+  playlist: text("playlist"),
+  lightPreset: text("lightPreset"),
+  /** FIXED | ROTATING */
+  bartenderMode: text("bartenderMode").default("ROTATING").notNull(),
+  createdBy: text("createdBy"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("rabbitChairActivations_live_branch_uidx")
+    .on(t.branchId)
+    .where(sql`${t.status} = 'LIVE'`),
+  index("rabbitChairActivations_branch_idx").on(t.branchId, t.status, t.startsAt),
+]);
+
+export const rabbitChairSlots = pgTable("rabbitChairSlots", {
+  id: id(),
+  activationId: fkId("activationId").references(() => rabbitChairActivations.id, { onDelete: "cascade" }),
+  index: integer("index").notNull(),
+  wave: integer("wave").default(1).notNull(),
+  /** FREE | HELD | PAID | SEATED | SERVED | DONE | EXPIRED */
+  status: text("status").default("FREE").notNull(),
+  /** UNPAID | AUTHORIZED | PAID | REFUNDED */
+  paymentStatus: text("paymentStatus").default("UNPAID").notNull(),
+  orderId: text("orderId"),
+  userId: text("userId"),
+  guestName: text("guestName"),
+  config: jsonb("config"),
+  paidCents: integer("paidCents"),
+  paymentRef: text("paymentRef"),
+  heldUntil: timestamp("heldUntil"),
+  seatedAt: timestamp("seatedAt"),
+  servedAt: timestamp("servedAt"),
+  endsAt: timestamp("endsAt"),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("rabbitChairSlots_activation_index_uidx").on(t.activationId, t.index),
+  uniqueIndex("rabbitChairSlots_active_user_uidx")
+    .on(t.activationId, t.userId)
+    .where(sql`${t.userId} IS NOT NULL AND ${t.status} IN ('HELD', 'PAID', 'SEATED')`),
+  uniqueIndex("rabbitChairSlots_payment_uidx")
+    .on(t.paymentRef)
+    .where(sql`${t.paymentRef} IS NOT NULL`),
+  index("rabbitChairSlots_activation_status_idx").on(
+    t.activationId,
+    t.status,
+    t.wave,
+    t.index,
+  ),
+]);

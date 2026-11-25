@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@rabbitty/auth";
-import { getCoreDb } from "@rabbitty/api/db";
+import { getCoreDb, getRestaurantDb } from "@rabbitty/api/db";
 import { ownedBusinesses, rabbitChairRequests, users } from "@rabbitty/database-core/schema";
 import { isGodAdminIdentity } from "@rabbitty/api/services/god2fa";
 import { sendOwnerEmail, sendOwnerPush } from "@rabbitty/api/services/ownerNotify";
 import { sendTelegramToChat } from "@rabbitty/api/services/telegramNotify";
 import { signRabbitChairInvite } from "@/lib/rabbit-chair-token";
+import { createGrant } from "@rabbitty/api/services/rabbitChair";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,23 @@ export async function POST(req: NextRequest) {
     .update(rabbitChairRequests)
     .set({ status: "APPROVED", token, resolvedAt: new Date(), resolvedBy: email })
     .where(eq(rabbitChairRequests.id, requestId));
+
+  // El regalo por hito son 3 activaciones. Se crean en la misma base que las
+  // activaciones para que consumirlas sea transaccional. Si el negocio aún no
+  // está vinculado (businessId null), God puede otorgarlas después.
+  if (request.businessId) {
+    try {
+      await createGrant(getRestaurantDb(), {
+        businessId: request.businessId,
+        credits: 3,
+        days: 90,
+        requestId: request.id,
+        createdBy: email,
+      });
+    } catch (error) {
+      console.error("[RABBIT_CHAIR_GRANT]", error);
+    }
+  }
 
   // ── Avisar al tenant ──
   let owner: { id: string; email: string | null; telegramId: string | null } | undefined;
