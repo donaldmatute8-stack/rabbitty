@@ -14,6 +14,14 @@ import { Button, Card, Input, Select, toast } from "@rabbitty/ui";
 export default function RabbitChairAdminPage() {
   const utils = trpc.useUtils();
   const credits = trpc.rabbitChair.credits.useQuery(undefined, { retry: false });
+  const status = trpc.rabbitChair.status.useQuery(undefined, { retry: false });
+  const toggle = trpc.rabbitChair.enable.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.enabled ? "Rabbit Chair activado" : "Rabbit Chair desactivado");
+      utils.rabbitChair.status.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const list = trpc.rabbitChair.list.useQuery(undefined, { retry: false });
 
   const activate = trpc.rabbitChair.activate.useMutation({
@@ -76,6 +84,33 @@ export default function RabbitChairAdminPage() {
           teléfono. Aquí abres la activación y la operas desde el POS.
         </p>
       </div>
+
+      {/* Activación por el dueño: sin esto el POS no muestra La Silla */}
+      <Card className={`p-4 border ${status.data?.enabled ? "border-emerald-500/30 bg-emerald-500/[0.06]" : "border-amber-500/30 bg-amber-500/[0.06]"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="m-0 text-sm font-black text-white">
+              {status.data?.enabled ? "Rabbit Chair está activo en tu negocio" : "Rabbit Chair está desactivado"}
+            </p>
+            <p className="m-0 mt-1 max-w-xl text-xs text-gray-400">
+              {status.data?.enabled
+                ? "El POS muestra La Silla y puedes abrir activaciones."
+                : "Hasta que lo actives aquí, el POS no muestra nada y no se puede crear una activación."}
+            </p>
+          </div>
+          <Button
+            variant={status.data?.enabled ? "secondary" : "primary"}
+            onClick={() => toggle.mutate({ enabled: !status.data?.enabled })}
+            disabled={toggle.isPending}
+          >
+            {toggle.isPending
+              ? "Guardando…"
+              : status.data?.enabled
+                ? "Desactivar"
+                : "Activar Rabbit Chair"}
+          </Button>
+        </div>
+      </Card>
 
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -237,11 +272,16 @@ export default function RabbitChairAdminPage() {
                 randomWindowTo: form.windowTo ? new Date(form.windowTo).toISOString() : null,
               })
             }
-            disabled={activate.isPending || remaining <= 0}
+            disabled={activate.isPending || remaining <= 0 || !status.data?.enabled}
           >
             {activate.isPending ? "Creando…" : "Crear activación"}
           </Button>
-          {remaining <= 0 && (
+          {!status.data?.enabled && (
+            <p className="m-0 self-center text-[11px] font-bold text-amber-400">
+              Activa Rabbit Chair arriba para poder crear activaciones.
+            </p>
+          )}
+          {status.data?.enabled && remaining <= 0 && (
             <p className="m-0 self-center text-[11px] font-bold text-amber-400">
               Sin créditos: pide a Rabbitty que te asigne activaciones.
             </p>

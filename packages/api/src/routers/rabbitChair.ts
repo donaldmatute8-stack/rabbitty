@@ -25,8 +25,10 @@ import {
   markSeated,
   markServed,
   openActivation,
+  isRabbitChairEnabled,
   RabbitChairError,
   resolveBusinessId,
+  setRabbitChairEnabled,
   type Db,
 } from "../services/rabbitChair";
 
@@ -125,6 +127,30 @@ async function slotInBranch(ctx: { restaurantDb: Db }, slotId: string, branchId:
 }
 
 export const rabbitChairRouter = router({
+  /** ¿El dueño activó la experiencia en este negocio? */
+  status: posProcedure.query(({ ctx }) =>
+    run(async () => ({ enabled: await isRabbitChairEnabled(db(ctx), ctx.branchId) })),
+  ),
+
+  /**
+   * Activar/desactivar Rabbit Chair. Solo el DUEÑO (sin ficha de staff):
+   * es la "activación literal" que habilita la experiencia en el POS.
+   */
+  enable: protectedProcedure
+    .input(z.object({ enabled: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      run(async () => {
+        if (ctx.staffRole) {
+          throw new RabbitChairError(
+            "FORBIDDEN",
+            "Solo el dueño del negocio puede activar Rabbit Chair.",
+            403,
+          );
+        }
+        return setRabbitChairEnabled(db(ctx), ctx.branchId, input.enabled, ctx.userId ?? null);
+      }),
+    ),
+
   /**
    * God: otorga créditos a un negocio. Es la puerta de acceso al producto;
    * sin grant activo no se puede crear una activación.
@@ -159,8 +185,14 @@ export const rabbitChairRouter = router({
   ),
 
   activate: adminOnlyProcedure.input(activateInput).mutation(({ ctx, input }) =>
-    run(() =>
-      createActivation(db(ctx), {
+    run(async () => {
+      if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
+        throw new RabbitChairError(
+          "INVALID_STATE",
+          "Activa Rabbit Chair en Marketing → Rabbit Chair antes de crear una activación.",
+        );
+      }
+      return createActivation(db(ctx), {
         branchId: ctx.branchId,
         name: input.name,
         format: input.format,
@@ -179,14 +211,17 @@ export const rabbitChairRouter = router({
         randomWindowTo: input.randomWindowTo ? new Date(input.randomWindowTo) : null,
         radiusMeters: input.radiusMeters ?? null,
         createdBy: ctx.userId ?? null,
-      }),
-    ),
+      });
+    }),
   ),
 
   list: adminOnlyProcedure.query(({ ctx }) => run(() => listActivations(db(ctx), ctx.branchId))),
 
   open: adminOnlyProcedure.input(activationInput).mutation(({ ctx, input }) =>
     run(async () => {
+      if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
+        throw new RabbitChairError("INVALID_STATE", "Rabbit Chair no está activado en este negocio.");
+      }
       await activationInBranch(ctx, input.activationId, ctx.branchId);
       return openActivation(db(ctx), input.activationId);
     }),
@@ -209,13 +244,14 @@ export const rabbitChairRouter = router({
   /** POS: activación LIVE + lugares en una sola llamada. */
   active: posProcedure.query(({ ctx }) =>
     run(async () => {
-      const activation = await getActiveActivation(db(ctx), ctx.branchId);
+      const enabled = await isRabbitChairEnabled(db(ctx), ctx.branchId);
+      if (!enabled) return { enabled: false, activation: null, slots: [] };
 
-      if (!activation) {
-        return { activation: null, slots: [] };
-      }
+      const activation = await getActiveActivation(db(ctx), ctx.branchId);
+      if (!activation) return { enabled: true, activation: null, slots: [] };
 
       return {
+        enabled: true,
         activation,
         slots: await listSlots(db(ctx), activation.id),
       };

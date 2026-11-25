@@ -36,6 +36,7 @@ export default function AdminPage() {
   const { data: businessBio } = trpc.passkeys.businessBiometrics.useQuery(undefined, { retry: false });
   // Rabbit Chair: aviso in-app del admin cuando el negocio tiene créditos.
   const { data: chairCredits } = trpc.rabbitChair.credits.useQuery(undefined, { retry: false });
+  const { data: chairStatus } = trpc.rabbitChair.status.useQuery(undefined, { retry: false });
 
   const utils = trpc.useUtils();
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -179,7 +180,7 @@ export default function AdminPage() {
       )}
 
       {/* 0a. Rabbit Chair: aviso de la experiencia cuando hay créditos */}
-      {(chairCredits?.creditsRemaining ?? 0) > 0 && (
+      {chairStatus?.enabled && (chairCredits?.creditsRemaining ?? 0) > 0 && (
         <div className="relative overflow-hidden rounded-3xl border border-red-500/25 bg-linear-to-r from-red-500/10 via-black/40 to-black/60 p-5 backdrop-blur-xl">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-4">
@@ -198,7 +199,7 @@ export default function AdminPage() {
               </div>
             </div>
             <Link
-              href="/settings/rabbit-chair"
+              href="/marketing/rabbit-chair"
               className="flex shrink-0 items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-xs font-black text-white transition-all hover:bg-red-400 active:scale-95"
             >
               Configurar La Silla

@@ -115,7 +115,7 @@ export default function RabbitChairPosPage() {
               Abre la activación desde el panel del negocio (Ajustes → Rabbit Chair).
             </p>
             <Link
-              href="/settings/rabbit-chair"
+              href="/marketing/rabbit-chair"
               className="mt-4 inline-block rounded-full bg-red-600 px-5 py-2.5 text-xs font-black text-white hover:bg-red-500"
             >
               Ir al panel

@@ -30,6 +30,10 @@ export const restaurants = pgTable("restaurants", {
   /** Módulos activos del sidebar, JSON array. Antes vivía solo en localStorage. */
   activeModules: text("activeModules").default("[]").notNull(),
   acceptsBunz: boolean("acceptsBunz").default(true).notNull(),
+  /** Rabbit Chair (La Silla): el dueño la activa en Marketing. Default off. */
+  rabbitChairEnabled: boolean("rabbitChairEnabled").default(false).notNull(),
+  rabbitChairEnabledAt: timestamp("rabbitChairEnabledAt"),
+  rabbitChairEnabledBy: text("rabbitChairEnabledBy"),
   happyHourStart: text("happyHourStart"), // e.g. "14:00"
   happyHourEnd: text("happyHourEnd"), // e.g. "18:00"
   happyHourRewardRate: integer("happyHourRewardRate"), // e.g. 40 for 2X if default is 20

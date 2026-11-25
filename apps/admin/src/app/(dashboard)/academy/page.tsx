@@ -212,7 +212,7 @@ Una silla, una luz, diez minutos. El cliente no habla: configura y paga desde el
 
 ### 2) Crear y abrir
 
-1. Ajustes → **Rabbit Chair**.
+1. Marketing → **Rabbit Chair**.
 2. Llena la activación y toca **Crear**.
 3. Toca **Abrir**. En ese momento la Silla queda en vivo.
 

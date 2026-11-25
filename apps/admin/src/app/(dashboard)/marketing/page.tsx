@@ -93,6 +93,14 @@ const STUDIO_MODULES = [
     accent: "from-amber-500/20 to-yellow-500/10 border-amber-500/30 text-amber-400",
   },
   {
+    href: "/marketing/rabbit-chair",
+    icon: Sparkles,
+    title: "Rabbit Chair · La Silla",
+    description: "Activa la experiencia de bar oscuro: una silla, diez minutos y diez lugares. Solo aparece en el POS cuando la activas aquí.",
+    badge: "Nuevo",
+    accent: "from-red-500/20 to-rose-500/10 border-red-500/30 text-red-400",
+  },
+  {
     href: "/marketing/behavior",
     icon: Brain,
     title: "Reglas de Comportamiento",

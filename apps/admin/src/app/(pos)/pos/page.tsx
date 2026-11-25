@@ -615,6 +615,11 @@ export default function PosPage() {
 
   // ── Fase 3: turno del empleado ──
   // Con turno activo, "Salir" cierra el turno (la terminal sigue autorizada).
+  // Rabbit Chair: el botón solo existe si el DUEÑO lo activó en Marketing.
+  const { data: chairStatus } = trpc.rabbitChair.status.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 60_000,
+  });
   const { data: operatorStatus } = trpc.posOperators.status.useQuery(undefined, {
     retry: false,
     enabled: isTerminalDevice,
@@ -2536,8 +2541,8 @@ export default function PosPage() {
             </button>
           </div>
 
-          {/* Rabbit Chair: pestaña de la experiencia (si hay activación abierta
-              o no, la vista lo explica). Misma ventana, sin salir de la app. */}
+          {/* Rabbit Chair: solo si el dueño la activó en Marketing. */}
+          {chairStatus?.enabled && (
           <Link
             href="/pos/rabbit-chair"
             className="flex items-center gap-1.5 rounded-full bg-red-500/10 border border-red-500/25 px-2.5 py-1.5 text-red-200 hover:bg-red-500/20 text-xs font-bold transition-all whitespace-nowrap active:scale-95"
@@ -2546,6 +2551,7 @@ export default function PosPage() {
             <Sparkles className="h-3.5 w-3.5 text-red-300" />
             <span className="hidden sm:inline">La Silla</span>
           </Link>
+          )}
 
           {/* Ayuda: Bunzy limitado DENTRO del POS. Nunca manda al panel admin:
               un empleado no debe aterrizar en la administración del negocio. */}

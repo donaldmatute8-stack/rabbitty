@@ -858,3 +858,42 @@ export async function cancelActivation(db: Db, activationId: string) {
     return updated!;
   });
 }
+
+// ── Activación de la experiencia por el dueño ──────────────────────────────
+// Sin este interruptor el POS no muestra "La Silla" y no se puede crear una
+// activación. Es lo que evita que la experiencia aparezca "sola" en un tenant.
+
+export async function isRabbitChairEnabled(db: Db, branchId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ enabled: restaurants.rabbitChairEnabled })
+    .from(branches)
+    .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  return Boolean(row?.enabled);
+}
+
+export async function setRabbitChairEnabled(
+  db: Db,
+  branchId: string,
+  enabled: boolean,
+  userId?: string | null,
+) {
+  const [branch] = await db
+    .select({ restaurantId: branches.restaurantId })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  if (!branch?.restaurantId) throw new RabbitChairError("NOT_FOUND", "Sucursal no encontrada", 404);
+
+  await db
+    .update(restaurants)
+    .set({
+      rabbitChairEnabled: enabled,
+      rabbitChairEnabledAt: new Date(),
+      rabbitChairEnabledBy: userId ?? null,
+    })
+    .where(eq(restaurants.id, branch.restaurantId));
+
+  return { enabled };
+}
