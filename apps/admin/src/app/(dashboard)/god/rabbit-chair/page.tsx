@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
-import { desc } from "drizzle-orm";
+import { asc, desc } from "drizzle-orm";
 import { auth } from "@rabbitty/auth";
-import { getCoreDb } from "@rabbitty/api/db";
+import { getCoreDb, getRestaurantDb } from "@rabbitty/api/db";
 import { rabbitChairRequests } from "@rabbitty/database-core/schema";
+import { restaurants } from "@rabbitty/database-restaurant/schema";
 import { isGodAdminIdentity } from "@rabbitty/api/services/god2fa";
 import { ApproveRequest } from "./ApproveRequest";
+import { BroadcastPolicyPanel } from "./BroadcastPolicyPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,18 @@ export default async function GodRabbitChairPage() {
     .limit(100)
     .catch(() => []);
 
+  const restaurantDb = getRestaurantDb();
+  const policyRows = await restaurantDb
+    .select({
+      businessId: restaurants.businessId,
+      name: restaurants.name,
+      dailyLimit: restaurants.rabbitChairMassDailyLimit,
+      recipientCap: restaurants.rabbitChairMassRecipientCap,
+    })
+    .from(restaurants)
+    .orderBy(asc(restaurants.name))
+    .catch(() => []);
+
   const pending = requests.filter((r) => r.status === "PENDING");
   const done = requests.filter((r) => r.status !== "PENDING");
 
@@ -42,6 +56,8 @@ export default async function GodRabbitChairPage() {
           push, correo y Telegram.
         </p>
       </div>
+
+      <BroadcastPolicyPanel businesses={policyRows} />
 
       <section>
         <h2 className="mb-2 text-xs font-black uppercase tracking-wider text-gray-400">
