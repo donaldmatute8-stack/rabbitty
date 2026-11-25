@@ -2536,6 +2536,17 @@ export default function PosPage() {
             </button>
           </div>
 
+          {/* Rabbit Chair: pestaña de la experiencia (si hay activación abierta
+              o no, la vista lo explica). Misma ventana, sin salir de la app. */}
+          <Link
+            href="/pos/rabbit-chair"
+            className="flex items-center gap-1.5 rounded-full bg-red-500/10 border border-red-500/25 px-2.5 py-1.5 text-red-200 hover:bg-red-500/20 text-xs font-bold transition-all whitespace-nowrap active:scale-95"
+            title="Rabbit Chair · La Silla"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-red-300" />
+            <span className="hidden sm:inline">La Silla</span>
+          </Link>
+
           {/* Ayuda: Bunzy limitado DENTRO del POS. Nunca manda al panel admin:
               un empleado no debe aterrizar en la administración del negocio. */}
           <button

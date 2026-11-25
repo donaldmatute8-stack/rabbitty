@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { trpc } from "../../lib/trpc-client";
 import { Card, Dialog, Button, Input, toast, cn } from "@rabbitty/ui";
-import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert, Trash2, Fingerprint } from "lucide-react";
+import { TrendingUp, DollarSign, ShoppingCart, UtensilsCrossed, ArrowUpRight, Activity, Building2, Lock, ArrowRight, ShieldAlert, Trash2, Fingerprint, Sparkles } from "lucide-react";
 import { motion, type Variants } from "framer-motion";
 import { useBranch } from "../../components/DashboardClientWrapper";
 import { BranchSelector } from "../../components/BranchSelector";
@@ -34,6 +34,8 @@ export default function AdminPage() {
   // Biometría del NEGOCIO: dueño + admins/managers de la sucursal. Una passkey
   // de Touch ID en la Mac del admin también cuenta, no solo Face ID.
   const { data: businessBio } = trpc.passkeys.businessBiometrics.useQuery(undefined, { retry: false });
+  // Rabbit Chair: aviso in-app del admin cuando el negocio tiene créditos.
+  const { data: chairCredits } = trpc.rabbitChair.credits.useQuery(undefined, { retry: false });
 
   const utils = trpc.useUtils();
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -172,6 +174,36 @@ export default function AdminPage() {
                 ¿No aparece? Ver diagnóstico
               </Link>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 0a. Rabbit Chair: aviso de la experiencia cuando hay créditos */}
+      {(chairCredits?.creditsRemaining ?? 0) > 0 && (
+        <div className="relative overflow-hidden rounded-3xl border border-red-500/25 bg-linear-to-r from-red-500/10 via-black/40 to-black/60 p-5 backdrop-blur-xl">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/15 text-red-300">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-red-400">Nuevo · Rabbit Chair</p>
+                <h3 className="m-0 mt-1 text-base font-black text-white">
+                  Tienes {chairCredits?.creditsRemaining} activaciones de La Silla
+                </h3>
+                <p className="m-0 mt-1 max-w-2xl text-xs leading-relaxed text-gray-300">
+                  Una silla, una luz y diez minutos. Configura el formato, el cupo y la carta; el POS te deja
+                  apartar lugar, sentar y marcar servido.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/settings/rabbit-chair"
+              className="flex shrink-0 items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-xs font-black text-white transition-all hover:bg-red-400 active:scale-95"
+            >
+              Configurar La Silla
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
         </div>
       )}

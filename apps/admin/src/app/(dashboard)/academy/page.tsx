@@ -195,6 +195,50 @@ Con eso el mesero no puede salirse a otras apps ni recibir notificaciones que lo
     content: `## Dashboard Multi-Sucursal\n\nEl dashboard unificado muestra KPIs de todas las sucursales en una sola vista.\n\n### Características:\n- Selector de sucursal en el header del admin\n- KPIs agregados: órdenes totales, ingresos totales, clientes únicos\n- Desglose por sucursal con métricas individuales\n- Contexto global (BranchContext) disponible en todas las páginas\n\n### Cómo usar:\n1. Usa el selector en la esquina superior derecha\n2. Selecciona "Todas las sucursales" para ver datos consolidados\n3. Selecciona una sucursal específica para ver sus datos`,
   },
   {
+    id: "rabbit-chair",
+    icon: Sparkles,
+    label: "Rabbit Chair · La Silla",
+    desc: "La experiencia de bar oscuro: cupo secreto, aporte libre y diez minutos",
+    role: "admin",
+    content: `## Rabbit Chair · La Silla
+
+Una silla, una luz, diez minutos. El cliente no habla: configura y paga desde el teléfono.
+
+### 1) Antes de abrir
+
+- Necesitas **créditos de activación**. Rabbitty los otorga por hito (regalo); no hay cobro por ahora.
+- Define: **formato** (una silla, varias a la vez, oleadas o parejas), **cupo**, **aporte mínimo** (desde $50), **duración** (10 min por defecto), **carta** (café, coctelería o ambas) y **bartender** (fijo o sorpresa).
+- Si la carta incluye alcohol, el sistema marca la experiencia como **+18**.
+
+### 2) Crear y abrir
+
+1. Ajustes → **Rabbit Chair**.
+2. Llena la activación y toca **Crear**.
+3. Toca **Abrir**. En ese momento la Silla queda en vivo.
+
+### 3) Operar desde el POS
+
+- En el POS toca **La Silla** (barra superior).
+- **Apartar lugar**: para un invitado sin cuenta.
+- **Sentar** cuando llega a la silla.
+- **Servido** arranca el cronómetro de 10 minutos; al terminar, la luz cambia.
+
+### 4) Reglas
+
+- El aporte es **libre** con mínimo de $50 y **solo tarjeta**.
+- El pedido de marketplace/app nunca se cobra dos veces: la experiencia es aparte.
+- Cerrar la activación la archiva; entra a tu caja como cualquier venta.
+- Cancelar un **borrador** devuelve el crédito.
+
+### 5) Qué falta (fase siguiente)
+
+- Drop con push y **fecha aleatoria** desde el panel.
+- Lista de espera automática.
+- **Cobro real** del aporte (hoy el checkout está bloqueado a propósito).
+
+> Guía relacionada: **Terminales, cajas y asignaciones** (para dejar el POS listo).`,
+  },
+  {
     id: "empleados-roles",
     icon: Users,
     label: "Empleados, roles y terminales",
