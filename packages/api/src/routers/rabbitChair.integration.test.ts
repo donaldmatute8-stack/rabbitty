@@ -476,6 +476,36 @@ describe("Rabbit Chair — integración (fase 0/1)", () => {
     ).rejects.toThrow(/fila de este negocio/i);
   });
 
+  it("limita a un aviso masivo por día por negocio", async () => {
+    const first = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+    await ctx.restaurantDb
+      .update(rabbitChairActivations)
+      .set({ broadcastAt: sql`now()` })
+      .where(eq(rabbitChairActivations.id, first.id));
+
+    const second = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+    await expect(
+      caller.launch({
+        activationId: second.id,
+        audience: "ALL",
+        allowBroadcast: true,
+      }),
+    ).rejects.toThrow(/últimas 24 horas/i);
+  });
+
+  it("una audiencia dirigida no consume el límite masivo", async () => {
+    const first = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+    await ctx.restaurantDb
+      .update(rabbitChairActivations)
+      .set({ broadcastAt: sql`now()` })
+      .where(eq(rabbitChairActivations.id, first.id));
+
+    const second = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
+    await expect(
+      caller.launch({ activationId: second.id, audience: "WAITLIST" }),
+    ).rejects.toThrow(/fila de este negocio/i);
+  });
+
   it("la audiencia “todos” exige confirmación explícita", async () => {
     const draft = await caller.activate({ format: "SINGLE", menuMode: "COFFEE" });
 

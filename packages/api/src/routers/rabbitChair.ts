@@ -8,6 +8,7 @@ import {
   rabbitChairGrantUses,
   rabbitChairSlots,
   rabbitChairWaitlist,
+  restaurants,
 } from "@rabbitty/database-restaurant/schema";
 import {
   membershipSubscriptions,
@@ -36,6 +37,7 @@ import {
   createGrant,
   getActivation,
   getActiveActivation,
+  getRabbitChairBroadcastPolicy,
   grantSummary,
   listActivations,
   listSlots,
@@ -434,6 +436,67 @@ export const rabbitChairRouter = router({
     }),
   ),
 
+  /** God: lee la política de avisos masivos de un negocio. */
+  broadcastPolicy: godAdminProcedure
+    .input(z.object({ businessId: z.string().min(1) }))
+    .query(({ ctx, input }) =>
+      run(async () => {
+        const [row] = await db(ctx)
+          .select({
+            businessId: restaurants.businessId,
+            name: restaurants.name,
+            dailyLimit: restaurants.rabbitChairMassDailyLimit,
+            recipientCap: restaurants.rabbitChairMassRecipientCap,
+          })
+          .from(restaurants)
+          .where(eq(restaurants.businessId, input.businessId))
+          .limit(1);
+        if (!row) throw new RabbitChairError("NOT_FOUND", "Negocio no encontrado", 404);
+        return row;
+      }),
+    ),
+
+  /** God: ajusta el límite diario (0 = sin límite) y el tope de destinatarios. */
+  setBroadcastPolicy: godAdminProcedure
+    .input(
+      z.object({
+        businessId: z.string().min(1),
+        dailyLimit: z.number().int().min(0).max(10),
+        recipientCap: z.number().int().min(1).max(5000),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      run(async () => {
+        const [updated] = await db(ctx)
+          .update(restaurants)
+          .set({
+            rabbitChairMassDailyLimit: input.dailyLimit,
+            rabbitChairMassRecipientCap: input.recipientCap,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(restaurants.businessId, input.businessId))
+          .returning({
+            businessId: restaurants.businessId,
+            dailyLimit: restaurants.rabbitChairMassDailyLimit,
+            recipientCap: restaurants.rabbitChairMassRecipientCap,
+          });
+        if (!updated) throw new RabbitChairError("NOT_FOUND", "Negocio no encontrado", 404);
+
+        logAudit({
+          userId: ctx.userId ?? null,
+          action: "RABBIT_CHAIR_BROADCAST_POLICY",
+          resource: "restaurants",
+          resourceId: input.businessId,
+          details: {
+            dailyLimit: input.dailyLimit,
+            recipientCap: input.recipientCap,
+          },
+        });
+
+        return updated;
+      }),
+    ),
+
   activate: adminOnlyProcedure.input(activateInput).mutation(({ ctx, input }) =>
     run(async () => {
       if (!(await isRabbitChairEnabled(db(ctx), ctx.branchId))) {
@@ -513,8 +576,35 @@ export const rabbitChairRouter = router({
       }
 
       const businessId = await resolveBusinessId(db(ctx), ctx.branchId);
+      const broadcastPolicy = await getRabbitChairBroadcastPolicy(db(ctx), businessId);
       let userIds: string[] = [];
       let broadcast = false;
+
+      // 1 masivo por día (configurable). Se valida ANTES de consultar la
+      // audiencia para no gastar queries ni mandar nada si ya se usó.
+      const assertBroadcastAllowed = async () => {
+        if (broadcastPolicy.dailyLimit <= 0) return;
+        const since = new Date(Date.now() - 24 * 60 * 60_000);
+        const [used] = await db(ctx)
+          .select({ count: sql<number>`count(*)::int` })
+          .from(rabbitChairActivations)
+          .where(
+            and(
+              eq(rabbitChairActivations.businessId, businessId),
+              isNotNull(rabbitChairActivations.broadcastAt),
+              gte(rabbitChairActivations.broadcastAt, since),
+            ),
+          )
+          .limit(1);
+
+        if (Number(used?.count ?? 0) >= broadcastPolicy.dailyLimit) {
+          throw new RabbitChairError(
+            "INVALID_STATE",
+            `Ya se envió un aviso masivo en las últimas 24 horas. Límite: ${broadcastPolicy.dailyLimit} por día. Usa una audiencia dirigida o espera.`,
+            429,
+          );
+        }
+      };
 
       if (input.audience === "PRESENCE") {
         // 1) Presencia reciente (lo natural del drop).
@@ -538,12 +628,13 @@ export const rabbitChairRouter = router({
               "Sin audiencia reciente en el negocio. Confirma el envío masivo (allowBroadcast) para avisar a los Rabbitters con push.",
             );
           }
+          await assertBroadcastAllowed();
           broadcast = true;
           const fallback = await ctx.coreDb
             .select({ id: users.id })
             .from(users)
             .where(eq(users.pushInAppEnabled, true))
-            .limit(100);
+            .limit(broadcastPolicy.recipientCap);
           userIds = fallback.map((u) => u.id);
         }
       } else if (input.audience === "RADIO") {
@@ -673,12 +764,13 @@ export const rabbitChairRouter = router({
             "El envío masivo a todos los Rabbitters exige confirmación (allowBroadcast).",
           );
         }
+        await assertBroadcastAllowed();
         broadcast = true;
         const rows = await ctx.coreDb
           .select({ id: users.id })
           .from(users)
           .where(eq(users.pushInAppEnabled, true))
-          .limit(100);
+          .limit(broadcastPolicy.recipientCap);
         userIds = rows.map((u) => u.id);
       }
 
@@ -689,6 +781,14 @@ export const rabbitChairRouter = router({
         name: activation.name,
         branchId: ctx.branchId,
       });
+
+      // Solo cuenta como masivo si realmente salió a alguien.
+      if (broadcast && userIds.length > 0) {
+        await db(ctx)
+          .update(rabbitChairActivations)
+          .set({ broadcastAt: sql`now()`, updatedAt: sql`now()` })
+          .where(eq(rabbitChairActivations.id, input.activationId));
+      }
 
       logAudit({
         userId: ctx.userId ?? null,
@@ -710,6 +810,7 @@ export const rabbitChairRouter = router({
         audience: userIds.length,
         audienceType: input.audience,
         broadcast,
+        broadcastPolicy,
       };
     }),
   ),

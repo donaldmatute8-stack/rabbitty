@@ -34,6 +34,10 @@ export const restaurants = pgTable("restaurants", {
   rabbitChairEnabled: boolean("rabbitChairEnabled").default(false).notNull(),
   rabbitChairEnabledAt: timestamp("rabbitChairEnabledAt"),
   rabbitChairEnabledBy: text("rabbitChairEnabledBy"),
+  /** Avisos masivos de La Silla permitidos por día (0 = sin límite). */
+  rabbitChairMassDailyLimit: integer("rabbitChairMassDailyLimit").default(1).notNull(),
+  /** Tope de destinatarios por aviso masivo (default 100). */
+  rabbitChairMassRecipientCap: integer("rabbitChairMassRecipientCap").default(100).notNull(),
   happyHourStart: text("happyHourStart"), // e.g. "14:00"
   happyHourEnd: text("happyHourEnd"), // e.g. "18:00"
   happyHourRewardRate: integer("happyHourRewardRate"), // e.g. 40 for 2X if default is 20
@@ -1432,6 +1436,8 @@ export const rabbitChairActivations = pgTable("rabbitChairActivations", {
   staffId: text("staffId"),
   staffMinutes: integer("staffMinutes").default(0).notNull(),
   staffCostCents: integer("staffCostCents").default(0).notNull(),
+  /** Último aviso masivo enviado por esta activación (rate limit 1/día). */
+  broadcastAt: timestamp("broadcastAt"),
   createdBy: text("createdBy"),
   ...timestamps,
 }, (t) => [

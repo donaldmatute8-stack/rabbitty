@@ -559,7 +559,7 @@ export default function RabbitChairAdminPage() {
                   ? "Quienes alguna vez entraron a la fila de La Silla."
                   : audience === "MEMBERS"
                     ? "Miembros con membresía activa y vigente."
-                    : "Todos con push activo (máx. 100). Pide confirmación."}
+                    : "Todos con push activo. Máx. 100 y 1 envío al día. Pide confirmación."}
             </p>
           </div>
         </div>

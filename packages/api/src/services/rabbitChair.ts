@@ -940,6 +940,26 @@ export async function cancelActivation(db: Db, activationId: string) {
 // Sin este interruptor el POS no muestra "La Silla" y no se puede crear una
 // activación. Es lo que evita que la experiencia aparezca "sola" en un tenant.
 
+/**
+ * Política de avisos masivos de La Silla para un negocio.
+ * Defaults: 1 por día y 100 destinatarios. God puede ajustarlo por negocio.
+ */
+export async function getRabbitChairBroadcastPolicy(db: Db, businessId: string) {
+  const [row] = await db
+    .select({
+      dailyLimit: restaurants.rabbitChairMassDailyLimit,
+      recipientCap: restaurants.rabbitChairMassRecipientCap,
+    })
+    .from(restaurants)
+    .where(eq(restaurants.businessId, businessId))
+    .limit(1);
+
+  return {
+    dailyLimit: Math.max(0, Number(row?.dailyLimit ?? 1)),
+    recipientCap: Math.min(5000, Math.max(1, Number(row?.recipientCap ?? 100))),
+  };
+}
+
 export async function isRabbitChairEnabled(db: Db, branchId: string): Promise<boolean> {
   const [row] = await db
     .select({ enabled: restaurants.rabbitChairEnabled })
