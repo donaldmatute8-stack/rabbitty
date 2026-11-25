@@ -34,3 +34,27 @@ jobs:
           fi
 
           echo "Drained OK."
+
+      # Respaldo: la fila de La Silla avanza cada 5 min aunque el workflow
+      # dedicado no dispare. inviteNextWaiter es idempotente (una invitación
+      # activa por activación), así que no duplica avisos.
+      - name: Rabbit Chair waitlist (respaldo)
+        if: always()
+        continue-on-error: true
+        run: |
+          ADMIN_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::warning::Sin CRON_SECRET; se omite la fila de La Silla."
+            exit 0
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$ADMIN_URL/api/cron/rabbit-chair-waitlist" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          echo "Waitlist HTTP: $HTTP_STATUS"
+          echo "Waitlist: $BODY"

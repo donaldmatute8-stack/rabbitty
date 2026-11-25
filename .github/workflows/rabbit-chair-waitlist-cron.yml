@@ -5,6 +5,7 @@ name: Rabbit Chair — Lista de espera (invitaciones)
 #
 # Manual: Actions → "Rabbit Chair — Lista de espera" → Run workflow.
 
+# rearmed 2026-11-25: el schedule no había disparado desde su alta.
 on:
   schedule:
     - cron: '*/5 * * * *'

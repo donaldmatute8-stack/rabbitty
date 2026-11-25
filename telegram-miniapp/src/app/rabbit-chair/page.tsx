@@ -44,6 +44,7 @@ export default function RabbitChairPage() {
   const businessId = params.get("business") || "";
   const branchFromLink = params.get("branch") || "";
   const { user, loading: authLoading } = useAuth();
+  const userId = user?.id;
 
   const [branch, setBranch] = useState(branchFromLink);
   const [state, setState] = useState<{
@@ -78,7 +79,7 @@ export default function RabbitChairPage() {
       });
       const data = await res.json();
       setState(data);
-      if (data?.activation?.id && user?.id) {
+      if (data?.activation?.id && userId) {
         const pass = await fetch(
           `/api/rabbit-chair/slot?activationId=${encodeURIComponent(data.activation.id)}`,
           { headers: await headers(), cache: "no-store" },
@@ -92,7 +93,7 @@ export default function RabbitChairPage() {
     } finally {
       setLoading(false);
     }
-  }, [businessId, branch, user?.id, headers]);
+  }, [businessId, branch, userId, headers]);
 
   useEffect(() => {
     void load();
