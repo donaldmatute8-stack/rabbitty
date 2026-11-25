@@ -1,0 +1,47 @@
+name: Rabbit Chair — Lista de espera (invitaciones)
+
+# Cada 5 minutos invita al primero de la fila cuando hay lugar libre.
+# Sin esto, la fila avanza solo si un POS está consultando La Silla.
+#
+# Manual: Actions → "Rabbit Chair — Lista de espera" → Run workflow.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: rabbit-chair-waitlist
+  cancel-in-progress: false
+
+jobs:
+  invite:
+    name: Invitar siguiente de la fila
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Trigger waitlist invite
+        run: |
+          APP_URL="${{ secrets.ADMIN_APP_URL || 'https://admin.rabbitty.me' }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Falta el secret CRON_SECRET del repositorio."
+            exit 1
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$APP_URL/api/cron/rabbit-chair-waitlist" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Accept: application/json")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP: $HTTP_STATUS"
+          echo "Respuesta: $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Rabbit Chair waitlist cron falló con HTTP $HTTP_STATUS"
+            exit 1
+          fi

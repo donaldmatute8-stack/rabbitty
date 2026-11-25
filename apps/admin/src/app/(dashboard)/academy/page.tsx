@@ -235,7 +235,7 @@ Una silla, una luz, diez minutos. El cliente no habla: configura y paga desde el
 - **Sortear** fecha con Bunzy o **Lanzar ahora**: el aviso sale por push a los Rabbitters.
 - **Lista de espera**: si la silla se llena, el cliente entra a la fila; al liberarse un lugar se le invita por push.
 - **Cobro del aporte en caja**: se registra como una orden normal (entra a caja y reportes).
-- **App**: el cliente toma su lugar, configura la bebida sin hablar y recibe un **pase con QR**.
+- **App**: el cliente toma su lugar, configura la bebida sin hablar, **paga con tarjeta** (si el negocio tiene Stripe conectado) y recibe un **pase con QR**. Si no hay Stripe, el aporte se cobra en caja.
 
 > Guía relacionada: **Terminales, cajas y asignaciones** (para dejar el POS listo).`,
   },

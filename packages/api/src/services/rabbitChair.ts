@@ -534,7 +534,8 @@ export async function claimSlot(db: Db, activationId: string, input: ClaimInput)
           status: "HELD",
           userId: input.userId ?? null,
           guestName: input.guestName?.trim() || null,
-          heldUntil: sql`now() + interval '5 minutes'`,
+          // PREPAID pasa por Stripe: 15 min de hold; el resto, 5.
+          heldUntil: sql`now() + interval '${sql.raw(String(activation.chargeMode === "PREPAID" ? 15 : 5))} minutes'`,
           updatedAt: sql`now()`,
         })
         .where(
@@ -1246,5 +1247,106 @@ export async function checkoutSlotAtPos(db: Db, input: PosCheckoutInput) {
       .where(eq(rabbitChairSlots.id, input.slotId));
 
     return { alreadyPaid: false, orderId: order.id, amountCents: input.amountCents };
+  });
+}
+
+/**
+ * ── Pago confirmado por Stripe (Checkout) ──────────────────────────────────
+ * El webhook de Stripe llama aquí cuando se completa el pago del aporte.
+ * Es idempotente: si el lugar ya está pagado, no crea otra orden.
+ */
+export async function markSlotPaidFromStripe(
+  db: Db,
+  input: { slotId: string; amountCents: number; ref: string; userId?: string | null },
+) {
+  return db.transaction(async (tx: any) => {
+    const [slot] = await tx
+      .select()
+      .from(rabbitChairSlots)
+      .where(eq(rabbitChairSlots.id, input.slotId))
+      .for("update")
+      .limit(1);
+    if (!slot) throw new RabbitChairError("NOT_FOUND", "Lugar no encontrado", 404);
+    if (slot.status === "PAID") return { alreadyPaid: true, orderId: slot.orderId };
+
+    const [activation] = await tx
+      .select()
+      .from(rabbitChairActivations)
+      .where(eq(rabbitChairActivations.id, slot.activationId))
+      .limit(1);
+    if (!activation) throw new RabbitChairError("NOT_FOUND", "Activación no encontrada", 404);
+
+    const total = Math.max(0, Math.round(input.amountCents)) / 100;
+    const subtotal = Math.round((total / 1.16) * 100) / 100;
+    const tax = Math.round((total - subtotal) * 100) / 100;
+    const menuItemId = await ensureChairMenuItem(tx, activation.branchId);
+
+    const order = await withOrderCreate(tx, { actor: { staffId: null, terminalId: null } }, async () => {
+      const [row] = await tx
+        .insert(orders)
+        .values({
+          branchId: activation.branchId,
+          orderType: "TO_GO",
+          status: "PAID",
+          channel: "RABBIT_CHAIR",
+          customerName: slot.guestName ?? null,
+          notes: `Rabbit Chair · ${activation.name} · Stripe`,
+          subtotal,
+          tax,
+          total,
+          version: 1,
+        })
+        .returning({ id: orders.id });
+
+      await tx.insert(orderItems).values({
+        orderId: row.id,
+        menuItemId,
+        nameSnapshot: "La Silla",
+        quantity: 1,
+        unitPrice: total,
+        totalPrice: total,
+        sortOrder: 0,
+        status: "SERVED",
+        taxRate: 0.16,
+        taxAmount: tax,
+      });
+
+      await tx.insert(payments).values({
+        orderId: row.id,
+        method: "CREDIT_CARD",
+        amount: total,
+        status: "COMPLETED",
+        reference: input.ref,
+        verificationMethod: "PROVIDER_WEBHOOK",
+      });
+
+      return row;
+    });
+
+    await tx
+      .update(rabbitChairSlots)
+      .set({
+        status: "PAID",
+        orderId: order.id,
+        paidCents: Math.round(input.amountCents),
+        paymentRef: input.ref,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(rabbitChairSlots.id, input.slotId));
+
+    await tx
+      .update(rabbitChairWaitlist)
+      .set({ status: "CONVERTED", updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(rabbitChairWaitlist.activationId, slot.activationId),
+          input.userId
+            ? eq(rabbitChairWaitlist.userId, input.userId)
+            : eq(rabbitChairWaitlist.userId, String(slot.userId ?? "")),
+          inArray(rabbitChairWaitlist.status, ["WAITING", "INVITED"]),
+        ),
+      );
+
+    return { alreadyPaid: false, orderId: order.id };
   });
 }

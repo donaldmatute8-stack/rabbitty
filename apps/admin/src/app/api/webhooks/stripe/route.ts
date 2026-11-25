@@ -205,6 +205,47 @@ export async function POST(req: Request) {
         // ── Membresías: alta de suscripción tras el pago (Stripe Connect) ──
         const session = event.data.object;
         const meta = session.metadata || {};
+
+        // ── Rabbit Chair: aporte pagado con Stripe Checkout ──
+        if (meta.kind === "rabbit_chair" && meta.slotId) {
+          try {
+            const { markSlotPaidFromStripe } = await import("@rabbitty/api/services/rabbitChair");
+            const result = await markSlotPaidFromStripe(getRestaurantDb() as any, {
+              slotId: String(meta.slotId),
+              amountCents: Number(session.amount_total ?? 0),
+              ref: session.id,
+              userId: meta.userId ?? null,
+            });
+
+            // Aviso al cliente (outbox → in-app + push), idempotente.
+            try {
+              const { notificationsOutbox } = await import("@rabbitty/database-core/schema");
+              if (meta.userId) {
+                await getCoreDb()
+                  .insert(notificationsOutbox)
+                  .values({
+                    userId: String(meta.userId),
+                    type: "SYSTEM",
+                    title: "Aporte confirmado · La Silla",
+                    message: "Tu lugar está pagado. Llega, siéntate y muestra tu pase.",
+                    route: `/rabbit-chair?business=${meta.businessId ?? ""}`,
+                    data: { kind: "rabbit_chair_paid" },
+                    dedupeKey: `rabbit_chair_paid:${meta.slotId}`,
+                    priority: "normal",
+                  })
+                  .onConflictDoNothing({ target: notificationsOutbox.dedupeKey });
+              }
+            } catch (noticeErr) {
+              console.warn("[Stripe Webhook] aviso rabbit_chair falló:", noticeErr);
+            }
+
+            console.info("[Stripe Webhook] rabbit_chair pagado:", meta.slotId, result);
+          } catch (chairErr) {
+            console.error("[Stripe Webhook] rabbit_chair falló:", chairErr);
+          }
+          break;
+        }
+
         if (meta.kind === "MEMBERSHIP_SUBSCRIPTION" && session.mode === "subscription" && session.subscription) {
           const coreDb = getCoreDb();
           const stripe = getStripeClient();

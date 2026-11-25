@@ -86,6 +86,25 @@ export default function RabbitChairPage() {
     void load();
   }, [load]);
 
+  // PREPAID: mientras se paga en Stripe, refrescamos el lugar hasta verlo PAID.
+  useEffect(() => {
+    if (!state?.activation || !user?.id) return;
+    if (state.activation.chargeMode !== "PREPAID") return;
+    if (slot?.paidCents) return;
+    const id = setInterval(async () => {
+      try {
+        const pass = await fetch(
+          `/api/rabbit-chair/slot?activationId=${encodeURIComponent(state.activation!.id)}`,
+          { headers: await headers(), cache: "no-store" },
+        ).then((r) => r.json());
+        if (pass?.slot?.paidCents) setSlot(pass.slot);
+      } catch {
+        /* sin red: seguimos */
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [state?.activation, slot?.paidCents, user?.id, headers]);
+
   const claim = async () => {
     if (!state?.activation) return;
     setError("");
@@ -129,6 +148,29 @@ export default function RabbitChairPage() {
       await PlatformBridge.hapticFeedback("success");
     } catch {
       setError("Error de conexión.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pay = async () => {
+    if (!state?.activation || !slot) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/rabbit-chair/checkout", {
+        method: "POST",
+        headers: { ...(await headers()), "Content-Type": "application/json" },
+        body: JSON.stringify({ activationId: state.activation.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.url) {
+        setError(data?.error || "No se pudo iniciar el pago.");
+        return;
+      }
+      await PlatformBridge.openExternalUrl(data.url);
+    } catch {
+      setError("Error de conexión con el pago.");
     } finally {
       setSaving(false);
     }
@@ -268,8 +310,28 @@ export default function RabbitChairPage() {
               </button>
             </div>
 
+            {/* Pago del aporte (PREPAID) */}
+            {slot.config && activation.chargeMode === "PREPAID" && !slot.paidCents && (
+              <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Aporte</p>
+                <p className="mt-2 text-sm text-gray-300">
+                  Mínimo ${(activation.minContributionCents / 100).toFixed(0)} · pago seguro con tarjeta
+                </p>
+                <button
+                  onClick={pay}
+                  disabled={saving}
+                  className="mt-4 w-full rounded-full bg-white px-6 py-3 text-sm font-black text-black disabled:opacity-40"
+                >
+                  {saving ? "Abriendo pago…" : "Pagar aporte"}
+                </button>
+                <p className="mt-2 text-[10px] text-gray-500">
+                  Al terminar el pago, esta pantalla se actualiza sola.
+                </p>
+              </div>
+            )}
+
             {/* Pase */}
-            {slot.config && (
+            {slot.config && (activation.chargeMode !== "PREPAID" || slot.paidCents) && (
               <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-6 text-center">
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">Tu pase</p>
                 <p className="mt-2 text-2xl font-black">Lugar #{slot.index}</p>
