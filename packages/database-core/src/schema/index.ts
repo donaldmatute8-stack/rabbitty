@@ -308,8 +308,67 @@ export const referrals = pgTable("referrals", {
   invitedId: fkId("invitedId").references(() => users.id),
   status: text("status").default("PENDING").notNull(),
   rewardAmount: integer("rewardAmount").default(50).notNull(),
+  /** Pago del bono (legado o desde el fondo). Null = pendiente. */
+  rewardedAt: timestamp("rewardedAt"),
+  tranchesPaid: integer("tranchesPaid").default(0).notNull(),
+  ledgerEntryId: text("ledgerEntryId"),
+  coopAmount: integer("coopAmount").default(0).notNull(),
+  treasuryAmount: integer("treasuryAmount").default(0).notNull(),
+  coopCommitmentId: text("coopCommitmentId"),
   createdAt: timestamp("createdAt").defaultNow(),
 });
+
+/**
+ * ── Fondo de crecimiento "La Madriguera" (ADR-CORE-011) ────────────────────
+ * Solo tablas de lectura en Fase 1. No mueve Bunz ni toca ledger_entries.
+ * El asiento contable vive en `ledger_entries` (restaurant DB) con subject
+ * `sys_growth_fund`.
+ */
+export const fundContributions = pgTable("fund_contributions", {
+  id: id(),
+  /** coop | user | affiliate | match */
+  source: text("source").notNull(),
+  /** usr_<uuid> | biz_<uuid> | sys_treasury */
+  subjectId: text("subjectId").notNull(),
+  amount: integer("amount").notNull(),
+  ledgerEntryId: text("ledgerEntryId"),
+  program: text("program").default("madriguera").notNull(),
+  periodStart: timestamp("periodStart"),
+  idempotencyKey: text("idempotencyKey").notNull().unique(),
+  ...timestamps,
+}, (t) => [
+  index("fund_contributions_program_idx").on(t.program, t.createdAt),
+  index("fund_contributions_source_idx").on(t.program, t.source, t.createdAt),
+]);
+
+export const referralCoopCommitments = pgTable("referral_coop_commitments", {
+  id: id(),
+  affiliateId: text("affiliateId").notNull(),
+  source: text("source").default("coop").notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  pctBasis: real("pctBasis"),
+  committed: integer("committed").default(0).notNull(),
+  spent: integer("spent").default(0).notNull(),
+  returned: integer("returned").default(0).notNull(),
+  /** ACTIVE | EXHAUSTED | RETURNED | CANCELLED */
+  status: text("status").default("ACTIVE").notNull(),
+  ...timestamps,
+}, (t) => [
+  index("referral_coop_commitments_affiliate_idx").on(t.affiliateId, t.status, t.periodStart),
+]);
+
+export const platformBudgets = pgTable("platform_budgets", {
+  id: id(),
+  program: text("program").notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  budgeted: integer("budgeted").notNull(),
+  spent: integer("spent").default(0).notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("platform_budgets_program_period_uidx").on(t.program, t.periodStart),
+]);
 
 export const notifications = pgTable("notifications", {
   id: id(),

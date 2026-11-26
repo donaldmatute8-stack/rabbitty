@@ -110,7 +110,53 @@ export const referrals = pgTable("referrals", {
   invitedId: text("invitedId").notNull().references(() => users.id),
   status: text("status").default("PENDING").notNull(),
   rewardAmount: integer("rewardAmount").default(50).notNull(),
+  rewardedAt: timestamp("rewardedAt"),
+  tranchesPaid: integer("tranchesPaid").default(0).notNull(),
+  ledgerEntryId: text("ledgerEntryId"),
+  coopAmount: integer("coopAmount").default(0).notNull(),
+  treasuryAmount: integer("treasuryAmount").default(0).notNull(),
+  coopCommitmentId: text("coopCommitmentId"),
   createdAt: timestamp("createdAt").defaultNow(),
+});
+
+/** Fondo de crecimiento La Madriguera — solo lectura en Fase 1. */
+export const fundContributions = pgTable("fund_contributions", {
+  id: text("id").primaryKey(),
+  source: text("source").notNull(),
+  subjectId: text("subjectId").notNull(),
+  amount: integer("amount").notNull(),
+  ledgerEntryId: text("ledgerEntryId"),
+  program: text("program").default("madriguera").notNull(),
+  periodStart: timestamp("periodStart"),
+  idempotencyKey: text("idempotencyKey").notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+});
+
+export const referralCoopCommitments = pgTable("referral_coop_commitments", {
+  id: text("id").primaryKey(),
+  affiliateId: text("affiliateId").notNull(),
+  source: text("source").default("coop").notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  pctBasis: real("pctBasis"),
+  committed: integer("committed").default(0).notNull(),
+  spent: integer("spent").default(0).notNull(),
+  returned: integer("returned").default(0).notNull(),
+  status: text("status").default("ACTIVE").notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
+});
+
+export const platformBudgets = pgTable("platform_budgets", {
+  id: text("id").primaryKey(),
+  program: text("program").notNull(),
+  periodStart: timestamp("periodStart").notNull(),
+  periodEnd: timestamp("periodEnd").notNull(),
+  budgeted: integer("budgeted").notNull(),
+  spent: integer("spent").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow(),
 });
 
 export const notifications = pgTable("notifications", {
