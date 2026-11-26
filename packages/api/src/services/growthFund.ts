@@ -232,9 +232,11 @@ export function levelFromContribution(input: {
   total: number;
   consecutiveMonths: number;
 }): MadrigueraLevel["tier"] {
+  // Guardián por monto o por 3 meses consecutivos; va antes de Compa para que
+  // un usuario con 120 Bunz en 3 meses sea Guardián, no Compa.
   if (input.total >= MADRIGUERA_LEVELS.GUARDIAN.min) return "GUARDIAN";
-  if (input.total >= MADRIGUERA_LEVELS.COMPA.min) return "COMPA";
   if (input.consecutiveMonths >= 3) return "GUARDIAN";
+  if (input.total >= MADRIGUERA_LEVELS.COMPA.min) return "COMPA";
   return "APRENDIZ";
 }
 

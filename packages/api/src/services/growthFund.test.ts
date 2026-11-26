@@ -4,6 +4,8 @@ import {
   assertFundHealthy,
   consecutiveMonths,
   getFundBalance,
+  getFundContributionsSummary,
+  getMadrigueraLevel,
   growthFundFlags,
   levelFromContribution,
 } from "./growthFund";
@@ -79,6 +81,41 @@ describe("La Madriguera · Fase 1 (solo lectura)", () => {
     expect(levelFromContribution({ total: 499, consecutiveMonths: 0 })).toBe("COMPA");
     expect(levelFromContribution({ total: 500, consecutiveMonths: 0 })).toBe("GUARDIAN");
     expect(levelFromContribution({ total: 0, consecutiveMonths: 3 })).toBe("GUARDIAN");
+  });
+
+  it("calcula el nivel desde los aportes de 12 meses", async () => {
+    const db = {
+      execute: async () => ({
+        rows: [
+          { month: "2026-09", amount: 40 },
+          { month: "2026-10", amount: 40 },
+          { month: "2026-11", amount: 40 },
+        ],
+      }),
+    } as never;
+
+    const level = await getMadrigueraLevel(db, "user-1");
+    expect(level.totalContributed).toBe(120);
+    expect(level.consecutiveMonths).toBe(3);
+    expect(level.tier).toBe("GUARDIAN");
+    expect(level.label).toBe("Guardián");
+  });
+
+  it("resume aportes por fuente", async () => {
+    const db = {
+      execute: async () => ({
+        rows: [
+          { source: "coop", amount: 150, entries: 1 },
+          { source: "user", amount: 5, entries: 1 },
+        ],
+      }),
+    } as never;
+
+    const summary = await getFundContributionsSummary(db);
+    expect(summary).toEqual([
+      { source: "coop", amount: 150, entries: 1 },
+      { source: "user", amount: 5, entries: 1 },
+    ]);
   });
 
   it("todos los flags arrancan apagados", () => {
