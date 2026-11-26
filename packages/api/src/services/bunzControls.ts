@@ -91,6 +91,30 @@ async function usedInPeriod(
   since: Date
 ): Promise<number> {
   if (operation === "emission") {
+    // Fuente única de emisión: `transactions.bunzMinted`. Cubre tanto el mint
+    // del POS (`/api/pos/reward`) como el escaneo del negocio (`scan/mint`).
+    // Si la tabla no está en esta conexión (dev con bases separadas), se cae al
+    // contador legacy de orders para no romper.
+    const executor = db as unknown as { execute?: (query: unknown) => Promise<unknown> };
+    if (typeof executor.execute === "function") {
+      try {
+        const result = await executor.execute(sql`
+          SELECT COALESCE(SUM("bunzMinted"), 0)::int AS used
+            FROM "transactions"
+           WHERE "businessId" = ${affiliateId}
+             AND "status" = 'MINTED'
+             AND "createdAt" >= ${since}
+        `);
+        const rows = Array.isArray(result)
+          ? result
+          : ((result as { rows?: Array<{ used?: number }> })?.rows ?? []);
+        const row = rows[0] as { used?: number } | undefined;
+        return Number(row?.used) || 0;
+      } catch {
+        // fallback abajo
+      }
+    }
+
     const [row] = await db
       .select({ used: sql<number>`coalesce(sum(${tables.orders.bunzReward}), 0)` })
       .from(tables.orders)

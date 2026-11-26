@@ -100,6 +100,44 @@ describe("RP-2B — controles del piloto", () => {
     expect(r.allowed).toBe(false);
   });
 
+  it("piloto activo: cuenta emisión desde transactions (POS + scan)", async () => {
+    process.env[PILOT_FLAG] = "true";
+    const limits = {
+      affiliateId: "a1",
+      pilotEnabled: true,
+      periodDays: 7,
+      maxEmissionBunz: 100,
+      maxRedemptionBunz: 50,
+      maxSettlementBunz: 200,
+    };
+    let i = 0;
+    const db: any = {
+      select() {
+        const chain: any = {
+          from: () => chain,
+          innerJoin: () => chain,
+          where: () => {
+            const rows = i++ === 0 ? [limits] : [];
+            const p: any = Promise.resolve(rows);
+            p.limit = async () => rows;
+            return p;
+          },
+        };
+        return chain;
+      },
+      execute: async () => ({ rows: [{ used: 90 }] }),
+    };
+
+    const denied = await checkOperation(db, {
+      affiliateId: "a1",
+      operation: "emission",
+      amount: 20,
+      tables,
+    });
+    expect(denied.allowed).toBe(false);
+    expect(denied.used).toBe(90);
+  });
+
   it("piloto activo: respeta el tope del periodo", async () => {
     process.env[PILOT_FLAG] = "true";
     const limits = {
