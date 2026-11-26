@@ -3,6 +3,7 @@ import { users, referrals, notifications } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 import { sendEcosystemNotification } from '@/lib/push/notify';
+import { GROWTH_FUND_ACCOUNT, growthFundFlags } from '@rabbitty/api/services/growthFund';
 
 /**
  * Triggers the referral reward for the inviter if this is the invited user's first consumption/earn.
@@ -16,8 +17,6 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
 
     if (!user) return;
 
-    let shouldTriggerReferral = false;
-
     // Check First Earn
     if (type === 'EARN' && !user.hasEarnedFirstBunz) {
       await db.update(users).set({ hasEarnedFirstBunz: true }).where(eq(users.id, userId));
@@ -30,8 +29,6 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
         route: '/profile/wallet',
         threadId: 'first_milestones',
       });
-      
-      shouldTriggerReferral = true;
     }
 
     // Check First Spend
@@ -46,13 +43,15 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
         route: '/profile/inventory',
         threadId: 'first_milestones',
       });
-      
-      shouldTriggerReferral = true;
     }
 
-    // Trigger Referral Reward
-    if (shouldTriggerReferral) {
-      // Find pending referral
+    // Trigger Referral Reward.
+    // Se intenta en cada EARN/SPEND (no solo en el primero) para que un bono
+    // QUEUED por fondo insuficiente pueda pagarse en un evento posterior.
+    const eligibleForReferral = Boolean(user.hasEarnedFirstBunz || user.hasMadeFirstTransaction) ||
+      type === 'EARN' || type === 'SPEND';
+
+    if (eligibleForReferral) {
       const referral = await db.query.referrals.findFirst({
         where: and(
           eq(referrals.invitedId, userId),
@@ -61,7 +60,8 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
       });
 
       if (referral) {
-        await db.transaction(async (tx) => {
+        const flags = growthFundFlags();
+        const payout = await db.transaction(async (tx) => {
           // Re-verify and lock referral
           const [lockedReferral] = await tx
             .select()
@@ -70,7 +70,7 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
             .limit(1)
             .for('update');
 
-          if (!lockedReferral) return;
+          if (!lockedReferral) return { paid: false as const, reason: 'ALREADY' };
 
           // Lock inviter user row
           const [inviter] = await tx
@@ -80,12 +80,43 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
             .limit(1)
             .for('update');
 
-          if (!inviter) return;
+          if (!inviter) return { paid: false as const, reason: 'NO_INVITER' };
+
+          let payerSubjectId = 'sys_referrals';
+          let idempotencyKey = `ref_reward_${lockedReferral.id}`;
+          let ledgerEntryId: string | null = null;
+
+          if (flags.referralPayouts) {
+            // Fondo único: serializa pagos para no sobregirar el saldo.
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${GROWTH_FUND_ACCOUNT}))`);
+            const [balanceRow] = (await tx.execute(sql`
+              SELECT
+                COALESCE(SUM(CASE WHEN "payeeSubjectId" = ${GROWTH_FUND_ACCOUNT}
+                                   AND type IN ('MINT','TRANSFER') THEN amount ELSE 0 END), 0)
+                - COALESCE(SUM(CASE WHEN "payerSubjectId" = ${GROWTH_FUND_ACCOUNT}
+                                   AND type = 'EARN' THEN amount ELSE 0 END), 0) AS balance
+                FROM "ledger_entries"
+               WHERE "payerSubjectId" = ${GROWTH_FUND_ACCOUNT}
+                  OR "payeeSubjectId" = ${GROWTH_FUND_ACCOUNT}
+            `)).rows as Array<{ balance: number }>;
+
+            if (Number(balanceRow?.balance ?? 0) < lockedReferral.rewardAmount) {
+              // No se marca COMPLETED: queda PENDING para el próximo evento.
+              return { paid: false as const, reason: 'QUEUED' };
+            }
+
+            payerSubjectId = GROWTH_FUND_ACCOUNT;
+            idempotencyKey = `referral_reward:${lockedReferral.id}:1`;
+          }
 
           // 1. Mark referral as completed
           await tx
             .update(referrals)
-            .set({ status: 'COMPLETED' })
+            .set({
+              status: 'COMPLETED',
+              rewardedAt: new Date(),
+              tranchesPaid: 1,
+            })
             .where(eq(referrals.id, lockedReferral.id));
 
           // 2. Credit inviter user
@@ -98,22 +129,29 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
             .where(eq(users.id, inviter.id));
 
           // 3. Record authoritative ledger entry
-          await recordLedgerTransaction(
+          const entry = await recordLedgerTransaction(
             {
-              payerSubjectId: 'sys_referrals',
+              payerSubjectId,
               payeeSubjectId: `usr_${inviter.id}`,
               amount: lockedReferral.rewardAmount,
               type: 'EARN',
               referenceId: lockedReferral.id,
-              idempotencyKey: `ref_reward_${lockedReferral.id}`,
+              idempotencyKey,
               metadata: {
                 invitedUserId: userId,
                 invitedUsername: user.username || user.firstName || 'Invitado',
-                source: 'referral_program',
+                source: flags.referralPayouts ? 'madriguera_referral' : 'referral_program',
+                program: flags.referralPayouts ? 'madriguera' : undefined,
               },
             },
             tx
           );
+          ledgerEntryId = entry?.id ?? null;
+
+          await tx
+            .update(referrals)
+            .set({ ledgerEntryId })
+            .where(eq(referrals.id, lockedReferral.id));
 
           // 4. Notify inviter (in-app)
           await tx.insert(notifications).values({
@@ -122,18 +160,24 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
             message: `Acabas de ganar ${lockedReferral.rewardAmount} Bunz porque tu amigo ${user.firstName || 'invitado'} hizo su primer consumo.`,
             type: 'REFERRAL',
           });
+
+          return { paid: true as const, amount: lockedReferral.rewardAmount };
         });
 
-        // 5. Native push al invitador
-        await sendEcosystemNotification({
-          userId: referral.inviterId,
-          title: '🎁 ¡Bono de referido recibido!',
-          message: `¡Ganaste ${referral.rewardAmount} Bunz! Tu amigo ${user.firstName || 'invitado'} realizó su primer consumo en Rabbitty.`,
-          type: 'REFERRAL',
-          route: '/referral',
-          pushData: { rewardAmount: referral.rewardAmount, invitedUserId: userId },
-          threadId: 'referrals',
-        });
+        if (payout.paid) {
+          // 5. Native push al invitador
+          await sendEcosystemNotification({
+            userId: referral.inviterId,
+            title: '🎁 ¡Bono de referido recibido!',
+            message: `¡Ganaste ${referral.rewardAmount} Bunz! Tu amigo ${user.firstName || 'invitado'} realizó su primer consumo en Rabbitty.`,
+            type: 'REFERRAL',
+            route: '/referral',
+            pushData: { rewardAmount: referral.rewardAmount, invitedUserId: userId },
+            threadId: 'referrals',
+          });
+        } else if (payout.reason === 'QUEUED') {
+          console.info(`[REFERRAL_QUEUED] referral=${referral.id} fondo sin saldo`);
+        }
       }
     }
   } catch (err) {
