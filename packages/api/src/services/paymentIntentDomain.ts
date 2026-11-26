@@ -397,46 +397,11 @@ export class PaymentIntentService {
         }
       }
 
-      // 6. Cashback OFICIAL — SOLO sobre la parte FIAT de la venta.
-      // Regla económica (decisión D-10, 2026-11-02): el cashback se gana al
-      // comprar con fiat a los afiliados; pagar CON Bunz no genera Bunz
-      // (fiatMxn = amountMxn − bunzAmount; venta 100% Bunz ⇒ 0 cashback).
-      if (payerSubjectId && payerSubjectId !== "SYSTEM") {
-        // Tasa real del negocio (branch → restaurant.defaultRewardRate); 20 solo como fallback
-        let cashbackRate = 20;
-        try {
-          const [br] = await tx.select({ restaurantId: branches.restaurantId })
-            .from(branches).where(eq(branches.id, intent.merchantId)).limit(1);
-          if (br?.restaurantId) {
-            const [rest] = await tx.select({ defaultRewardRate: restaurants.defaultRewardRate })
-              .from(restaurants).where(eq(restaurants.id, br.restaurantId)).limit(1);
-            if (rest?.defaultRewardRate) cashbackRate = rest.defaultRewardRate;
-          }
-        } catch (rateErr) {
-          console.error("[intent.settle] Error resolviendo rewardRate, fallback 20%:", rateErr);
-        }
-        const fiatMxn = Math.max(0, Number(intent.amountMxn || 0) - Number(intent.bunzAmount || 0));
-        const rewardAmount = Math.floor(fiatMxn * (cashbackRate / 100));
-        if (fiatMxn > 0 && rewardAmount > 0) {
-          await tx
-            .update(users)
-            .set({ totalBunzEarned: sql`COALESCE(${users.totalBunzEarned}, 0) + ${rewardAmount}` })
-            .where(eq(users.id, payerUser.id));
-
-          await tx.insert(ledgerEntries).values({
-            branchId: intent.merchantId,
-            payerSubjectId: businessCanonical,
-            payeeSubjectId: payerCanonical,
-            amount: rewardAmount,
-            currency: "BUNZ",
-            type: "EARN",
-            referenceId: intent.id,
-            idempotencyKey: `cbk_${intent.id}_${payerUser.id}`,
-            metadata: { orderId: intent.orderId, amountMxn: intent.amountMxn, reason: "CASHBACK_PAYMENT" },
-          });
-        }
-      }
-
+      // 6. Cashback: NO se emite aquí.
+      // Este dominio se usa para pagos Bunz-only (bunzAmount = amountMxn), donde la
+      // parte fiat es 0. El único motor de cashback es `paymentCore` →
+      // `/api/pos/reward`, que aplica la tasa del negocio, nivel/campaña, control de
+      // emisión, `bunzBalance` y `orders.bunzReward`. Evitamos un segundo libro.
       // 7. Mark intent SETTLED and update orders + payments (within SAME transaction)
       const paidAt = new Date();
       await tx

@@ -36,6 +36,19 @@ export async function PATCH(req: Request) {
 
     const ownerId = caller.id;
 
+    // ── Tesorería: NUNCA editable desde el tenant ────────────────────────
+    // Los saldos/límites se ajustan solo en God con aprobación, motivo y
+    // asiento de ledger. Antes un rol ADMIN podía escribirlos directo.
+    if (creditLimit !== undefined || creditUsed !== undefined || bunzBalance !== undefined) {
+      return NextResponse.json(
+        {
+          error:
+            "Los saldos y límites de Bunz no se editan desde la app. Se ajustan en God con aprobación y auditoría.",
+        },
+        { status: 403 },
+      );
+    }
+
     // Verify ownership
     let business = null;
     if (businessId) {
@@ -76,37 +89,19 @@ export async function PATCH(req: Request) {
       }
     }
     if (logoUrl !== undefined) updateFields.logoUrl = String(logoUrl).trim();
-    if (creditLimit !== undefined && caller.role === 'ADMIN') updateFields.creditLimit = parseInt(creditLimit);
-    if (creditUsed !== undefined && caller.role === 'ADMIN') updateFields.creditUsed = parseInt(creditUsed);
-    if (bunzBalance !== undefined && caller.role === 'ADMIN') updateFields.bunzBalance = parseInt(bunzBalance);
 
-    // Si se recarga/modifica el crédito o se solicita el reset explícito,
-    // comprobar si el saldo restante supera el 15% (o si se fuerza reset) para eliminar lastLowIncentiveAlertAt
-    const nextLimit = creditLimit !== undefined ? parseInt(creditLimit) : business?.creditLimit || 0;
-    const nextUsed = creditUsed !== undefined ? parseInt(creditUsed) : business?.creditUsed || 0;
-    const isRechargeAction =
-      resetLowIncentiveAlert === true ||
-      creditLimit !== undefined ||
-      creditUsed !== undefined ||
-      bunzBalance !== undefined;
-
-    if (isRechargeAction && business) {
-      const remaining = nextLimit > 0 ? nextLimit - nextUsed : 0;
-      const ratio = nextLimit > 0 ? remaining / nextLimit : 1;
-
-      // Si el ratio recuperado vuelve a ser > 15%, o se solicitó reset, limpiar cooldown anti-spam
-      if (ratio > 0.15 || resetLowIncentiveAlert === true) {
-        let vData: Record<string, unknown> = {};
-        try {
-          if (business.verificationData) {
-            vData = JSON.parse(business.verificationData);
-          }
-        } catch {}
-
-        if ('lastLowIncentiveAlertAt' in vData) {
-          delete vData.lastLowIncentiveAlertAt;
-          updateFields.verificationData = JSON.stringify(vData);
+    // El reset de la alerta de inventario bajo sigue permitido; no toca saldos.
+    if (resetLowIncentiveAlert === true && business) {
+      let vData: Record<string, unknown> = {};
+      try {
+        if (business.verificationData) {
+          vData = JSON.parse(business.verificationData);
         }
+      } catch {}
+
+      if ('lastLowIncentiveAlertAt' in vData) {
+        delete vData.lastLowIncentiveAlertAt;
+        updateFields.verificationData = JSON.stringify(vData);
       }
     }
 

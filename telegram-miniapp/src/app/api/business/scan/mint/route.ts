@@ -11,6 +11,17 @@ import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { sendEcosystemNotification } from '@/lib/push/notify';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { restaurantDb } from "@/db/restaurant";
+import { checkOperation } from "@rabbitty/api/services/bunzControls";
+import {
+  bunzControlState,
+  bunzEconomicLimits,
+  bunzObligations,
+  bunzRedemptionAttempts,
+  branches,
+  orders,
+  restaurants,
+} from "@rabbitty/database-restaurant/schema";
 
 const mintSchema = z.object({
   telegramId: z.string().min(1),
@@ -126,13 +137,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El monto es muy bajo para generar una recompensa en Bunz." }, { status: 400 });
     }
 
-    // Check credit limit
-    if (business.creditLimit > 0 && (business.creditUsed + bunzReward) > business.creditLimit) {
-      return NextResponse.json({
-        error: `El negocio ha alcanzado su límite de crédito de minting (${business.creditLimit.toLocaleString()} Bunz). Contacta a soporte para aumentarlo.`
-      }, { status: 400 });
-    }
-
+    // `creditLimit` es capacidad base, NO un tope de emisión acumulada.
+    // El tope real es el piloto/maxEmissionBunz de bunzControls.
     // Determine if it's a new business for the user
     const previousTransaction = await db.query.transactions.findFirst({
       where: and(eq(transactions.userId, customer.id), eq(transactions.businessId, business.id))
@@ -143,6 +149,32 @@ export async function POST(req: NextRequest) {
       ? body.idempotency_key
       : (typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined);
     const idempotencyKey = `mnt_${clientKey || crypto.randomUUID()}`;
+
+    // Replay antes de controlar: un reintento no debe bloquearse por tope.
+    if (await findLedgerEntry(idempotencyKey)) {
+      return NextResponse.json({ success: true, message: "Recompensa ya otorgada previamente.", bunzRewarded: bunzReward });
+    }
+
+    const emitControl = await checkOperation(restaurantDb, {
+      affiliateId: business.id,
+      operation: "emission",
+      amount: bunzReward,
+      tables: {
+        limits: bunzEconomicLimits,
+        orders,
+        branches,
+        restaurants,
+        attempts: bunzRedemptionAttempts,
+        obligations: bunzObligations,
+        controlState: bunzControlState,
+      },
+    });
+    if (!emitControl.allowed) {
+      return NextResponse.json(
+        { error: `Emisión de Bunz bloqueada: ${emitControl.reason ?? "no autorizada"}` },
+        { status: 409 },
+      );
+    }
 
     let cappedBonus = 0;
 
@@ -242,15 +274,15 @@ export async function POST(req: NextRequest) {
       // (3500 + reward = 3508 disponibles para aceptar redenciones).
       await tx.update(ownedBusinesses)
         .set({
+          // `creditUsed` es crédito/adelanto pendiente, no emisión. No se toca.
           bunzBalance: sql`COALESCE(${ownedBusinesses.bunzBalance}, 0) + ${bunzReward}`,
-          creditUsed: business.creditLimit > 0 ? sql`${ownedBusinesses.creditUsed} + ${bunzReward}` : ownedBusinesses.creditUsed,
         })
         .where(eq(ownedBusinesses.id, business.id));
 
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
         {
-          payerSubjectId: business.id,
+          payerSubjectId: `biz_${business.id}`,
           payeeSubjectId: `usr_${customer.id}`,
           amount: bunzReward,
           type: "EARN",

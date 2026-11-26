@@ -6,6 +6,17 @@ import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
 import { sendEcosystemNotification } from "@/lib/push/notify";
 import crypto from "crypto";
 import { resolveLoyaltyBonus } from "@/lib/membershipLoyalty";
+import { restaurantDb } from "@/db/restaurant";
+import { checkOperation } from "@rabbitty/api/services/bunzControls";
+import {
+  bunzControlState,
+  bunzEconomicLimits,
+  bunzObligations,
+  bunzRedemptionAttempts,
+  branches,
+  orders,
+  restaurants,
+} from "@rabbitty/database-restaurant/schema";
 
 export async function POST(request: Request) {
   try {
@@ -230,6 +241,30 @@ export async function POST(request: Request) {
       );
     }
     const hasEnoughInventory = true; // se re-evalúa dentro de la tx
+
+    // RP-2B: kill switch + whitelist + tope de emisión antes de crear Bunz.
+    // Este es el motor único de cashback; sin este control, Stripe/POS podían
+    // saltarse el piloto y maxEmissionBunz.
+    const emitControl = await checkOperation(restaurantDb, {
+      affiliateId: effectiveBusinessId,
+      operation: "emission",
+      amount: bunzToMint,
+      tables: {
+        limits: bunzEconomicLimits,
+        orders,
+        branches,
+        restaurants,
+        attempts: bunzRedemptionAttempts,
+        obligations: bunzObligations,
+        controlState: bunzControlState,
+      },
+    });
+    if (!emitControl.allowed) {
+      return NextResponse.json(
+        { error: `Emisión de Bunz bloqueada: ${emitControl.reason ?? "no autorizada"}` },
+        { status: 409 },
+      );
+    }
 
     const expirationDate = new Date();
     expirationDate.setMonth(expirationDate.getMonth() + 3);
