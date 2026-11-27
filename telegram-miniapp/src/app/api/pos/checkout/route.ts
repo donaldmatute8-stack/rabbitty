@@ -9,6 +9,7 @@ import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { resolveOrderingStatus } from '@/lib/orderingStatus';
+import { resolveLedgerSandbox } from '@/lib/ledgerSandbox';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { describeError } from '@/lib/errors';
 
@@ -679,6 +680,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: 'Monto inválido de Bunz' }, { status: 400 });
       }
 
+      // Si el negocio es sandbox, los asientos son de demo: no entran al ancla.
+      const ledgerSandbox = await resolveLedgerSandbox(restaurantDb, {
+        orderId: targetOrderId,
+        businessId,
+      });
+
       // 1. Atomic debit from user account with row-lock and authoritative ledger entry
       const idempotencyKey = `pos_chk_${targetOrderId}_${caller.id}_${bunzRequired}`;
       await db.transaction(async (tx) => {
@@ -717,6 +724,7 @@ export async function POST(req: Request) {
             type: 'SPEND',
             referenceId: targetOrderId,
             idempotencyKey,
+            sandbox: ledgerSandbox,
             metadata: {
               orderId: targetOrderId,
               tableId,
@@ -753,6 +761,7 @@ export async function POST(req: Request) {
             type: 'SPEND',
             referenceId: targetOrderId,
             idempotencyKey: `bunz_stock_${targetOrderId}`,
+            sandbox: ledgerSandbox,
             metadata: {
               orderId: targetOrderId,
               concept: 'Consumo de stock Bunz en checkout',

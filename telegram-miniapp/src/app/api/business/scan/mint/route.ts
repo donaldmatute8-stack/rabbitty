@@ -288,6 +288,8 @@ export async function POST(req: NextRequest) {
           type: "EARN",
           referenceId: appTx.id,
           idempotencyKey,
+          // Negocio sandbox → asiento de demo: no entra al ancla ni consume seq.
+          sandbox: Boolean(business.sandbox),
           metadata: { fiatAmount, businessId: business.id, customerTelegramId: customer.telegramId },
         },
         tx

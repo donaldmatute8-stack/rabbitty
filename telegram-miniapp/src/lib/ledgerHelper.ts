@@ -13,6 +13,11 @@ export interface RecordTransactionParams {
   referenceId?: string | null;
   idempotencyKey: string;
   metadata?: Record<string, unknown>;
+  /**
+   * true = asiento de prueba/demo (orden `isTest` o negocio sandbox). No entra
+   * al ancla y no consume `seq`; el trigger de la base lo deja con seq = NULL.
+   */
+  sandbox?: boolean;
 }
 
 /**
@@ -50,6 +55,7 @@ export async function recordLedgerTransaction(params: RecordTransactionParams, t
       referenceId: params.referenceId || undefined,
       idempotencyKey: params.idempotencyKey,
       metadata: params.metadata || null,
+      sandbox: params.sandbox === true,
     })
     .onConflictDoNothing({ target: ledgerEntries.idempotencyKey })
     .returning();
