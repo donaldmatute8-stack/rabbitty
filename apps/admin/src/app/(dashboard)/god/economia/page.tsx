@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Card, Button, cn } from "@rabbitty/ui";
 import { GrowthFundPanel } from "./GrowthFundPanel";
+import { BalanceAdjustmentsPanel } from "./BalanceAdjustmentsPanel";
 
 /**
  * Centro económico GOD.
@@ -25,12 +26,13 @@ import { GrowthFundPanel } from "./GrowthFundPanel";
  * contratos e historial. Solo GOD (allowlist + 2FA).
  */
 
-type Tab = "resumen" | "capacidad" | "fondo" | "conciliacion" | "contratos" | "historial";
+type Tab = "resumen" | "capacidad" | "fondo" | "aprobaciones" | "conciliacion" | "contratos" | "historial";
 
 const TABS: Array<{ id: Tab; label: string; icon: any }> = [
   { id: "resumen", label: "Resumen", icon: Activity },
   { id: "capacidad", label: "Capacidad", icon: Coins },
   { id: "fondo", label: "Fondo / referidos", icon: Coins },
+  { id: "aprobaciones", label: "Aprobaciones", icon: FileText },
   { id: "conciliacion", label: "Conciliación", icon: Scale },
   { id: "contratos", label: "Contratos", icon: FileText },
   { id: "historial", label: "Historial", icon: History },
@@ -623,6 +625,8 @@ export default function GodEconomyPage() {
       )}
 
       {tab === "fondo" && <GrowthFundPanel />}
+
+      {tab === "aprobaciones" && <BalanceAdjustmentsPanel />}
 
       {tab === "historial" && (
         <Card className="p-5 bg-white/5 border-white/10 overflow-x-auto">

@@ -51,6 +51,7 @@ import { godRouter } from "./god";
 import { uberEatsRouter } from "./uberEats";
 import { ratingsRouter } from "./ratings";
 import { rabbitChairRouter } from "./rabbitChair";
+import { balanceAdjustmentsRouter } from "./balanceAdjustments";
 import "../services/queue";
 
 export const appRouter = router({
@@ -106,6 +107,7 @@ export const appRouter = router({
   uberEats: uberEatsRouter,
   ratings: ratingsRouter,
   rabbitChair: rabbitChairRouter,
+  balanceAdjustments: balanceAdjustmentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

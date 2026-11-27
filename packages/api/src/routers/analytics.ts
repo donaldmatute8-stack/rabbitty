@@ -104,6 +104,7 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
+            eq(orders.isTest, false),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
@@ -163,6 +164,7 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
+            eq(orders.isTest, false),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
@@ -202,6 +204,7 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, branchId),
             inArray(orders.status, ["COMPLETED", "PAID"]),
+            eq(orders.isTest, false),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
@@ -291,6 +294,7 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, branchId),
             inArray(orders.status, ["COMPLETED", "PAID"]),
+            eq(orders.isTest, false),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : []),
             sql`${orders.customerPhone} IS NOT NULL`
@@ -382,6 +386,7 @@ export const analyticsRouter = router({
           and(
             eq(orders.branchId, await resolveBranchId(ctx, input.branchId)),
             inArray(orders.status, ["COMPLETED", "PAID"]),
+            eq(orders.isTest, false),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : [])
           )
@@ -500,6 +505,7 @@ export const analyticsRouter = router({
           and(
             inArray(orders.branchId, branchIds),
             inArray(orders.status, ["COMPLETED", "PAID"]),
+            eq(orders.isTest, false),
             gte(orders.createdAt, startDate),
             ...(endDate ? [lte(orders.createdAt, endDate)] : []),
             ...(channelFilter ? [channelFilter] : []),
@@ -897,7 +903,7 @@ export const analyticsRouter = router({
           avgTipPct: sql<number>`COALESCE(AVG(CASE WHEN ${orders.tip} > 0 AND ${orders.subtotal} > 0 THEN (${orders.tip} / ${orders.subtotal}) * 100 END), 0)`,
         })
         .from(orders)
-        .where(and(inArray(orders.status, ["COMPLETED", "PAID"]), gte(orders.createdAt, startDate)));
+        .where(and(inArray(orders.status, ["COMPLETED", "PAID"]), eq(orders.isTest, false), gte(orders.createdAt, startDate)));
       return {
         gated: false as const,
         paidOrders: Number(stats?.paidOrders || 0),

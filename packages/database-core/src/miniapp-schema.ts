@@ -62,6 +62,7 @@ export const transactions = pgTable("transactions", {
   fiatAmount: real("fiatAmount").notNull(),
   bunzMinted: integer("bunzMinted").notNull(),
   status: text("status").default("PENDING").notNull(),
+  isTest: boolean("isTest").default(false).notNull(),
   txHash: text("txHash"),
   errorMessage: text("errorMessage"),
   ticketUrl: text("ticketUrl"),

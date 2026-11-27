@@ -112,6 +112,32 @@ export function GrowthFundPanel() {
         </div>
       </div>
 
+      <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="m-0 text-sm font-black text-white">Fondeo co-op + match</p>
+            <p className="m-0 mt-1 max-w-2xl text-[11px] leading-relaxed text-gray-400">
+              Preparado, no activo. Se habilita cuando los pagos de referido estén activos y el
+              contrato del afiliado y el presupuesto de plataforma estén aprobados.
+            </p>
+          </div>
+          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-gray-400">
+            En espera
+          </span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="secondary" disabled title="Se habilita al activar pagos de referido y firmar co-op">
+            Aportar co-op
+          </Button>
+          <Button variant="secondary" disabled title="Se habilita con presupuesto de plataforma aprobado">
+            Match de plataforma
+          </Button>
+          <span className="self-center text-[10px] text-gray-500">
+            Un clic cuando esté configurado; hoy no mueve Bunz.
+          </span>
+        </div>
+      </div>
+
       <Dialog
         open={open}
         onClose={() => {

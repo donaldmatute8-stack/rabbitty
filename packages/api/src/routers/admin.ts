@@ -549,6 +549,7 @@ export const adminRouter = router({
                COUNT(*) AS orders
         FROM "orders"
         WHERE "branchId" = ${branchId}
+          AND "isTest" = false
           AND "commissionCents" > 0
           AND "createdAt" >= now() - interval '30 days'
       `),
@@ -558,6 +559,7 @@ export const adminRouter = router({
         SELECT COALESCE(SUM("commissionCents"), 0) AS total, 0 AS base, 0 AS orders
         FROM "orders"
         WHERE "branchId" = ${branchId}
+          AND "isTest" = false
           AND "commissionCents" > 0
           AND "createdAt" >= date_trunc('month', now())
       `),

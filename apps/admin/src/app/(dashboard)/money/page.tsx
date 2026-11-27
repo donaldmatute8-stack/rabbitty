@@ -18,6 +18,7 @@ import {
   CircleDollarSign,
 } from "lucide-react";
 import { useBranch } from "../../../components/DashboardClientWrapper";
+import { BalanceAdjustmentRequest } from "./BalanceAdjustmentRequest";
 
 /**
  * ── Dinero (hub) ────────────────────────────────────────────────────────────
@@ -201,6 +202,8 @@ export default function MoneyPage() {
           </p>
         </Card>
       </div>
+
+      <BalanceAdjustmentRequest />
 
       {/* Herramientas por cadencia */}
       {(["diario", "mensual", "fiscal"] as const).map((group) => (

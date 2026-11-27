@@ -103,6 +103,7 @@ async function usedInPeriod(
             FROM "transactions"
            WHERE "businessId" = ${affiliateId}
              AND "status" = 'MINTED'
+             AND "isTest" = false
              AND "createdAt" >= ${since}
         `);
         const rows = Array.isArray(result)

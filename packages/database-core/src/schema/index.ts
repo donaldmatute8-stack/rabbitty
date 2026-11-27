@@ -239,6 +239,8 @@ export const transactions = pgTable("transactions", {
   fiatAmount: real("fiatAmount").notNull(),
   bunzMinted: integer("bunzMinted").notNull(),
   status: text("status").default("PENDING").notNull(),
+  /** Dato de prueba/mock: no cuenta en economía, reportes ni D-17. */
+  isTest: boolean("isTest").default(false).notNull(),
   txHash: text("txHash"),
   errorMessage: text("errorMessage"),
   ticketUrl: text("ticketUrl"),
@@ -356,6 +358,32 @@ export const referralCoopCommitments = pgTable("referral_coop_commitments", {
   ...timestamps,
 }, (t) => [
   index("referral_coop_commitments_affiliate_idx").on(t.affiliateId, t.status, t.periodStart),
+]);
+
+/**
+ * ── Ajustes de tesorería con aprobación ──────────────────────────────────────
+ * El owner solicita; otro God aprueba. No hay edición directa de saldos.
+ */
+export const businessBalanceAdjustments = pgTable("business_balance_adjustments", {
+  id: id(),
+  businessId: text("businessId").notNull(),
+  /** BUNZ_BALANCE por ahora. */
+  field: text("field").default("BUNZ_BALANCE").notNull(),
+  delta: integer("delta").notNull(),
+  reason: text("reason").notNull(),
+  requestedBy: text("requestedBy").notNull(),
+  approvedBy: text("approvedBy"),
+  /** PENDING | APPROVED | REJECTED | APPLIED */
+  status: text("status").default("PENDING").notNull(),
+  idempotencyKey: text("idempotencyKey").notNull().unique(),
+  beforeValue: integer("beforeValue"),
+  afterValue: integer("afterValue"),
+  ledgerEntryId: text("ledgerEntryId"),
+  approvedAt: timestamp("approvedAt"),
+  appliedAt: timestamp("appliedAt"),
+  ...timestamps,
+}, (t) => [
+  index("business_balance_adjustments_business_idx").on(t.businessId, t.status, t.createdAt),
 ]);
 
 export const platformBudgets = pgTable("platform_budgets", {
