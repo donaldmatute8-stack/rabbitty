@@ -124,6 +124,16 @@ interface BusinessResponse {
     loyaltyEnabled: boolean;
     moodEnabled: boolean;
   };
+  /** Horario + caja: si el local recibe pedidos AHORA (misma regla que checkout). */
+  ordering?: {
+    canOrder: boolean;
+    state: 'OPEN' | 'NO_TILL' | 'EXTENDED' | 'CLOSED';
+    scheduleOpen: boolean;
+    cashShiftOpen: boolean;
+    message: string | null;
+    tone: 'success' | 'info' | 'warn' | 'error';
+    nextOpenLabel: string | null;
+  } | null;
 }
 
 function AffiliateProfileContent() {
@@ -137,6 +147,8 @@ function AffiliateProfileContent() {
   const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [tables, setTables] = useState<Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>>([]);
+  // ¿El local recibe pedidos ahora? (horario + caja) Lo resuelve el servidor.
+  const [ordering, setOrdering] = useState<BusinessResponse['ordering']>(null);
   const [capabilities, setCapabilities] = useState<BusinessResponse['capabilities']>({
     menuEnabled: true,
     digitalOrderingEnabled: true,
@@ -278,6 +290,7 @@ function AffiliateProfileContent() {
           setCategories(data.categories || []);
           setTables(data.tables || []);
           if (data.capabilities) setCapabilities(data.capabilities);
+          setOrdering(data.ordering ?? null);
 
           // If initialTableNum exists, resolve its tableId
           if (data.tables && initialTableNum !== null) {
@@ -547,6 +560,13 @@ function AffiliateProfileContent() {
     address?: { text: string; data: Record<string, unknown> },
     paymentMethod: 'CASH' | 'BUNZ' | 'CARD' = 'CASH',
   ) => {
+    // El local no está recibiendo pedidos: se avisa AQUÍ y no se manda nada.
+    // Antes el pedido se armaba, se enviaba y el servidor lo rechazaba (o el
+    // Rabbitter se quedaba esperando un pedido que nunca entró al POS).
+    if (ordering && !ordering.canOrder) {
+      showToast(ordering.message || 'El local está cerrado ahora.', 'error');
+      return;
+    }
     PlatformBridge.hapticFeedback('heavy');
 
     const payload = {
@@ -896,9 +916,25 @@ function AffiliateProfileContent() {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${
-              openNow ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'
+              ordering
+                ? ordering.canOrder
+                  ? 'text-[var(--success)]'
+                  : 'text-[var(--text-muted)]'
+                : openNow
+                  ? 'text-[var(--success)]'
+                  : 'text-[var(--text-muted)]'
             }`}>
-              ● {openNow ? 'Abierto ahora' : 'Cerrado'}
+              ● {ordering
+                ? ordering.state === 'EXTENDED'
+                  ? 'Atendiendo (fuera de horario)'
+                  : ordering.state === 'NO_TILL'
+                    ? 'Abierto · caja cerrada'
+                    : ordering.canOrder
+                      ? 'Abierto ahora'
+                      : 'Cerrado'
+                : openNow
+                  ? 'Abierto ahora'
+                  : 'Cerrado'}
             </span>
             {affiliate.category && (
               <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
@@ -918,6 +954,32 @@ function AffiliateProfileContent() {
             Devuelve <span className="text-[var(--rabbitty-pink)]">+{affiliate.rewardPercentage}% en Bunz</span> en cada consumo
           </p>
         </div>
+
+        {/* ── Estado de pedidos (horario + caja): se sabe ANTES de armar el pedido ── */}
+        {ordering?.message && (
+          <div
+            role="status"
+            className={`flex items-start gap-2 rounded-2xl border px-3 py-2.5 text-[11.5px] font-semibold leading-snug ${
+              ordering.state === 'CLOSED'
+                ? 'border-red-500/40 bg-red-500/10 text-red-200'
+                : ordering.state === 'NO_TILL'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                  : ordering.state === 'EXTENDED'
+                    ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
+                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+            }`}
+          >
+            <Clock size={14} className="mt-0.5 shrink-0" />
+            <span>
+              {ordering.message}
+              {!ordering.canOrder && (
+                <span className="mt-1 block text-[10.5px] font-bold opacity-80">
+                  El menú sigue visible; ya puedes elegir y pedir cuando abra.
+                </span>
+              )}
+            </span>
+          </div>
+        )}
 
         {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
         <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
@@ -1414,6 +1476,8 @@ function AffiliateProfileContent() {
         checkedIn={hasPresenceCheckedIn}
         branchOrBusinessId={affiliate.id}
         bunzBalance={Math.max(0, (user?.totalBunzEarned ?? 0) - (user?.totalBunzSpent ?? 0))}
+        orderingNotice={ordering?.message ? { tone: ordering.tone, message: ordering.message } : null}
+        orderingBlocked={ordering ? !ordering.canOrder : false}
       />
 
       {/* Pedido en rampa: identidad de tarjeta de pedido + barra de 5 s */}

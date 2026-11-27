@@ -13,6 +13,7 @@ import {
 import { eq, and, asc } from 'drizzle-orm';
 import { resolveBusinessCover } from '@/lib/businessCover';
 import { getProductStockMap } from '@rabbitty/api/services/storeStock';
+import { resolveOrderingStatus } from '@/lib/orderingStatus';
 
 interface BranchRecord {
   id: string;
@@ -264,6 +265,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       defaultRewardRate: effectiveRewardRate,
     } : null;
 
+    // ¿Se puede pedir ahora? El cliente lo necesita ANTES de armar el carrito:
+    // si el local está cerrado no debe escribir el pedido para descubrirlo al
+    // final. Misma regla que usa `/api/pos/checkout`.
+    const ordering = await resolveOrderingStatus(restaurantDb, {
+      branchId: primaryBranch?.id ?? null,
+      activeDays: business.activeDays,
+      startTime: business.startTime,
+      endTime: business.endTime,
+      timezone: business.timezone,
+    });
+
     return NextResponse.json({
       success: true,
       business: unifiedBusiness,
@@ -271,7 +283,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       primaryBranch: primaryBranch || null,
       categories: categoriesWithItems,
       tables: branchTables,
-      capabilities
+      capabilities,
+      ordering,
     });
   } catch (error) {
     console.error('Fetch Business By ID Error:', error);

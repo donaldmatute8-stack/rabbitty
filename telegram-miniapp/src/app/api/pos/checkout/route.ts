@@ -8,7 +8,7 @@ import { computePlatformCommission } from '@rabbitty/api/services/platformCommis
 import { db } from '@/db';
 import { users, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
-import { isBusinessOpen } from '@/lib/chat';
+import { resolveOrderingStatus } from '@/lib/orderingStatus';
 import { recordLedgerTransaction, findLedgerEntry } from '@/lib/ledgerHelper';
 import { describeError } from '@/lib/errors';
 
@@ -119,46 +119,60 @@ async function resolveBranchId(branchOrBusinessId: string): Promise<string | nul
   return production?.id ?? null;
 }
 
-/** Motivo legible si el negocio está cerrado; null si puede recibir pedidos. */
-async function businessClosedReason(branchId: string): Promise<string | null> {
-  try {
-    // El horario configurado es una PROMESA al cliente, no un candado para la
-    // operación real. Si la caja está abierta (turno OPEN), el local está
-    // vendiendo ahora mismo: se acepta el pedido aunque el reloj diga cerrado.
-    // Antes, un local que seguía atendiendo después de su hora configurada
-    // rechazaba el pedido de la app con 409 y el Rabbitter se quedaba sin
-    // saber que nunca entró al POS.
-    const [openShift] = await restaurantDb
-      .select({ id: cashShifts.id })
-      .from(cashShifts)
-      .where(and(eq(cashShifts.branchId, branchId), eq(cashShifts.status, 'OPEN')))
-      .limit(1);
-    if (openShift) return null;
+/**
+ * Puerta de pedidos: horario + caja, con la MISMA regla que ve el cliente en
+ * `/api/business/[id]`. `canOrder` puede ser true aunque el horario esté
+ * cerrado si la caja sigue abierta (el local está atendiendo).
+ */
+async function orderGate(branchId: string) {
+  const [biz] = await restaurantDb
+    .select({ businessId: restaurants.businessId })
+    .from(branches)
+    .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  if (!biz?.businessId) return null;
+  const [owner] = await db
+    .select({
+      activeDays: ownedBusinesses.activeDays,
+      startTime: ownedBusinesses.startTime,
+      endTime: ownedBusinesses.endTime,
+      timezone: ownedBusinesses.timezone,
+    })
+    .from(ownedBusinesses)
+    .where(eq(ownedBusinesses.id, biz.businessId))
+    .limit(1);
+  if (!owner) return null;
 
-    const [biz] = await restaurantDb
-      .select({ businessId: restaurants.businessId })
-      .from(branches)
-      .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
-      .where(eq(branches.id, branchId))
-      .limit(1);
-    if (!biz?.businessId) return null;
-    const [owner] = await db
-      .select({
-        activeDays: ownedBusinesses.activeDays,
-        startTime: ownedBusinesses.startTime,
-        endTime: ownedBusinesses.endTime,
-        timezone: ownedBusinesses.timezone,
-      })
-      .from(ownedBusinesses)
-      .where(eq(ownedBusinesses.id, biz.businessId))
-      .limit(1);
-    if (!owner) return null;
-    if (isBusinessOpen(owner)) return null;
-    return `El local está cerrado ahora (${owner.startTime}–${owner.endTime}). Puedes pedir dentro del horario.`;
-  } catch {
-    // Si falla la consulta, no bloqueamos el pedido.
-    return null;
-  }
+  return resolveOrderingStatus(restaurantDb, {
+    branchId,
+    activeDays: owner.activeDays,
+    startTime: owner.startTime,
+    endTime: owner.endTime,
+    timezone: owner.timezone,
+  });
+}
+
+/** Rechazo con código estable + log para diagnóstico (sin datos del cliente). */
+function reject(input: {
+  code: string;
+  message: string;
+  status: number;
+  branchId?: string | null;
+  businessId?: string | null;
+  detail?: Record<string, unknown>;
+}) {
+  console.warn('[POS_CHECKOUT_REJECT]', JSON.stringify({
+    code: input.code,
+    branchId: input.branchId ?? null,
+    businessId: input.businessId ?? null,
+    at: new Date().toISOString(),
+    ...input.detail,
+  }));
+  return NextResponse.json(
+    { success: false, code: input.code, error: input.message },
+    { status: input.status },
+  );
 }
 
 export async function POST(req: Request) {
@@ -174,6 +188,17 @@ export async function POST(req: Request) {
       deliveryAddress,
       deliveryAddressData,
     } = body;
+
+    // Traza de entrada: si un pedido no aparece en el POS, este log dice si la
+    // petición llegó siquiera y con qué forma (sin datos del cliente).
+    console.info('[POS_CHECKOUT_START]', JSON.stringify({
+      hasTable: Boolean(tableId),
+      branchRef: typeof body.branchId === 'string' ? body.branchId.slice(0, 40) : null,
+      items: Array.isArray(items) ? items.length : 0,
+      paymentMethod: paymentMethod ?? null,
+      orderType: requestedOrderType ?? null,
+      at: new Date().toISOString(),
+    }));
 
     // ── Tienda: qué se está comprando ──
     // Un producto de tienda (`kind = PRODUCT`) usa el mismo carrito y la misma
@@ -200,13 +225,11 @@ export async function POST(req: Request) {
     for (const line of rawItems) {
       const meta = catalogById.get(line.id);
       if (meta?.maxPerOrder && Number(line.quantity) > meta.maxPerOrder) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Solo puedes llevar ${meta.maxPerOrder} de ${meta.name} por pedido.`,
-          },
-          { status: 409 },
-        );
+        return reject({
+          code: 'MAX_PER_ORDER',
+          message: `Solo puedes llevar ${meta.maxPerOrder} de ${meta.name} por pedido.`,
+          status: 409,
+        });
       }
     }
 
@@ -233,13 +256,11 @@ export async function POST(req: Request) {
     // Sin dirección válida no se puede entregar: se rechaza acá, no en el POS
     // cuando ya prometimos tiempo de entrega.
     if (resolvedOrderType === 'DELIVERY' && !addressResult) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Falta la dirección de entrega (calle, ciudad, estado y CP) para el pedido a domicilio.',
-        },
-        { status: 400 },
-      );
+      return reject({
+        code: 'NO_ADDRESS',
+        message: 'Falta la dirección de entrega (calle, ciudad, estado y CP) para el pedido a domicilio.',
+        status: 400,
+      });
     }
     const normalizedAddress = addressResult?.text ?? null;
     const normalizedAddressData = addressResult?.data ?? null;
@@ -252,20 +273,18 @@ export async function POST(req: Request) {
     const caller = await getAuthenticatedUser(req).catch(() => null);
     // P0-5: no crear orden para un pago con Bunz sin sesión
     if (paymentMethod === 'BUNZ' && !caller) {
-      return NextResponse.json({ success: false, error: 'Inicia sesión para pagar con Bunz' }, { status: 401 });
+      return reject({ code: 'NEED_SESSION', message: 'Inicia sesión para pagar con Bunz', status: 401 });
     }
     if (!existingOrderId && (!items || items.length === 0)) {
-      return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
+      return reject({ code: 'EMPTY_CART', message: 'El carrito está vacío.', status: 400 });
     }
     if (!existingOrderId && !tableId && !caller) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            'No pudimos identificarte en la app. Vuelve a abrir Rabbitty e inténtalo de nuevo, o pide desde la mesa escaneando su QR.',
-        },
-        { status: 401 },
-      );
+      return reject({
+        code: 'NEED_SESSION',
+        message:
+          'No pudimos identificarte en la app. Vuelve a abrir Rabbitty e inténtalo de nuevo, o pide desde la mesa escaneando su QR.',
+        status: 401,
+      });
     }
 
     let targetOrderId = existingOrderId;
@@ -282,21 +301,37 @@ export async function POST(req: Request) {
       let table: typeof tables.$inferSelect | undefined | null = null;
       if (tableId) {
         [table] = await restaurantDb.select().from(tables).where(eq(tables.id, tableId));
-        if (!table) return NextResponse.json({ success: false, error: 'Mesa no válida' }, { status: 404 });
+        if (!table) return reject({ code: 'TABLE_NOT_FOUND', message: 'Mesa no válida', status: 404 });
       }
       const rawBranchRef = table?.branchId || body.branchId || null;
       const orderBranchId = rawBranchRef ? await resolveBranchId(String(rawBranchRef)) : null;
       if (!orderBranchId) {
-        return NextResponse.json(
-          { success: false, error: 'Aún no hay sucursal configurada para este negocio en el sistema del local. Avisa al comercio.' },
-          { status: 422 }
-        );
+        return reject({
+          code: 'NO_BRANCH',
+          message: 'Aún no hay sucursal configurada para este negocio en el sistema del local. Avisa al comercio.',
+          status: 422,
+        });
       }
 
-      // Pedidos sin mesa (app para llevar / domicilio) solo dentro del horario.
+      // Pedidos sin mesa: horario + caja. Si el local está cerrado se rechaza
+      // ANTES de crear nada y con el motivo exacto, para que la app lo muestre
+      // (el Rabbitter no arma un pedido que nunca va a entrar).
       if (!tableId) {
-        const closed = await businessClosedReason(orderBranchId);
-        if (closed) return NextResponse.json({ success: false, error: closed }, { status: 409 });
+        const gate = await orderGate(orderBranchId);
+        if (gate && !gate.canOrder) {
+          return reject({
+            code: 'CLOSED',
+            message: gate.message ?? 'El local está cerrado ahora.',
+            status: 409,
+            branchId: orderBranchId,
+            detail: {
+              state: gate.state,
+              scheduleOpen: gate.scheduleOpen,
+              cashShiftOpen: gate.cashShiftOpen,
+              nextOpenLabel: gate.nextOpenLabel,
+            },
+          });
+        }
       }
 
       interface OrderItemInput {
@@ -310,7 +345,12 @@ export async function POST(req: Request) {
       // P0: un pedido sin monto no debe nacer (evita tabs "Desde la App" en $0
       // que luego bloquean/confunden el cobro en el POS).
       if (!(grandTotal > 0)) {
-        return NextResponse.json({ error: "El pedido no tiene monto. Agrega productos con precio." }, { status: 400 });
+        return reject({
+          code: 'ZERO_TOTAL',
+          message: 'El pedido no tiene monto. Agrega productos con precio.',
+          status: 400,
+          branchId: orderBranchId,
+        });
       }
 
       // Config del restaurante que se necesita en el pedido: envío y comisión.
@@ -355,13 +395,12 @@ export async function POST(req: Request) {
         const detail = shortages
           .map((s) => `${s.name} (quedan ${s.available})`)
           .join(', ');
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Sin stock para completar el pedido: ${detail}.`,
-          },
-          { status: 409 },
-        );
+        return reject({
+          code: 'NO_STOCK',
+          message: `Sin stock para completar el pedido: ${detail}.`,
+          status: 409,
+          branchId: orderBranchId,
+        });
       }
 
       // ── Fase C: ACUMULAR en el Tab abierto del PROPIO Rabbitter ──
@@ -835,12 +874,18 @@ export async function POST(req: Request) {
     // salen al usuario — el detalle queda solo en el log del server.
     const raw = describeError(err);
     let friendly = 'No pudimos registrar tu pedido. Revisa tu conexión e intenta de nuevo.';
+    let code = 'UNKNOWN';
     if (raw.includes('SALDO_INSUFICIENTE_BUNZ')) {
       friendly = 'No tienes Bunz suficientes para cubrir esta cuenta.';
+      code = 'INSUFFICIENT_BUNZ';
+    } else if (raw.includes('STOCK_INSUFFICIENT')) {
+      friendly = 'El local no tiene respaldo Bunz suficiente para este pedido. Paga en caja.';
+      code = 'NO_BUNZ_BACKING';
     } else if (raw.includes('23503') || raw.includes('foreign key')) {
       friendly = 'No pudimos identificar el local de este pedido. Vuelve a entrar al negocio o escanea el QR del local.';
+      code = 'NO_BRANCH';
     }
     console.error('[POS_CHECKOUT]', raw);
-    return NextResponse.json({ success: false, error: friendly }, { status: 500 });
+    return reject({ code, message: friendly, status: 500, detail: { raw: raw.slice(0, 300) } });
   }
 }
