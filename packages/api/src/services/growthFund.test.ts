@@ -7,6 +7,8 @@ import {
   getFundContributionsSummary,
   getMadrigueraLevel,
   growthFundFlags,
+  coopAmount,
+  matchAmount,
   levelFromContribution,
 } from "./growthFund";
 
@@ -116,6 +118,15 @@ describe("La Madriguera · Fase 1 (solo lectura)", () => {
       { source: "coop", amount: 150, entries: 1 },
       { source: "user", amount: 5, entries: 1 },
     ]);
+  });
+
+  it("calcula co-op y match sin escribir", () => {
+    expect(coopAmount(1500, 0.1)).toBe(150);
+    expect(coopAmount(0, 0.1)).toBe(0);
+    expect(matchAmount(150, 0)).toBe(150);
+    expect(matchAmount(150, 40)).toBe(110);
+    expect(matchAmount(150, 40, 500)).toBe(110);
+    expect(matchAmount(150, 150)).toBe(0);
   });
 
   it("todos los flags arrancan apagados", () => {

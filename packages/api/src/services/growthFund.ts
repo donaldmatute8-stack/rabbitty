@@ -1,5 +1,9 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { fundContributions } from "@rabbitty/database-core/schema";
+import {
+  fundContributions,
+  merchantCapacityAccounts,
+  platformBudgets,
+} from "@rabbitty/database-core/schema";
 import type { getCoreDb, getRestaurantDb } from "../db";
 
 /**
@@ -189,6 +193,80 @@ export async function getFundContributionsSummary(db: CoreDb, program = GROWTH_F
     amount: Number(row.amount ?? 0),
     entries: Number(row.entries ?? 0),
   }));
+}
+
+/* ── Fondeo co-op + match (preview, sin escribir) ─────────────────────────── */
+
+export function coopAmount(promoAuthorized: number, pct = 0.1): number {
+  const base = Math.max(0, Number(promoAuthorized) || 0);
+  const rate = Math.min(1, Math.max(0, Number(pct) || 0));
+  return Math.floor(base * rate);
+}
+
+export function matchAmount(
+  budgeted: number,
+  spent: number,
+  requested?: number | null,
+): number {
+  const remaining = Math.max(0, Number(budgeted) - Number(spent));
+  if (requested == null) return Math.floor(remaining);
+  return Math.max(0, Math.min(remaining, Math.floor(Number(requested) || 0)));
+}
+
+export async function getCoopPreview(
+  db: CoreDb,
+  businessId: string,
+  pct = 0.1,
+) {
+  const [account] = await db
+    .select({
+      affiliateId: merchantCapacityAccounts.affiliateId,
+      promoAuthorized: merchantCapacityAccounts.promoAuthorized,
+      status: merchantCapacityAccounts.status,
+    })
+    .from(merchantCapacityAccounts)
+    .where(eq(merchantCapacityAccounts.affiliateId, businessId))
+    .limit(1);
+
+  if (!account) {
+    return { businessId, promoAuthorized: 0, pct, amount: 0, available: false };
+  }
+
+  return {
+    businessId,
+    promoAuthorized: Number(account.promoAuthorized ?? 0),
+    pct,
+    amount: coopAmount(Number(account.promoAuthorized ?? 0), pct),
+    available: account.status === "ACTIVE" && coopAmount(Number(account.promoAuthorized ?? 0), pct) > 0,
+  };
+}
+
+export async function getMatchPreview(
+  db: CoreDb,
+  program: string,
+  periodStart: Date,
+  requested?: number | null,
+) {
+  const [budget] = await db
+    .select()
+    .from(platformBudgets)
+    .where(and(eq(platformBudgets.program, program), eq(platformBudgets.periodStart, periodStart)))
+    .limit(1);
+
+  if (!budget) {
+    return { program, budgeted: 0, spent: 0, remaining: 0, amount: 0, available: false };
+  }
+
+  const budgeted = Number(budget.budgeted ?? 0);
+  const spent = Number(budget.spent ?? 0);
+  return {
+    program,
+    budgeted,
+    spent,
+    remaining: Math.max(0, budgeted - spent),
+    amount: matchAmount(budgeted, spent, requested),
+    available: matchAmount(budgeted, spent, requested) > 0,
+  };
 }
 
 /* ── Nivel La Madriguera (solo lectura) ───────────────────────────────────── */
