@@ -14,6 +14,8 @@ import {
   type PosRole,
 } from "./services/posPermissions";
 import { isOperatorSessionsEnabled } from "./services/posOperatorAuth";
+import { ownedBusinesses as businessesCore } from "@rabbitty/database-core";
+import { branches as branchesRestaurant, restaurants as restaurantsRestaurant } from "@rabbitty/database-restaurant/schema";
 
 export interface Context {
   userId?: string | null;
@@ -150,11 +152,62 @@ export function terminalCanCallPath(path: string): boolean {
   );
 }
 
+/**
+ * ── Modelo LITE: el POS no está disponible ──────────────────────────────────
+ * Un negocio LITE solo participa del ecosistema Bunz (perfil, ofertas, canje y
+ * recompensa desde el teléfono). No tiene caja, mesas ni KDS. Se bloquea aquí,
+ * en el servidor, para que no dependa de que la UI esconda el menú.
+ *
+ * Caché de 60 s por sucursal: el POS hace polling y no queremos una consulta
+ * extra por request. Si la lectura falla, **se deja pasar** (nunca se tumba la
+ * operación de un negocio POS por un hipo de base).
+ */
+const LITE_CACHE = new Map<string, { lite: boolean; at: number }>();
+const LITE_TTL_MS = 60_000;
+
+export async function branchIsLite(ctx: Context, branchId: string | null | undefined): Promise<boolean> {
+  if (!branchId) return false;
+  const hit = LITE_CACHE.get(branchId);
+  if (hit && Date.now() - hit.at < LITE_TTL_MS) return hit.lite;
+  try {
+    const [br] = await ctx.restaurantDb
+      .select({ restaurantId: branchesRestaurant.restaurantId })
+      .from(branchesRestaurant)
+      .where(eq(branchesRestaurant.id, branchId))
+      .limit(1);
+    if (!br?.restaurantId) return false;
+    const [rest] = await ctx.restaurantDb
+      .select({ businessId: restaurantsRestaurant.businessId })
+      .from(restaurantsRestaurant)
+      .where(eq(restaurantsRestaurant.id, br.restaurantId))
+      .limit(1);
+    if (!rest?.businessId) return false;
+    const [biz] = await ctx.coreDb
+      .select({ model: businessesCore.participationModel })
+      .from(businessesCore)
+      .where(eq(businessesCore.id, rest.businessId))
+      .limit(1);
+    const lite = biz?.model === "LITE";
+    LITE_CACHE.set(branchId, { lite, at: Date.now() });
+    return lite;
+  } catch {
+    return false;
+  }
+}
+
 export const posProcedure = t.procedure
   .use(rateLimitMiddleware)
   .use(auditMiddleware)
-  .use(({ ctx, path, next }) => {
+  .use(async ({ ctx, path, next }) => {
     if (ctx.userId) {
+      // Un negocio LITE no opera POS: se corta en el servidor, no solo en la UI.
+      if (await branchIsLite(ctx, ctx.branchId)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Tu negocio opera en modo Lite (sin POS). Usa el portal del negocio para dar Bunz y validar canjes.",
+        });
+      }
       return next({ ctx: { ...ctx, userId: ctx.userId } });
     }
     if (ctx.posAuth?.method === "terminal" && terminalCanCallPath(path)) {
