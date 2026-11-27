@@ -378,7 +378,6 @@ function TenantsTab({ showToast, setPendingCount }: {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [acting, setActing] = useState<string | null>(null);
-  const [provisioning, setProvisioning] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -409,21 +408,6 @@ function TenantsTab({ showToast, setPendingCount }: {
         showToast(`Negocio ${status === 'APPROVED' ? 'aprobado ✓' : status === 'REJECTED' ? 'rechazado' : 'en revisión'}`, 'success');
       } else showToast('Error: ' + (data.error || 'desconocido'), 'error');
     } catch { showToast('Error de conexión', 'error'); } finally { setActing(null); }
-  };
-
-  const handleProvision = async (businessId: string, businessName: string, amount = 3500) => {
-    setProvisioning(businessId);
-    try {
-      const res = await fetch('/api/admin/business', {
-        method: 'POST', headers: await adminHeaders(user, true),
-        body: JSON.stringify({ businessId, action: 'PROVISION_BUNZ', amount }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setBusinesses((prev) => prev.map((b) => (b.id === businessId ? { ...b, bunzBalance: data.bunzBalance } : b)));
-        showToast(`🎉 +${fmt(amount)} Bunz → ${businessName}`, 'success');
-      } else showToast('Error: ' + (data.error || 'No se pudo aprovisionar'), 'error');
-    } catch { showToast('Error de conexión al aprovisionar', 'error'); } finally { setProvisioning(null); }
   };
 
   const filtered = businesses.filter((b) =>
@@ -487,9 +471,9 @@ function TenantsTab({ showToast, setPendingCount }: {
                 </>
               )}
               {!isPending && (
-                <Btn kind="primary" onClick={() => handleProvision(b.id, b.name)} disabled={provisioning === b.id}>
-                  {provisioning === b.id ? 'Aprovisionando…' : '⚡ Aprovisionar +3,500 Bunz'}
-                </Btn>
+                <p style={{ fontSize: 10, color: T.faint, margin: 0 }}>
+                  El aprovisionamiento de Bunz se hace en God con aprobación y ledger.
+                </p>
               )}
             </div>
           </Card>
