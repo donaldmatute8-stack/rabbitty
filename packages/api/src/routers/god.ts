@@ -23,6 +23,7 @@ import {
   membershipPlanVersions,
   wishlistGifts,
   wishlistItems,
+  referrals,
 } from "@rabbitty/database-core";
 import { ledgerEntries, rabbitterScoreShadow, platformCommissionHistory } from "@rabbitty/database-restaurant/schema";
 import {
@@ -62,6 +63,8 @@ import {
 } from "../services/bunzControls";
 import { runReconciliation } from "../services/bunzReconciliation";
 import { runValidationCapture } from "../services/validationCapture";
+import { getFundBalance } from "../services/growthFund";
+import { logAudit } from "../middleware/auditLog";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
 const sqlRows = (r: unknown) => ((r as { rows?: unknown[] }).rows ?? r) as Array<Record<string, unknown>>;
@@ -1496,6 +1499,100 @@ export const godRouter = router({
           set: { value, updatedAt: new Date() },
         });
       return { success: true, key: input.key, enabled: input.enabled };
+    }),
+
+  /**
+   * ── Fondo La Madriguera · pagos de referido ─────────────────────────────
+   * El pago desde el fondo está apagado por defecto. Solo God lo enciende
+   * desde la UI con doble confirmación e identidad; mientras esté apagado, los
+   * referidos siguen pagando por el camino legado (50 Bunz sys_referrals).
+   */
+  getGrowthFundReferralStatus: godAdminProcedure.query(async ({ ctx }) => {
+    const [row] = await ctx.coreDb
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, "growth_fund_referral_payouts_enabled"))
+      .limit(1);
+
+    const [pending] = await ctx.coreDb
+      .select({
+        count: sql<number>`count(*)::int`,
+        amount: sql<number>`coalesce(sum("rewardAmount"), 0)::int`,
+      })
+      .from(referrals)
+      .where(eq(referrals.status, "PENDING"));
+
+    const balance = await getFundBalance(ctx.restaurantDb);
+
+    return {
+      enabled: row?.value === "1",
+      updatedAt: row?.updatedAt ?? null,
+      fundBalance: balance.balance,
+      fundHealthy: balance.healthy,
+      pendingCount: Number(pending?.count ?? 0),
+      pendingAmount: Number(pending?.amount ?? 0),
+      referralAmount: 50,
+    };
+  }),
+
+  setGrowthFundReferralPayouts: godAdminProcedure
+    .input(
+      z.object({
+        enabled: z.boolean(),
+        identityEmail: z.string().email(),
+        confirmation: z.string().min(1),
+        reason: z.string().trim().min(10).max(300),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const expected = input.enabled ? "ACTIVAR REFERIDOS" : "DESACTIVAR REFERIDOS";
+      if (input.confirmation.trim().toUpperCase() !== expected) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `La confirmación debe ser exactamente: ${expected}`,
+        });
+      }
+
+      let email = (ctx.user?.email ?? "").trim().toLowerCase();
+      if (!email && ctx.userId) {
+        const [row] = await ctx.coreDb
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, ctx.userId))
+          .limit(1);
+        email = (row?.email ?? "").trim().toLowerCase();
+      }
+      if (!email || input.identityEmail.trim().toLowerCase() !== email) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "El correo de identidad no coincide con la sesión God.",
+        });
+      }
+
+      const value = input.enabled ? "1" : "0";
+      await ctx.coreDb
+        .insert(systemSettings)
+        .values({ key: "growth_fund_referral_payouts_enabled", value })
+        .onConflictDoUpdate({
+          target: systemSettings.key,
+          set: { value, updatedAt: new Date() },
+        });
+
+      logAudit({
+        userId: ctx.userId ?? null,
+        action: input.enabled
+          ? "GROWTH_FUND_REFERRAL_PAYOUTS_ENABLED"
+          : "GROWTH_FUND_REFERRAL_PAYOUTS_DISABLED",
+        resource: "systemSettings",
+        resourceId: "growth_fund_referral_payouts_enabled",
+        details: {
+          enabled: input.enabled,
+          reason: input.reason,
+          identityEmail: input.identityEmail,
+        },
+      });
+
+      return { success: true, enabled: input.enabled };
     }),
 
   createHatTrick: godAdminProcedure

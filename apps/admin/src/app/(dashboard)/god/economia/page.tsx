@@ -16,6 +16,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { Card, Button, cn } from "@rabbitty/ui";
+import { GrowthFundPanel } from "./GrowthFundPanel";
 
 /**
  * Centro económico GOD.
@@ -24,11 +25,12 @@ import { Card, Button, cn } from "@rabbitty/ui";
  * contratos e historial. Solo GOD (allowlist + 2FA).
  */
 
-type Tab = "resumen" | "capacidad" | "conciliacion" | "contratos" | "historial";
+type Tab = "resumen" | "capacidad" | "fondo" | "conciliacion" | "contratos" | "historial";
 
 const TABS: Array<{ id: Tab; label: string; icon: any }> = [
   { id: "resumen", label: "Resumen", icon: Activity },
   { id: "capacidad", label: "Capacidad", icon: Coins },
+  { id: "fondo", label: "Fondo / referidos", icon: Coins },
   { id: "conciliacion", label: "Conciliación", icon: Scale },
   { id: "contratos", label: "Contratos", icon: FileText },
   { id: "historial", label: "Historial", icon: History },
@@ -228,7 +230,7 @@ export default function GodEconomyPage() {
               </span>
             </div>
             <p className="text-xs text-gray-400 mt-1">
-              Capacidad, conciliación, contratos e historial en un solo lugar. No aprueba nada por sí solo.
+              Capacidad, fondo de referidos, conciliación, contratos e historial en un solo lugar. No aprueba nada por sí solo.
             </p>
           </div>
         </div>
@@ -619,6 +621,8 @@ export default function GodEconomyPage() {
           </table>
         </Card>
       )}
+
+      {tab === "fondo" && <GrowthFundPanel />}
 
       {tab === "historial" && (
         <Card className="p-5 bg-white/5 border-white/10 overflow-x-auto">

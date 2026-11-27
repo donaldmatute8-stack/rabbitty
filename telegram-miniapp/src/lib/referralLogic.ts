@@ -1,9 +1,9 @@
 import { db } from '@/db';
-import { users, referrals, notifications } from '@/db/schema';
+import { users, referrals, notifications, systemSettings } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { recordLedgerTransaction } from '@/lib/ledgerHelper';
 import { sendEcosystemNotification } from '@/lib/push/notify';
-import { GROWTH_FUND_ACCOUNT, growthFundFlags } from '@rabbitty/api/services/growthFund';
+import { GROWTH_FUND_ACCOUNT } from '@rabbitty/api/services/growthFund';
 
 /**
  * Triggers the referral reward for the inviter if this is the invited user's first consumption/earn.
@@ -60,7 +60,13 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
       });
 
       if (referral) {
-        const flags = growthFundFlags();
+        const [setting] = await db
+          .select({ value: systemSettings.value })
+          .from(systemSettings)
+          .where(eq(systemSettings.key, 'growth_fund_referral_payouts_enabled'))
+          .limit(1);
+        const useFund = setting?.value === '1';
+
         const payout = await db.transaction(async (tx) => {
           // Re-verify and lock referral
           const [lockedReferral] = await tx
@@ -86,7 +92,7 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
           let idempotencyKey = `ref_reward_${lockedReferral.id}`;
           let ledgerEntryId: string | null = null;
 
-          if (flags.referralPayouts) {
+          if (useFund) {
             // Fondo único: serializa pagos para no sobregirar el saldo.
             await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${GROWTH_FUND_ACCOUNT}))`);
             const [balanceRow] = (await tx.execute(sql`
@@ -140,8 +146,8 @@ export async function processReferralAndNotifications(userId: string, type: 'EAR
               metadata: {
                 invitedUserId: userId,
                 invitedUsername: user.username || user.firstName || 'Invitado',
-                source: flags.referralPayouts ? 'madriguera_referral' : 'referral_program',
-                program: flags.referralPayouts ? 'madriguera' : undefined,
+                source: useFund ? 'madriguera_referral' : 'referral_program',
+                program: useFund ? 'madriguera' : undefined,
               },
             },
             tx
