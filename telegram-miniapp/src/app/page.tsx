@@ -8,9 +8,7 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import BottomNav from '@/components/BottomNav';
 import Tabs from '@/components/ui/Tabs';
-import FeedCard from '@/components/ui/FeedCard';
-import EmptyState from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
+import BunzDiscover from '@/components/bunz/BunzDiscover';
 import { useAuth } from '@/features/auth/AuthProvider';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
@@ -72,17 +70,9 @@ interface FeedItem {
   hasStockOffer?: boolean;
 }
 
-interface Offer {
-  id: string;
-  title: string;
-  description?: string;
-  image?: string;
-  businessName: string;
-  bunzCost: number;
-  isAvailable: boolean;
-}
 
-const TABS = ["bunz'in", 'Stock', 'Freehands'];
+const TABS = ["bunz'in", 'Freehands'];
+const TAB_LABELS: Record<string, string> = { "bunz'in": 'Bunz', Freehands: 'Mapa' };
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -119,13 +109,11 @@ export default function FeedPage() {
   useEffect(() => {
     postsRef.current = posts;
   }, [posts]);
-  const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(() => posts.length === 0);
   const [refreshKey, setRefreshKey] = useState(0);
   // Visual del pull-to-refresh / refresh del Ra-menu (compartido)
   const [pullDist, setPullDist] = useState(0);
   const [refreshingFeed, setRefreshingFeed] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [purchasing, setPurchasing] = useState(false);
   const { showToast } = useToast();
 
@@ -483,12 +471,6 @@ export default function FeedPage() {
               } catch {}
             }
           }
-        } else if (activeTab === 'Stock') {
-          const res = await fetch('/api/offers');
-          if (res.ok) {
-            const { success, offers: o } = await res.json();
-            if (active && success) setOffers(o);
-          }
         }
       } catch (err) {
         console.error('[Feed] data fetch error:', err);
@@ -803,6 +785,7 @@ export default function FeedPage() {
           <Tabs 
             tabs={TABS} 
             activeTab={activeTab} 
+            labels={TAB_LABELS}
             onChange={(tab) => {
               PlatformBridge.hapticFeedback('light');
               setActiveTab(tab);
@@ -903,144 +886,16 @@ export default function FeedPage() {
               </div>
               )}
 
-              {postsWithDistance.length > 0 && (
-                <div className="flex items-center gap-3 mb-4 mt-2">
-                  <div className="flex-1 h-px bg-(--border-subtle)" />
-                  <span className="text-[11px] font-black text-(--text-muted) tracking-[0.5px]">COMERCIOS CERCA DE TI</span>
-                  <div className="flex-1 h-px bg-(--border-subtle)" />
-                </div>
-              )}
-              {loading && postsWithDistance.length === 0 ? (
-                <><SkeletonCard /><SkeletonCard /><SkeletonCard /></>
-              ) : postsWithDistance.length > 0 ? (
-                postsWithDistance.map((post, i) => (
-                  <FeedCard
-                    key={post.id}
-                    id={post.id}
-                    user={post.user}
-                    device={post.device}
-                    label={
-                      post.distance === undefined
-                        ? post.label
-                        : post.distance < 0.1
-                          ? 'Aquí'
-                          : post.distance < 1
-                            ? `${Math.round(post.distance * 1000)} m`
-                            : `${post.distance.toFixed(1)} km`
-                    }
-                    bunz={post.reward_percentage}
-                    imageUrl={post.imageUrl}
-                    initialHops={post.hops}
-                    initialSavedCount={post.savedCount}
-                    initialSharedCount={post.sharedCount}
-                    index={i}
-                  />
-                ))
-              ) : (
-                <EmptyState
-                  icon={<span className="text-4xl">🐇</span>}
-                  title="Sin negocios aún"
-                  description="No hay afiliados disponibles cerca de ti en este momento."
-                />
-              )}
+              {/* Bunz v2: una lista que se adapta (earn + spend + horario). */}
+              <BunzDiscover
+                isDark={isDark}
+                userLat={userLat}
+                userLng={userLng}
+                fallbackBalance={Math.max(0, (user?.totalBunzEarned ?? 0) - (user?.totalBunzSpent ?? 0))}
+              />
             </>
           )}
 
-          {/* ── Stock tab ── */}
-          {activeTab === 'Stock' && (
-            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
-              {/* Search */}
-              <div className="relative mb-5">
-                <svg className="absolute left-4 top-1/2 -translate-y-1/2" width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ color: 'var(--text-muted)' }}>
-                  <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M11 11L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                <input
-                  placeholder="Buscar negocios..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-(--bg-elevated) border border-(--border-subtle) rounded-full py-3 px-4 pl-10 text-sm text-(--text-primary) placeholder:text-(--text-muted) outline-none box-border"
-                  style={{ fontFamily: 'var(--font-family-base)' }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[17px] font-black text-(--text-primary) m-0">Ofertas Disponibles</h2>
-                {offers.length > 0 && (
-                  <span className="text-xs font-bold text-[#E91E63]">
-                    {offers.filter(o => o.isAvailable).length} activas
-                  </span>
-                )}
-              </div>
-
-              {loading ? (
-                <SkeletonCard />
-              ) : offers.length === 0 ? (
-                <div className="bg-(--bg-elevated) rounded-[20px] p-6 text-center border-2 border-dashed border-(--border-subtle)">
-                  <p className="font-bold text-(--text-secondary) mb-1">No hay ofertas disponibles</p>
-                  <p className="text-xs text-(--text-muted) m-0">Los negocios subirán certificados de regalo pronto.</p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {offers
-                    .filter(o =>
-                      !searchQuery ||
-                      o.businessName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      o.title?.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((o) => (
-                      <div
-                        key={o.id}
-                        className="bg-(--bg-elevated) rounded-[22px] overflow-hidden border border-(--border-subtle) shadow-[0_2px_12px_rgba(0,0,0,0.3)] relative"
-                        style={{ opacity: o.isAvailable ? 1 : 0.55, filter: o.isAvailable ? 'none' : 'grayscale(1)' }}
-                      >
-                        {/* Ticket notch */}
-                        <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-(--bg-primary) rounded-full border border-(--border-subtle)" />
-                        <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-(--bg-primary) rounded-full border border-(--border-subtle)" />
-
-                        <div className="p-5">
-                          <div className="flex items-start gap-4 mb-4">
-                            {o.image ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={o.image} alt={o.title} className="w-14 h-14 rounded-2xl object-cover shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.4)]" />
-                            ) : (
-                              <div className="w-14 h-14 rounded-2xl bg-(--bg-pressed) border border-(--border-subtle) flex items-center justify-center text-2xl shrink-0">🏪</div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-[#E91E63] tracking-[0.5px] uppercase mb-1">{o.businessName}</p>
-                              <p className="font-black text-(--text-primary) text-base leading-[1.2] mb-1">{o.title}</p>
-                              <p className="text-xs text-(--text-muted) leading-normal m-0 line-clamp-2">{o.description}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-4 border-t border-dashed border-(--border-subtle)">
-                            <div>
-                              <p className="text-[9px] font-black text-(--text-muted) tracking-[0.5px] uppercase mb-0.5">Costo</p>
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-[22px] font-black text-(--text-primary)">{o.bunzCost}</span>
-                                <span className="text-[13px] font-bold text-[#E91E63]">bunz</span>
-                              </div>
-                            </div>
-                            <button
-                              disabled={!o.isAvailable || purchasing}
-                              onClick={() => handleSpend(o.id, o.bunzCost, o.businessName, o.title)}
-                              className="text-[13px] font-black px-5 py-2.5 rounded-full border-none"
-                              style={{
-                                background: o.isAvailable && !purchasing ? '#E91E63' : 'var(--bg-pressed)',
-                                color: o.isAvailable && !purchasing ? '#fff' : 'var(--text-muted)',
-                                cursor: o.isAvailable && !purchasing ? 'pointer' : 'not-allowed',
-                              }}
-                            >
-                              {purchasing ? '...' : o.isAvailable ? 'Reservar' : 'Agotado Hoy'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </motion.div>
-          )}
 
         </div>
       </main>
@@ -1103,7 +958,7 @@ export default function FeedPage() {
                     border: isActive ? '1px solid rgba(233, 30, 99, 0.35)' : '1px solid transparent',
                   }}
                 >
-                  {tab}
+                  {TAB_LABELS[tab] ?? tab}
                 </button>
               );
             })}

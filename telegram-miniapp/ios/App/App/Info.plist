@@ -4,6 +4,13 @@
 <dict>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+	<!-- Desarrollo local: permite http://localhost:3000 (Capacitor live reload).
+	     NO debilita producción: solo habilita red local, no cargas arbitrarias. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
