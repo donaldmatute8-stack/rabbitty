@@ -478,6 +478,8 @@ export async function claimWelcomeBonusForUser(params: {
           payeeSubjectId: `usr_${userId}`,
           amount: finalAffiliateShare,
           type: 'EARN',
+          // Negocio de prueba ⇒ asiento de demo: no entra al ancla.
+          sandbox: Boolean(targetBusiness.sandbox),
           idempotencyKey: `welcome_aff_${userId}`,
         });
       }
@@ -487,6 +489,7 @@ export async function claimWelcomeBonusForUser(params: {
           payeeSubjectId: `usr_${userId}`,
           amount: finalTreasuryShare,
           type: 'EARN',
+          sandbox: Boolean(targetBusiness.sandbox),
           idempotencyKey: `welcome_trs_${userId}`,
         });
       }
