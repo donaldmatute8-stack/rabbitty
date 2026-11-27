@@ -58,6 +58,9 @@ export function GrowthFundPanel() {
           ? `Economía del fondo activada${funded > 0 ? ` · fondeados ${funded.toLocaleString("es-MX")} Bunz` : ""}`
           : "Economía del fondo desactivada",
       );
+      if (res?.fundingError) {
+        toast.error(`Activado, pero el fondeo falló: ${String(res.fundingError).slice(0, 120)}`);
+      }
       setOpen(false);
       refresh();
     },

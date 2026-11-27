@@ -1680,13 +1680,21 @@ export const godRouter = router({
 
       // Un solo interruptor: si se activa con fondeo, se ejecuta en la misma
       // acción y con la misma confirmación de identidad (no hay dos controles).
-      const funding =
-        input.enabled && input.fundCoopMatch
-          ? await runCoopMatchFunding(ctx, {
-              pct: input.pct,
-              matchRequested: input.matchRequested ?? null,
-            })
-          : null;
+      // El fondeo es best-effort: si falla, la activación queda hecha y se
+      // reporta el error para reintentar desde "Fondear ahora".
+      let funding: Awaited<ReturnType<typeof runCoopMatchFunding>> | null = null;
+      let fundingError: string | null = null;
+      if (input.enabled && input.fundCoopMatch) {
+        try {
+          funding = await runCoopMatchFunding(ctx, {
+            pct: input.pct,
+            matchRequested: input.matchRequested ?? null,
+          });
+        } catch (err) {
+          fundingError = err instanceof Error ? err.message : String(err);
+          console.error("[GROWTH_FUND] fondeo falló al activar:", fundingError);
+        }
+      }
 
       logAudit({
         userId: ctx.userId ?? null,
@@ -1700,6 +1708,7 @@ export const godRouter = router({
           reason: input.reason,
           identityEmail: input.identityEmail,
           funded: Boolean(funding),
+          fundingError,
           coopTotal: funding?.coopTotal ?? 0,
           matchTotal: funding?.matchTotal ?? 0,
           skipped: funding?.skipped ?? null,
@@ -1727,7 +1736,7 @@ export const godRouter = router({
         });
       }
 
-      return { success: true, enabled: input.enabled, funding };
+      return { success: true, enabled: input.enabled, funding, fundingError };
     }),
 
   /**
