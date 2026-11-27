@@ -1,24 +1,40 @@
 'use client';
 
 /**
- * ── PosOrderAlert ── aviso GIGANTE + sonido para pedidos nuevos de la app.
+ * ── PosOrderAlert ── aviso fullscreen + sonido para pedidos nuevos de la app.
  *
- * En una caja con ruido, la campanita se pierde. Cuando entra un pedido nuevo
- * desde el móvil, esta capa ocupa la pantalla con tipografía enorme, suena
- * hasta que alguien la atiende y lleva directo a "Desde la app".
+ * En una caja con ruido la campanita se pierde. Cuando entra un pedido desde el
+ * móvil esta capa TOMA la pantalla completa (sin tarjeta, sin fondo translúcido)
+ * para que sea imposible no verla, suena hasta que alguien la atiende y lleva
+ * directo a "Desde la app".
+ *
+ * Regla de operación: si el POS está en medio de otra operación (cobro, corte,
+ * comanda abierta) el botón **Revisar** manda el pedido a la cola en vez de
+ * interrumpir: el pedido nunca se pierde y queda el punto persistente.
  *
  * Solo se usa para PEDIDOS/ÓRDENES (no para comandas internas ni cobros).
  */
 
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Smartphone, Volume2, ArrowRight, X, Ban } from 'lucide-react';
+import { Smartphone, Volume2, ArrowRight, X, Ban, ListOrdered, Clock } from 'lucide-react';
+
+export interface PosAlertOrder {
+  orderId: string;
+  label: string;
+  total: number;
+  minutesAgo: number;
+}
 
 interface Props {
   open: boolean;
   count: number;
   /** Ajuste del negocio: si está apagado, la alerta sale muda. */
   soundEnabled?: boolean;
+  /** El POS está ocupado (cobro, corte, otra comanda): Revisar manda a cola. */
+  busy?: boolean;
+  /** Detalle corto de los pedidos pendientes, para que se sepa qué llegó. */
+  orders?: PosAlertOrder[];
   onOpen: () => void;
   onDismiss: () => void;
   /**
@@ -28,7 +44,16 @@ interface Props {
   onReject?: () => void;
 }
 
-export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDismiss, onReject }: Props) {
+export function PosOrderAlert({
+  open,
+  count,
+  soundEnabled = true,
+  busy = false,
+  orders = [],
+  onOpen,
+  onDismiss,
+  onReject,
+}: Props) {
   const ctxRef = useRef<AudioContext | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -80,7 +105,6 @@ export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDism
       return;
     }
 
-    // Un solo aviso: dos tonos al entrar (0 s y 0.9 s) y silencio.
     const beep = () => {
       try {
         if (!ctxRef.current) {
@@ -138,56 +162,93 @@ export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDism
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-6"
-          style={{ background: 'rgba(5,2,8,0.88)', backdropFilter: 'blur(6px)' }}
+          role="alertdialog"
+          aria-modal="true"
+          aria-label="Pedido nuevo desde la app"
+          className="fixed inset-0 z-[120] flex flex-col"
+          style={{
+            background:
+              'radial-gradient(120% 90% at 50% 0%, rgba(233,30,99,0.55) 0%, rgba(120,10,60,0.85) 38%, rgba(9,4,12,0.98) 78%), #09040c',
+          }}
         >
-          <motion.div
-            initial={{ scale: 0.9, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            transition={{ type: 'spring', damping: 18 }}
-            className="w-full max-w-3xl rounded-[32px] p-8 sm:p-12 text-center relative"
-            style={{
-              background: 'linear-gradient(160deg, rgba(233,30,99,0.28), rgba(10,5,12,0.96))',
-              border: '2px solid rgba(233,30,99,0.65)',
-              boxShadow: '0 0 120px rgba(233,30,99,0.45)',
-            }}
-          >
-            <button
-              type="button"
-              onClick={onDismiss}
-              aria-label="Silenciar"
-              className="absolute top-4 right-4 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white flex items-center justify-center cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <motion.div
-                animate={{ scale: [1, 1.12, 1] }}
-                transition={{ repeat: Infinity, duration: 1.1 }}
-                className="w-20 h-20 rounded-3xl flex items-center justify-center bg-[#E91E63]/25 border-2 border-[#E91E63]/60"
-              >
-                <Smartphone className="h-10 w-10 text-[#FF2E93]" strokeWidth={2.4} />
-              </motion.div>
-              <Volume2 className="h-8 w-8 text-[#FF2E93] animate-pulse" />
+          {/* Barra superior: identidad del aviso + silenciar */}
+          <div className="flex items-center justify-between px-5 pt-5 sm:px-8 sm:pt-7">
+            <div className="flex items-center gap-3">
+              <motion.span
+                animate={{ opacity: [0.35, 1, 0.35] }}
+                transition={{ repeat: Infinity, duration: 1.2 }}
+                className="h-3 w-3 rounded-full bg-[#FF2E93] shadow-[0_0_18px_4px_rgba(255,46,147,0.7)]"
+              />
+              <p className="m-0 text-[11px] sm:text-xs font-black uppercase tracking-[0.3em] text-[#FF8FC0]">
+                Pedido nuevo · desde la app
+              </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Volume2 className="h-5 w-5 text-[#FF2E93] animate-pulse" />
+              <button
+                type="button"
+                onClick={onDismiss}
+                aria-label="Silenciar"
+                className="flex h-11 items-center gap-2 rounded-full bg-white/10 px-4 text-xs font-black text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+                Silenciar
+              </button>
+            </div>
+          </div>
 
-            <p className="text-[15px] font-black text-[#FF2E93] uppercase tracking-[0.25em] m-0">
-              Pedido nuevo desde la app
-            </p>
-            <p className="text-6xl sm:text-7xl font-black text-white m-0 mt-3 leading-none">
-              {count}
-            </p>
-            <p className="text-lg font-bold text-white/70 m-0 mt-2">
+          {/* Cuerpo: el número manda */}
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 text-center sm:px-8">
+            <motion.div
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ repeat: Infinity, duration: 1.15 }}
+              className="mb-4 flex h-24 w-24 items-center justify-center rounded-[28px] border-2 border-[#E91E63]/70 bg-[#E91E63]/25 sm:h-28 sm:w-28"
+            >
+              <Smartphone className="h-12 w-12 text-[#FF2E93] sm:h-14 sm:w-14" strokeWidth={2.4} />
+            </motion.div>
+
+            <p className="m-0 text-[86px] font-black leading-[0.85] text-white sm:text-[140px]">{count}</p>
+            <p className="m-0 mt-2 text-xl font-black text-white/85 sm:text-2xl">
               {count === 1 ? 'pedido esperando en caja' : 'pedidos esperando en caja'}
             </p>
+            <p className="m-0 mt-1 text-sm font-semibold text-white/50">
+              {busy
+                ? 'El POS está en otra operación. Revisar lo manda a la cola: no se pierde.'
+                : 'Pasa a la caja para cobrarlo y que cocina arranque.'}
+            </p>
 
+            {orders.length > 0 && (
+              <ul className="m-0 mt-5 w-full max-w-xl list-none space-y-1.5 p-0 text-left">
+                {orders.slice(0, 3).map((o) => (
+                  <li
+                    key={o.orderId}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/30 px-3 py-2"
+                  >
+                    <span className="truncate text-sm font-bold text-white/90">{o.label}</span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="flex items-center gap-1 text-[11px] font-bold text-white/45">
+                        <Clock className="h-3 w-3" />
+                        {o.minutesAgo <= 0 ? 'ahora' : `${o.minutesAgo} min`}
+                      </span>
+                      <span className="text-sm font-black text-[#FF8FC0]">
+                        ${Number(o.total ?? 0).toFixed(2)}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Acción: Revisar es la única salida grande */}
+          <div className="px-5 pb-6 pt-4 sm:px-8 sm:pb-8">
             <button
               type="button"
               onClick={onOpen}
-              className="mt-9 w-full flex items-center justify-center gap-3 py-6 rounded-2xl bg-[#E91E63] hover:bg-[#FF2E93] text-white text-2xl font-black cursor-pointer active:scale-[0.99] transition-transform shadow-2xl shadow-[#E91E63]/40"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#E91E63] py-6 text-2xl font-black text-white shadow-2xl shadow-[#E91E63]/40 transition-transform hover:bg-[#FF2E93] active:scale-[0.99]"
             >
-              Ver pedido
+              {busy ? <ListOrdered className="h-7 w-7" /> : null}
+              {busy ? 'Revisar · mandar a la cola' : 'Revisar'}
               <ArrowRight className="h-7 w-7" />
             </button>
 
@@ -195,18 +256,18 @@ export function PosOrderAlert({ open, count, soundEnabled = true, onOpen, onDism
               <button
                 type="button"
                 onClick={onReject}
-                className="mt-3 w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/15 text-white/80 text-sm font-black cursor-pointer active:scale-[0.99] transition-transform"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 py-3 text-sm font-black text-white/80 transition-transform hover:bg-white/10 active:scale-[0.99]"
               >
                 <Ban className="h-4 w-4" />
                 No podemos aceptarlo · rechazar con motivo
               </button>
             )}
 
-            <p className="text-[13px] text-white/45 m-0 mt-4">
-              El sonido se detiene al abrir o silenciar. La alerta no se repite
-              por el mismo pedido en este dispositivo.
+            <p className="m-0 mt-3 text-center text-[11px] text-white/40">
+              El sonido se detiene al revisar o silenciar. La alerta no se repite por el mismo
+              pedido en este dispositivo; el punto del header sigue avisando mientras haya pedidos.
             </p>
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

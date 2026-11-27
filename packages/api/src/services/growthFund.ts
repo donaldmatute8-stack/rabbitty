@@ -4,6 +4,7 @@ import {
   merchantCapacityAccounts,
   platformBudgets,
 } from "@rabbitty/database-core/schema";
+import { ledgerEntries } from "@rabbitty/database-restaurant/schema";
 import type { getCoreDb, getRestaurantDb } from "../db";
 
 /**
@@ -266,6 +267,290 @@ export async function getMatchPreview(
     remaining: Math.max(0, budgeted - spent),
     amount: matchAmount(budgeted, spent, requested),
     available: matchAmount(budgeted, spent, requested) > 0,
+  };
+}
+
+/* ── Fondeo co-op + match (ejecución) ─────────────────────────────────────── */
+
+export function monthPeriod(now = new Date()) {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return { start, end };
+}
+
+export function periodKey(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+export interface CoopFundingResult {
+  ok: boolean;
+  businessId: string;
+  amount: number;
+  idempotencyKey: string;
+  ledgerEntryId: string | null;
+  alreadyDone: boolean;
+  reason?: "NO_ACCOUNT" | "NOT_ACTIVE" | "ZERO_AMOUNT" | "SKIPPED";
+}
+
+export interface MatchFundingResult {
+  ok: boolean;
+  program: string;
+  amount: number;
+  idempotencyKey: string;
+  ledgerEntryId: string | null;
+  alreadyDone: boolean;
+  reason?: "NO_BUDGET" | "ZERO_AMOUNT" | "SKIPPED";
+}
+
+interface Executor {
+  execute: (query: ReturnType<typeof sql>) => Promise<unknown>;
+  insert: LedgerDb["insert"];
+}
+
+function listOf<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  const maybe = result as { rows?: T[] };
+  return Array.isArray(maybe?.rows) ? maybe.rows : [];
+}
+
+/**
+ * Co-op del afiliado: `MINT biz_<id> → sys_growth_fund`.
+ *
+ * · El afiliado aporta CAPACIDAD promo, no Bunz que ya tenga → es MINT
+ *   (ADR-CORE-011 §3). Registrarlo como TRANSFER subcontaría la emisión.
+ * · Idempotente por `coop:<businessId>:<periodo>`: repetir no duplica.
+ * · No toca `bunzBalance` del negocio ni `merchantCapacityAccounts.available`:
+ *   el compromiso vive en `referral_coop_commitments` para no alterar MCCE.
+ * · `db` debe ser un executor con acceso a ledger y, en producción, a las
+ *   tablas core (misma base Neon).
+ */
+export async function fundCoop(
+  db: Executor,
+  input: {
+    businessId: string;
+    pct?: number;
+    periodStart: Date;
+    periodEnd: Date;
+    program?: string;
+  },
+): Promise<CoopFundingResult> {
+  const program = input.program ?? GROWTH_FUND_PROGRAM;
+  const businessId = String(input.businessId).replace(/^(biz|usr)_/i, "");
+  const pct = input.pct ?? 0.1;
+  const idempotencyKey = `coop:${businessId}:${periodKey(input.periodStart)}`;
+
+  const existing = listOf<{ id: string; amount: number; ledgerEntryId: string | null }>(
+    await db.execute(sql`
+      SELECT "id", "amount", "ledgerEntryId" FROM "fund_contributions"
+       WHERE "idempotencyKey" = ${idempotencyKey} LIMIT 1
+    `),
+  )[0];
+  if (existing) {
+    return {
+      ok: true,
+      businessId,
+      amount: Number(existing.amount),
+      idempotencyKey,
+      ledgerEntryId: existing.ledgerEntryId ?? null,
+      alreadyDone: true,
+    };
+  }
+
+  const account = listOf<{ promoAuthorized: number; status: string; sandbox: boolean }>(
+    await db.execute(sql`
+      SELECT "promoAuthorized", "status", "sandbox"
+        FROM "merchant_capacity_accounts"
+       WHERE "affiliateId" = ${businessId} LIMIT 1
+    `),
+  )[0];
+
+  if (!account) {
+    return { ok: false, businessId, amount: 0, idempotencyKey, ledgerEntryId: null, alreadyDone: false, reason: "NO_ACCOUNT" };
+  }
+  if (String(account.status) !== "ACTIVE" || account.sandbox) {
+    return { ok: false, businessId, amount: 0, idempotencyKey, ledgerEntryId: null, alreadyDone: false, reason: "NOT_ACTIVE" };
+  }
+
+  const amount = coopAmount(Number(account.promoAuthorized ?? 0), pct);
+  if (amount <= 0) {
+    return { ok: false, businessId, amount: 0, idempotencyKey, ledgerEntryId: null, alreadyDone: false, reason: "ZERO_AMOUNT" };
+  }
+
+  const entry = await db
+    .insert(ledgerEntries)
+    .values({
+      payerSubjectId: `biz_${businessId}`,
+      payeeSubjectId: GROWTH_FUND_ACCOUNT,
+      amount,
+      currency: "BUNZ",
+      type: "MINT",
+      referenceId: null,
+      idempotencyKey,
+      metadata: {
+        program,
+        source: "coop",
+        businessId,
+        pct,
+        periodStart: input.periodStart.toISOString(),
+      },
+    })
+    .onConflictDoNothing({ target: ledgerEntries.idempotencyKey })
+    .returning({ id: ledgerEntries.id });
+
+  const entryRow =
+    listOf<{ id: string }>(entry)[0] ??
+    listOf<{ id: string }>(
+      await db.execute(sql`SELECT "id" FROM "ledger_entries" WHERE "idempotencyKey" = ${idempotencyKey} LIMIT 1`),
+    )[0] ??
+    null;
+
+  const contributionId = crypto.randomUUID();
+  const contribution = listOf<{ id: string }>(
+    await db.execute(sql`
+      INSERT INTO "fund_contributions"
+        ("id", "source", "subjectId", "amount", "ledgerEntryId", "program", "periodStart", "idempotencyKey")
+      VALUES
+        (${contributionId}, 'coop', ${`biz_${businessId}`}, ${amount}, ${entryRow?.id ?? null}, ${program}, ${input.periodStart}, ${idempotencyKey})
+      ON CONFLICT ("idempotencyKey") DO NOTHING
+      RETURNING "id"
+    `),
+  )[0];
+
+  if (contribution) {
+    const commitment = listOf<{ id: string; committed: number }>(
+      await db.execute(sql`
+        SELECT "id", "committed" FROM "referral_coop_commitments"
+         WHERE "affiliateId" = ${businessId} AND "periodStart" = ${input.periodStart}
+           AND "source" = 'coop' LIMIT 1
+      `),
+    )[0];
+
+    if (commitment) {
+      await db.execute(sql`
+        UPDATE "referral_coop_commitments"
+           SET "committed" = "committed" + ${amount}, "pctBasis" = ${pct}, "updatedAt" = now()
+         WHERE "id" = ${commitment.id}
+      `);
+    } else {
+      await db.execute(sql`
+        INSERT INTO "referral_coop_commitments"
+          ("id", "affiliateId", "source", "periodStart", "periodEnd", "pctBasis", "committed", "spent", "status")
+        VALUES
+          (${crypto.randomUUID()}, ${businessId}, 'coop', ${input.periodStart}, ${input.periodEnd}, ${pct}, ${amount}, 0, 'ACTIVE')
+      `);
+    }
+  }
+
+  return {
+    ok: true,
+    businessId,
+    amount,
+    idempotencyKey,
+    ledgerEntryId: entryRow?.id ?? null,
+    alreadyDone: false,
+  };
+}
+
+/**
+ * Match de plataforma: `MINT sys_treasury → sys_growth_fund`.
+ * Idempotente por `match:<program>:<periodo>` y acotado al presupuesto.
+ */
+export async function fundMatch(
+  db: Executor,
+  input: {
+    program?: string;
+    periodStart: Date;
+    requested?: number | null;
+  },
+): Promise<MatchFundingResult> {
+  const program = input.program ?? GROWTH_FUND_PROGRAM;
+  const idempotencyKey = `match:${program}:${periodKey(input.periodStart)}`;
+
+  const existing = listOf<{ amount: number; ledgerEntryId: string | null }>(
+    await db.execute(sql`
+      SELECT "amount", "ledgerEntryId" FROM "fund_contributions"
+       WHERE "idempotencyKey" = ${idempotencyKey} LIMIT 1
+    `),
+  )[0];
+  if (existing) {
+    return {
+      ok: true,
+      program,
+      amount: Number(existing.amount),
+      idempotencyKey,
+      ledgerEntryId: existing.ledgerEntryId ?? null,
+      alreadyDone: true,
+    };
+  }
+
+  const budget = listOf<{ id: string; budgeted: number; spent: number }>(
+    await db.execute(sql`
+      SELECT "id", "budgeted", "spent" FROM "platform_budgets"
+       WHERE "program" = ${program} AND "periodStart" = ${input.periodStart} LIMIT 1
+    `),
+  )[0];
+
+  if (!budget) {
+    return { ok: false, program, amount: 0, idempotencyKey, ledgerEntryId: null, alreadyDone: false, reason: "NO_BUDGET" };
+  }
+
+  const amount = matchAmount(Number(budget.budgeted ?? 0), Number(budget.spent ?? 0), input.requested);
+  if (amount <= 0) {
+    return { ok: false, program, amount: 0, idempotencyKey, ledgerEntryId: null, alreadyDone: false, reason: "ZERO_AMOUNT" };
+  }
+
+  const entry = await db
+    .insert(ledgerEntries)
+    .values({
+      payerSubjectId: "sys_treasury",
+      payeeSubjectId: GROWTH_FUND_ACCOUNT,
+      amount,
+      currency: "BUNZ",
+      type: "MINT",
+      referenceId: null,
+      idempotencyKey,
+      metadata: {
+        program,
+        source: "match",
+        periodStart: input.periodStart.toISOString(),
+      },
+    })
+    .onConflictDoNothing({ target: ledgerEntries.idempotencyKey })
+    .returning({ id: ledgerEntries.id });
+
+  const entryRow =
+    listOf<{ id: string }>(entry)[0] ??
+    listOf<{ id: string }>(
+      await db.execute(sql`SELECT "id" FROM "ledger_entries" WHERE "idempotencyKey" = ${idempotencyKey} LIMIT 1`),
+    )[0] ??
+    null;
+
+  const contribution = listOf<{ id: string }>(
+    await db.execute(sql`
+      INSERT INTO "fund_contributions"
+        ("id", "source", "subjectId", "amount", "ledgerEntryId", "program", "periodStart", "idempotencyKey")
+      VALUES
+        (${crypto.randomUUID()}, 'match', 'sys_treasury', ${amount}, ${entryRow?.id ?? null}, ${program}, ${input.periodStart}, ${idempotencyKey})
+      ON CONFLICT ("idempotencyKey") DO NOTHING
+      RETURNING "id"
+    `),
+  )[0];
+
+  if (contribution) {
+    await db.execute(sql`
+      UPDATE "platform_budgets"
+         SET "spent" = "spent" + ${amount}, "updatedAt" = now()
+       WHERE "id" = ${budget.id}
+    `);
+  }
+
+  return {
+    ok: true,
+    program,
+    amount,
+    idempotencyKey,
+    ledgerEntryId: entryRow?.id ?? null,
+    alreadyDone: false,
   };
 }
 

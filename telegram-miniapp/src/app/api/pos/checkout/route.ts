@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { restaurantDb } from '@/db/restaurant';
-import { orders, orderItems, tables, tableSessions, payments, branches, restaurants, menuItems } from '@rabbitty/database-restaurant/schema';
+import { orders, orderItems, tables, tableSessions, payments, branches, restaurants, menuItems, cashShifts } from '@rabbitty/database-restaurant/schema';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { checkStockForItems, deductOrderInventory } from '@rabbitty/api/services/inventoryDeduction';
 import { quoteDelivery } from '@rabbitty/api/services/deliveryQuote';
@@ -122,6 +122,19 @@ async function resolveBranchId(branchOrBusinessId: string): Promise<string | nul
 /** Motivo legible si el negocio está cerrado; null si puede recibir pedidos. */
 async function businessClosedReason(branchId: string): Promise<string | null> {
   try {
+    // El horario configurado es una PROMESA al cliente, no un candado para la
+    // operación real. Si la caja está abierta (turno OPEN), el local está
+    // vendiendo ahora mismo: se acepta el pedido aunque el reloj diga cerrado.
+    // Antes, un local que seguía atendiendo después de su hora configurada
+    // rechazaba el pedido de la app con 409 y el Rabbitter se quedaba sin
+    // saber que nunca entró al POS.
+    const [openShift] = await restaurantDb
+      .select({ id: cashShifts.id })
+      .from(cashShifts)
+      .where(and(eq(cashShifts.branchId, branchId), eq(cashShifts.status, 'OPEN')))
+      .limit(1);
+    if (openShift) return null;
+
     const [biz] = await restaurantDb
       .select({ businessId: restaurants.businessId })
       .from(branches)
@@ -245,7 +258,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
     }
     if (!existingOrderId && !tableId && !caller) {
-      return NextResponse.json({ success: false, error: 'Datos inválidos' }, { status: 400 });
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'No pudimos identificarte en la app. Vuelve a abrir Rabbitty e inténtalo de nuevo, o pide desde la mesa escaneando su QR.',
+        },
+        { status: 401 },
+      );
     }
 
     let targetOrderId = existingOrderId;
