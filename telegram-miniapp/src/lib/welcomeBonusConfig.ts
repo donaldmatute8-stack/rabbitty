@@ -474,7 +474,7 @@ export async function claimWelcomeBonusForUser(params: {
       // 5a. Asientos del ledger (la UNIQUE es el candado atómico del claim)
       if (finalAffiliateShare > 0) {
         await tx.insert(ledgerEntries).values({
-          payerSubjectId: targetBusiness.id,
+          payerSubjectId: `biz_${targetBusiness.id}`,
           payeeSubjectId: `usr_${userId}`,
           amount: finalAffiliateShare,
           type: 'EARN',

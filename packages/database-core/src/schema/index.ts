@@ -135,6 +135,14 @@ export const ownedBusinesses = pgTable("ownedBusinesses", {
   sharedCount: integer("sharedCount").default(0).notNull(),
   /** Cuenta de prueba: su capacidad no tiene valor real y debe depurarse. */
   sandbox: boolean("sandbox").default(false).notNull(),
+  /**
+   * Cómo participa del ecosistema (ADR-CORE-012).
+   *  · POS  = usa el sistema del local (POS, caja, KDS, mesas).
+   *  · LITE = solo perfil, respaldo Bunz, ofertas y validación de canjes
+   *           desde el teléfono. Sin POS ni comisión por pedido.
+   * Lo decide God al aprobar el alta; el tenant no lo edita.
+   */
+  participationModel: text("participationModel").default("POS").notNull(),
   ...timestamps,
 });
 

@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 
       await recordLedgerTransaction(
         {
-          payerSubjectId: 'SYSTEM',
+          payerSubjectId: 'sys_treasury',
           payeeSubjectId: `usr_${user.id}`,
           amount: bunzAmount,
           type: 'MINT',

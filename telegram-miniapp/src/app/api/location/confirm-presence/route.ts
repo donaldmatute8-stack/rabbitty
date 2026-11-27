@@ -76,13 +76,13 @@ export async function POST(req: NextRequest) {
         .from(ledgerEntries)
         .where(and(
           eq(ledgerEntries.payeeSubjectId, `usr_${caller.id}`),
-          eq(ledgerEntries.payerSubjectId, biz.id),
+          eq(ledgerEntries.payerSubjectId, `biz_${biz.id}`),
           eq(ledgerEntries.type, 'EARN'),
           eq(ledgerEntries.idempotencyKey, idempotencyKey),
         ));
       const alreadyToday = Number(todayRow?.n ?? 0) > 0;
       const inserted = await db.insert(ledgerEntries).values({
-        payerSubjectId: biz.id,
+        payerSubjectId: `biz_${biz.id}`,
         payeeSubjectId: `usr_${caller.id}`,
         amount: 0,
         currency: 'BUNZ',

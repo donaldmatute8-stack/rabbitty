@@ -18,6 +18,7 @@ interface BusinessProfile {
   creditUsed?: number;
   bunzBalance?: number;
   sandbox?: boolean;
+  participationModel?: 'POS' | 'LITE' | string;
   package?: string;
   startTime?: string;
   endTime?: string;
@@ -318,6 +319,20 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
               Portal de negocio
             </p>
             <h1 className="m-0 mt-1 text-xl font-black">{business?.name || 'Tu negocio'}</h1>
+            <span
+              className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                business?.participationModel === 'LITE'
+                  ? 'border-sky-400/40 bg-sky-400/10 text-sky-200'
+                  : 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+              }`}
+              title={
+                business?.participationModel === 'LITE'
+                  ? 'Negocio Lite: perfil, respaldo Bunz, ofertas y canjes. Sin POS.'
+                  : 'Negocio con sistema del local (POS, caja, KDS).'
+              }
+            >
+              {business?.participationModel === 'LITE' ? 'Negocio Lite' : 'Con POS'}
+            </span>
           </div>
 
           {/* Candado biométrico con halo animado */}

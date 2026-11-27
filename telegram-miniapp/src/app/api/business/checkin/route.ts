@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       .from(ledgerEntries)
       .where(and(
         eq(ledgerEntries.payeeSubjectId, `usr_${caller.id}`),
-        eq(ledgerEntries.payerSubjectId, biz.id),
+        eq(ledgerEntries.payerSubjectId, `biz_${biz.id}`),
         eq(ledgerEntries.type, 'EARN'),
         eq(ledgerEntries.idempotencyKey, `checkin_${biz.id}_${caller.id}_${cdmxDate}`),
       ));
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     // Registro atómico: ledger con clave única diaria + contador de visitas
     const idempotencyKey = `checkin_${biz.id}_${caller.id}_${cdmxDate}`;
     const inserted = await db.insert(ledgerEntries).values({
-      payerSubjectId: biz.id,
+      payerSubjectId: `biz_${biz.id}`,
       payeeSubjectId: `usr_${caller.id}`,
       amount: 0, // check-in no mintea Bunz por sí mismo (el cashback llega con el consumo)
       currency: 'BUNZ',

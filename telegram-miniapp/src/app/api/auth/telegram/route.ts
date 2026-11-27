@@ -204,7 +204,7 @@ export async function POST(req: Request) {
             await recordLedgerTransaction(
               {
                 branchId,
-                payerSubjectId: branchId || 'SYSTEM',
+                payerSubjectId: vault.businessId ? `biz_${vault.businessId}` : 'sys_treasury',
                 payeeSubjectId: `usr_${user.id}`,
                 amount: bunzToAward,
                 type: 'EARN',

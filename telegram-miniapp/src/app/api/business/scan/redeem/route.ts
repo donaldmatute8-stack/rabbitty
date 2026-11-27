@@ -41,6 +41,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
+    // Solo el propio comercio (o un admin) puede validar un canje en su local.
+    // Antes cualquier usuario autenticado podía enviar un businessId ajeno y
+    // consumir la capacidad del negocio sin que nadie lo autorizara.
+    if (business.ownerId && business.ownerId !== user.id && user.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Solo el comercio puede validar este canje.' },
+        { status: 403 },
+      );
+    }
+
     // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
     const idempotencyKey = `rdm_${clientKey || crypto.randomUUID()}`;
     const result = await db.transaction(async (tx) => {
@@ -113,8 +123,9 @@ export async function POST(req: NextRequest) {
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
         {
+          // ADR-008: SPEND va del Rabbiter (usr_) al comercio (biz_).
           payerSubjectId: `usr_${user.id}`,
-          payeeSubjectId: business.id,
+          payeeSubjectId: `biz_${business.id}`,
           amount: bunzCost,
           type: 'SPEND',
           referenceId: appTx.id,

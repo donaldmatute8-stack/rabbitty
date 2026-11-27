@@ -687,7 +687,10 @@ export async function POST(req: Request) {
       });
 
       // 1. Atomic debit from user account with row-lock and authoritative ledger entry
-      const idempotencyKey = `pos_chk_${targetOrderId}_${caller.id}_${bunzRequired}`;
+      // Un solo asiento canónico por movimiento: SPEND usr_ → biz_.
+      // Antes se escribían DOS (usr_ → POS_CHECKOUT y biz_ → usr_), el segundo en
+      // la dirección que el ADR-008 prohíbe porque infla el saldo del pagador.
+      const idempotencyKey = `bunz_stock_${targetOrderId}`;
       await db.transaction(async (tx) => {
         const [lockedUser] = await tx
           .select()
@@ -715,24 +718,8 @@ export async function POST(req: Request) {
           })
           .where(eq(users.id, lockedUser.id));
 
-        // Record authoritative ledger entry (usuario)
-        await recordLedgerTransaction(
-          {
-            payerSubjectId: `usr_${caller.id}`,
-            payeeSubjectId: 'POS_CHECKOUT',
-            amount: bunzRequired,
-            type: 'SPEND',
-            referenceId: targetOrderId,
-            idempotencyKey,
-            sandbox: ledgerSandbox,
-            metadata: {
-              orderId: targetOrderId,
-              tableId,
-              concept: 'Pago de mesa POS con Bunz',
-            },
-          },
-          tx
-        );
+        // Dirección canónica ADR-008: el Rabbiter paga (usr_) y el comercio
+        // recibe la capacidad (biz_). El respaldo del negocio baja abajo.
 
         // P0-4: consumir stock del afiliado (condicional, sin sobregiro)
         const consumed = await tx
@@ -755,16 +742,17 @@ export async function POST(req: Request) {
         await recordLedgerTransaction(
           {
             branchId: paymentBranchId,
-            payerSubjectId: `biz_${businessId}`,
-            payeeSubjectId: `usr_${caller.id}`,
+            payerSubjectId: `usr_${caller.id}`,
+            payeeSubjectId: `biz_${businessId}`,
             amount: bunzRequired,
             type: 'SPEND',
             referenceId: targetOrderId,
-            idempotencyKey: `bunz_stock_${targetOrderId}`,
+            idempotencyKey,
             sandbox: ledgerSandbox,
             metadata: {
               orderId: targetOrderId,
-              concept: 'Consumo de stock Bunz en checkout',
+              tableId,
+              concept: 'BUNZ_REDEMPTION',
             },
           },
           tx
@@ -823,7 +811,7 @@ export async function POST(req: Request) {
             await recordLedgerTransaction(
               {
                 branchId: null,
-                payerSubjectId: 'POS_CHECKOUT',
+                payerSubjectId: `biz_${businessId}`,
                 payeeSubjectId: `usr_${caller.id}`,
                 amount: bunzRequired,
                 type: 'REFUND',

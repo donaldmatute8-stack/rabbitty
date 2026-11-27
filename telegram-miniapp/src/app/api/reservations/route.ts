@@ -123,9 +123,10 @@ export async function POST(req: Request) {
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
         {
-          branchId: business.id,
+          // `branchId` es FK a branches: un businessId aquí rompía el INSERT.
+          branchId: null,
           payerSubjectId: `usr_${user.id}`,
-          payeeSubjectId: business.id,
+          payeeSubjectId: `biz_${business.id}`,
           amount: bunzCost,
           type: "SPEND",
           referenceId: resRow.id,

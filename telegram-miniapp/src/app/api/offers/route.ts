@@ -49,6 +49,7 @@ export async function GET() {
       where: (b, { eq, and, gt }) => and(
         eq(b.status, 'APPROVED'),
         eq(b.acceptsBunz, true),
+        eq(b.sandbox, false),
         gt(b.bunzBalance, 0)
       ),
       orderBy: [desc(ownedBusinesses.bunzBalance)],

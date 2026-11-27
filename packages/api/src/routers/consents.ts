@@ -6,9 +6,12 @@ import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import {
   BUSINESS_DOCS,
   LEGAL_VERSION,
-  REQUIRED_BUSINESS_DOCS,
+  docsFor,
+  requiredDocsFor,
   type BusinessDoc,
+  type ParticipationModel,
 } from "../services/legalVersions";
+import { ownedBusinesses } from "@rabbitty/database-core/schema";
 
 /**
  * ── Aceptación de documentos por parte del AFILIADO ─────────────────────────
@@ -47,13 +50,35 @@ async function resolveBusinessId(
 
 type ConsentRow = { doc: string; version: string };
 
+/** Modelo de participación del negocio (ADR-CORE-012). Sin fila = POS. */
+async function resolveParticipationModel(
+  coreDb: { select: (...args: any[]) => any },
+  businessId: string,
+): Promise<ParticipationModel> {
+  try {
+    const [row] = await coreDb
+      .select({ model: ownedBusinesses.participationModel })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.id, businessId))
+      .limit(1);
+    return row?.model === "LITE" ? "LITE" : "POS";
+  } catch {
+    return "POS";
+  }
+}
+
 export const consentsRouter = router({
   /** ¿Falta aceptar algo? Devuelve la versión vigente y qué documentos aplican. */
   getBusinessAcceptance: adminOnlyProcedure.query(async ({ ctx }) => {
     const branchId = await resolveBranchId(ctx, undefined);
     const businessId = await resolveBusinessId(ctx.restaurantDb, branchId);
+    const model: ParticipationModel = businessId
+      ? await resolveParticipationModel(ctx.coreDb, businessId)
+      : "POS";
 
-    const publishedDocs = BUSINESS_DOCS.filter((d) => d.published);
+    // Un negocio LITE solo acepta los documentos que rigen su relación.
+    const publishedDocs = docsFor(model);
+    const required = requiredDocsFor(model);
 
     if (!businessId) {
       return {
@@ -76,7 +101,7 @@ export const consentsRouter = router({
 
     const list: ConsentRow[] = Array.isArray(rows) ? rows : rows.rows ?? [];
     const acceptedNow = new Set(list.filter((r) => r.version === LEGAL_VERSION).map((r) => r.doc));
-    const pending = REQUIRED_BUSINESS_DOCS.filter((doc) => !acceptedNow.has(doc));
+    const pending = required.filter((doc) => !acceptedNow.has(doc));
 
     return {
       businessId,
@@ -113,8 +138,10 @@ export const consentsRouter = router({
         });
       }
 
+      const model = await resolveParticipationModel(ctx.coreDb, businessId);
+      const required = requiredDocsFor(model);
       const email = ctx.user?.email ?? null;
-      for (const doc of REQUIRED_BUSINESS_DOCS) {
+      for (const doc of required) {
         await ctx.coreDb
           .execute(
             sql`INSERT INTO "business_consents"
@@ -132,7 +159,7 @@ export const consentsRouter = router({
       try {
         await ctx.coreDb.execute(
           sql`INSERT INTO "auditEntries" ("id","userId","action","resource","resourceId","details")
-              VALUES (gen_random_uuid()::text, ${ctx.userId ?? null}, 'BUSINESS_TERMS_ACCEPTED', 'business_consents', ${businessId}, ${JSON.stringify({ version: LEGAL_VERSION, docs: REQUIRED_BUSINESS_DOCS })})`,
+              VALUES (gen_random_uuid()::text, ${ctx.userId ?? null}, 'BUSINESS_TERMS_ACCEPTED', 'business_consents', ${businessId}, ${JSON.stringify({ version: LEGAL_VERSION, docs: required, model })})`,
         );
       } catch {
         /* la auditoría es best-effort: no debe romper la aceptación */
@@ -141,7 +168,7 @@ export const consentsRouter = router({
       // Comprobante por correo: prueba de quién aceptó qué, y aviso al negocio.
       // Best-effort: si el correo falla, la aceptación ya quedó registrada.
       if (email) {
-        const docsHtml = BUSINESS_DOCS.filter((d) => d.published)
+        const docsHtml = docsFor(model)
           .map((d) => `· ${d.label}`)
           .join("<br/>");
         const fecha = new Intl.DateTimeFormat("es-MX", {
@@ -175,7 +202,7 @@ export const consentsRouter = router({
           .catch(() => {});
       }
 
-      return { success: true, version: LEGAL_VERSION, docs: REQUIRED_BUSINESS_DOCS };
+      return { success: true, version: LEGAL_VERSION, docs: required, model };
     }),
 
   /** Historial de aceptaciones (auditoría y soporte). */
