@@ -26,21 +26,26 @@ interface WindowWithPlatform extends Window {
 }
 
 export default function AppOpener() {
-  const [showOpener, setShowOpener] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  // OJO: el estado inicial debe ser idéntico en servidor y cliente. Leer
+  // sessionStorage/Capacitor en el inicializador hacía que el servidor pintara
+  // "nada" y el cliente el overlay → React hydration error #418. La decisión se
+  // toma después de montar.
+  const [showOpener, setShowOpener] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const isNative = !!(window as WindowWithPlatform).Capacitor?.isNativePlatform?.();
-    if (isNative) return false;
+    if (isNative) return;
     try {
       const hasSeen = sessionStorage.getItem('rabbitty_opener_shown');
       if (!hasSeen) {
         sessionStorage.setItem('rabbitty_opener_shown', 'true');
-        return true;
+        setShowOpener(true);
       }
     } catch {
-      return false;
+      /* sin sessionStorage: no mostramos el splash */
     }
-    return false;
-  });
+  }, []);
 
   const [isRemoving, setIsRemoving] = useState(false);
 

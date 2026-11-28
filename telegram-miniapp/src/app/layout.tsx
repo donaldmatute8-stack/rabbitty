@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { WalletProvider } from "@/contexts/WalletContext";
@@ -37,18 +38,10 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning data-scroll-behavior="smooth" >
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        {/* Tema antes del primer paint, sin el warning de React por <script> manual. */}
+        <Script id="rabbitty-theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         {/* Telegram WebApp Script */}
-        <script
-          src="https://telegram.org/js/telegram-web-app.js"
-          async
-        />
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
         {/* Mapa: abrir TLS/DNS antes de que el motor pida tiles (menos latencia) */}
         <link rel="preconnect" href="https://tiles.openfreemap.org" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://tiles.openfreemap.org" />
