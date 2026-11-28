@@ -462,7 +462,9 @@ export default function FeedPage() {
         if (postsRef.current.length === 0) {
           setLoading(true);
         }
-        if (activeTab === "bunz'in" || activeTab === 'Freehands') {
+        // El feed solo lo necesita el mapa. El home usa /api/bunz/discover
+        // (una llamada en vez de dos) y así no duplicamos payload al abrir.
+        if (activeTab === 'Freehands') {
           const res = await fetch('/api/feed');
           if (res.ok) {
             const data = await res.json();
@@ -906,6 +908,7 @@ export default function FeedPage() {
                 userLng={userLng}
                 fallbackBalance={Math.max(0, (user?.totalBunzEarned ?? 0) - (user?.totalBunzSpent ?? 0))}
                 onSummary={setBunzSummary}
+                refreshKey={refreshKey}
               />
             </>
           )}

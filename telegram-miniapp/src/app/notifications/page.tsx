@@ -157,7 +157,7 @@ export default function NotificationsPage() {
   // PATCH { all: true }); el estado local se pinta optimista y el badge
   // (inbox del miniapp / iOS) se alinea con el siguiente cycle del worker.
   const unreadCount = notifications.filter(n => !n.isRead).length;
-  const markAllAsRead = async () => {
+  const markAllAsRead = async (silent = false) => {
     if (unreadCount === 0) return;
     PlatformBridge.hapticFeedback('light');
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
@@ -168,7 +168,7 @@ export default function NotificationsPage() {
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ all: true }),
       }).catch(() => {});
-      showToast('Todas marcadas como leídas', 'success');
+      if (!silent) showToast('Todas marcadas como leídas', 'success');
     } catch {
       /* best-effort: el server toma la fuente del badge al próximo load */
     }
@@ -179,7 +179,7 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (fetching) return;
     if (!notifications.some((n) => !n.isRead)) return;
-    const t = setTimeout(() => { void markAllAsRead(); }, 1200);
+    const t = setTimeout(() => { void markAllAsRead(true); }, 1200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetching, notifications]);

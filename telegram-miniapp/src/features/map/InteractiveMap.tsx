@@ -756,6 +756,11 @@ export default function InteractiveMap({
               onChange={(e) => {
                 setCopilotQuery(e.target.value);
                 setSearchQuery(e.target.value);
+                // Al escribir se busca en TODO el mapa: si Bunzy dejó una
+                // categoría fija, se libera para no esconder resultados.
+                if (e.target.value.trim() && activeCategory !== 'Todos') {
+                  setActiveCategory('Todos');
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && copilotQuery.trim()) {

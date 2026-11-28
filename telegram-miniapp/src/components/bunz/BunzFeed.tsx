@@ -47,9 +47,11 @@ interface Props {
   fallbackBalance?: number;
   /** Resume el feed para mostrarlo dentro del Rabbitty Pass (sin duplicar). */
   onSummary?: (summary: { balance: number; canjearPlaces: number; earnPlaces: number }) => void;
+  /** Se incrementa con el pull-to-refresh del home. */
+  refreshKey?: number;
 }
 
-export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0, onSummary }: Props) {
+export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0, onSummary, refreshKey = 0 }: Props) {
   const [businesses, setBusinesses] = useState<Biz[]>([]);
   const [balance, setBalance] = useState(fallbackBalance);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
