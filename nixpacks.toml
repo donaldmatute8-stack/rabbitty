@@ -1,5 +1,16 @@
 [phases.setup]
-nixPkgs = ["...", "openssl", "postgresql_17"]
+nixPkgs = ["...", "openssl"]
+
+# Cliente PostgreSQL 18 SOLO para los respaldos lógicos.
+# Neon corre 18.7 y pg_dump aborta si es más viejo ("server version mismatch").
+# Se usa un archivo de nixpkgs reciente únicamente en esta fase para no cambiar
+# la versión de Node del resto del build. `pg_dump --version` valida el binario
+# durante el build: si no queda en PATH, el deploy falla antes de romper nada.
+[phases.pgclient]
+dependsOn = ["setup"]
+nixPkgs = ["postgresql_18"]
+nixpkgsArchive = "58d0d3e9d527ca7263be6a45d1f86eacdc700dab"
+cmds = ["pg_dump --version"]
 
 [phases.install]
 cmds = ["pnpm install --no-frozen-lockfile"]
