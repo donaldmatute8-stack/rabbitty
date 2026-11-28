@@ -83,6 +83,12 @@ export function CashShiftModal({
 }) {
   const utils = trpc.useUtils();
   const { data, refetch } = trpc.cashShifts.current.useQuery({}, { enabled: open, refetchInterval: open ? 15000 : false });
+  // Catálogo de cajas: con más de una, el cajero elige en qué gaveta abre.
+  const registersQ = trpc.registers.list.useQuery(undefined, { enabled: open, retry: false });
+  const [selectedRegister, setSelectedRegister] = useState(registerId);
+  useEffect(() => {
+    if (open) setSelectedRegister(registerId);
+  }, [registerId, open]);
 
   const [mode, setMode] = useState<Mode>("home");
   const [pin, setPin] = useState("");
@@ -335,11 +341,29 @@ export function CashShiftModal({
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              openMut.mutate({ pin, openingFloat: num, registerId });
+              openMut.mutate({ pin, openingFloat: num, registerId: selectedRegister });
             }}
           >
+            {(registersQ.data?.length ?? 0) > 1 ? (
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase tracking-wider text-gray-500">Caja</span>
+                <select
+                  value={selectedRegister}
+                  onChange={(e) => setSelectedRegister(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-black/60 px-3 py-2 text-sm text-white"
+                >
+                  {(registersQ.data ?? [])
+                    .filter((r) => r.isActive)
+                    .map((r) => (
+                      <option key={r.id} value={r.code}>
+                        {r.name} · {r.code}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
             <p className="text-xs text-gray-400">
-              Caja <span className="font-black text-cyan-300">{registerId}</span> · Ingresa tu PIN y el efectivo con el que inicia la gaveta (fondo de cambio).
+              Caja <span className="font-black text-cyan-300">{selectedRegister}</span> · Ingresa tu PIN y el efectivo con el que inicia la gaveta (fondo de cambio).
             </p>
             <PinField id="cash-open-pin" label="Tu PIN de cajero" value={pin} onChange={setPin} autoFocus />
             <MoneyField id="cash-open-float" label="Fondo inicial ($)" value={amount} onChange={setAmount} />

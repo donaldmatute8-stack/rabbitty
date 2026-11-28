@@ -355,6 +355,12 @@ export const posTerminalsRouter = router({
       deviceKey: z.string().min(32).max(200),
       platform: z.string().max(30).optional(),
       hours: z.number().int().min(1).max(24 * 30).optional(),
+      /** ¿Qué es este dispositivo? (ADR-014) */
+      kind: z.enum(["CASHIER", "COMANDERO", "KDS"]).optional(),
+      /** Código de caja del catálogo `registers` (CASHIER). */
+      registerId: z.string().trim().min(1).max(12).optional(),
+      /** Estación fija (KDS / comandas). */
+      stationId: z.string().min(1).max(64).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const scope = await resolveScope(ctx);
@@ -377,6 +383,9 @@ export const posTerminalsRouter = router({
             branchId: scope.branchId,
             businessId: scope.businessId ?? undefined,
             platform: input.platform ?? null,
+            ...(input.kind ? { kind: input.kind } : {}),
+            ...(input.registerId ? { registerId: input.registerId.toUpperCase() } : {}),
+            ...(input.stationId !== undefined ? { stationId: input.stationId } : {}),
             status: "ACTIVE",
             expiresAt,
             revokedAt: null,
@@ -395,6 +404,9 @@ export const posTerminalsRouter = router({
             branchId: scope.branchId,
             businessId: scope.businessId ?? null,
             platform: input.platform ?? null,
+            ...(input.kind ? { kind: input.kind } : {}),
+            ...(input.registerId ? { registerId: input.registerId.toUpperCase() } : {}),
+            ...(input.stationId !== undefined ? { stationId: input.stationId } : {}),
             deviceKeyHash,
             status: "ACTIVE",
             authorizedBy: ctx.userId ?? null,

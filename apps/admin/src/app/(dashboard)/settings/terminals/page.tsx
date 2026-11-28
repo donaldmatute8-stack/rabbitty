@@ -24,6 +24,7 @@ import {
   KeyRound,
   Loader2,
   MonitorSmartphone,
+  Store,
   RefreshCw,
   ShieldOff,
   UserRound,
@@ -45,6 +46,8 @@ function statusBadge(status: string, expired: boolean) {
 
 export default function PosTerminalsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [newCode, setNewCode] = useState("");
+  const [newName, setNewName] = useState("");
 
   const feature = trpc.posTerminals.featureEnabled.useQuery(undefined, { retry: false });
   const overview = trpc.posTerminals.overview.useQuery(undefined, { retry: false });
@@ -90,6 +93,21 @@ export default function PosTerminalsPage() {
     onSettled: () => setBusyId(null),
   });
 
+  const registersList = trpc.registers.list.useQuery(undefined, { retry: false });
+  const createRegister = trpc.registers.create.useMutation({
+    onSuccess: () => {
+      toast.success("Caja creada");
+      setNewCode("");
+      setNewName("");
+      utils.registers.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateRegister = trpc.registers.update.useMutation({
+    onSuccess: () => utils.registers.list.invalidate(),
+    onError: (e) => toast.error(e.message),
+  });
+
   const history = trpc.posTerminals.shiftHistory.useInfiniteQuery(
     { limit: 20 },
     { getNextPageParam: (last) => last.nextCursor ?? undefined, retry: false },
@@ -121,6 +139,74 @@ export default function PosTerminalsPage() {
           </Button>
         </div>
       </div>
+
+      {/* ── Cajas: catálogo por sucursal (turno y terminal se atan a una) ── */}
+      <Card className="p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Store className="h-4 w-4 text-pink-500" />
+          <p className="m-0 text-sm font-black">Cajas de la sucursal</p>
+          <Badge variant="default">{(registersList.data ?? []).length}</Badge>
+          <span className="text-[11px] text-gray-500">
+            Cada caja abre su propio turno. Una terminal de caja se asigna a una sola.
+          </span>
+        </div>
+
+        <div className="space-y-1.5">
+          {(registersList.data ?? []).map((r) => (
+            <div
+              key={r.id}
+              className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="m-0 truncate text-[12.5px] font-black text-white">
+                  {r.name} <span className="text-gray-500">· {r.code}</span>
+                </p>
+                {r.location ? (
+                  <p className="m-0 truncate text-[10.5px] text-gray-500">{r.location}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => updateRegister.mutate({ id: r.id, isActive: !r.isActive })}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                  r.isActive
+                    ? "bg-emerald-500/15 text-emerald-300"
+                    : "bg-white/5 text-gray-400"
+                }`}
+              >
+                {r.isActive ? "Activa" : "Inactiva"}
+              </button>
+            </div>
+          ))}
+          {(registersList.data ?? []).length === 0 && (
+            <p className="m-0 text-[11.5px] text-gray-500">
+              Aún no hay cajas. Crea la primera (por ejemplo, Caja 2).
+            </p>
+          )}
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[110px_1fr_auto]">
+          <input
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 12))}
+            placeholder="C2"
+            className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-pink-500"
+          />
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value.slice(0, 60))}
+            placeholder="Caja 2 · barra"
+            className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-pink-500"
+          />
+          <Button
+            variant="secondary"
+            disabled={newCode.trim().length < 1 || newName.trim().length < 2 || createRegister.isPending}
+            onClick={() => createRegister.mutate({ code: newCode.trim(), name: newName.trim() })}
+          >
+            {createRegister.isPending ? "Creando…" : "Agregar caja"}
+          </Button>
+        </div>
+      </Card>
 
       <Card className="p-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
