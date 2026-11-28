@@ -71,7 +71,7 @@ const objectUrl = (host: string, bucket: string, key: string) =>
 /** Ejecuta pg_dump y devuelve el buffer completo (las bases son pequeñas: ~20 MB). */
 function pgDump(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const proc = spawn("pg_dump", ["-Fc", "--no-owner", "--no-privileges", url], {
+    const proc = spawn("pg_dump", ["-Fc", "--no-owner", "--no-privileges", "--schema=public", url], {
       env: { ...process.env, PGSSLMODE: url.includes("localhost") ? "disable" : "require" },
     });
 
