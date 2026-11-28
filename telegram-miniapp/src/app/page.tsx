@@ -175,7 +175,9 @@ export default function FeedPage() {
       const headers = await PlatformBridge.getAuthHeaders();
       return fetch(url, { headers }).then((res) => res.json());
     },
-    { refreshInterval: 12000, revalidateOnFocus: true }
+    // 30 s alcanza para un badge que no es chat; antes eran 5 llamadas por
+    // minuto y por usuario activo solo para el contador.
+    { refreshInterval: 30000, revalidateOnFocus: true, dedupingInterval: 5000 }
   );
   const unreadNotifCount = notifData?.unreadCount || 0;
 
