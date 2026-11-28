@@ -160,6 +160,9 @@ export default function PosTerminalsPage() {
               <div className="min-w-0">
                 <p className="m-0 truncate text-[12.5px] font-black text-white">
                   {r.name} <span className="text-gray-500">· {r.code}</span>
+                  <span className="ml-1.5 text-[10px] font-bold text-gray-500">
+                    {terminals.filter((t) => ((t as { registerId?: string }).registerId ?? "MAIN") === r.code).length} terminal(es)
+                  </span>
                 </p>
                 {r.location ? (
                   <p className="m-0 truncate text-[10.5px] text-gray-500">{r.location}</p>
@@ -390,18 +393,32 @@ export default function PosTerminalsPage() {
                   <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
                     Caja / gaveta
                   </label>
-                  <div className="mt-1 flex gap-2">
-                    <input
-                      defaultValue={(t as { registerId?: string }).registerId ?? "MAIN"}
-                      placeholder="MAIN"
-                      maxLength={24}
-                      onBlur={(e) => {
-                        const next = e.target.value.trim().toUpperCase() || "MAIN";
-                        const current = (t as { registerId?: string }).registerId ?? "MAIN";
-                        if (next !== current) setRegister.mutate({ terminalId: t.id, registerId: next });
-                      }}
-                      className="w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white outline-none"
-                    />
+                  <div className="mt-1">
+                    {(() => {
+                      const current = (t as { registerId?: string }).registerId ?? "MAIN";
+                      const list = registersList.data ?? [];
+                      return (
+                        <select
+                          value={current}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            if (next !== current) setRegister.mutate({ terminalId: t.id, registerId: next });
+                          }}
+                          className="w-full rounded-lg border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-white outline-none"
+                        >
+                          {list
+                            .filter((r) => r.isActive)
+                            .map((r) => (
+                              <option key={r.id} value={r.code}>
+                                {r.name} · {r.code}
+                              </option>
+                            ))}
+                          {!list.some((r) => r.code === current) && (
+                            <option value={current}>{current} (sin catálogo)</option>
+                          )}
+                        </select>
+                      );
+                    })()}
                   </div>
                   <p className="m-0 mt-1 text-[10px] text-gray-500">
                     Varias cajas por sucursal: la terminal abre el turno en esta gaveta.

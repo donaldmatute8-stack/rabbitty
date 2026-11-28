@@ -89,6 +89,8 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 export default function FeedPage() {
   const router = useRouter();
+  // Resumen Bunz para el Rabbitty Pass (saldo + lugares para canjear).
+  const [bunzSummary, setBunzSummary] = useState<{ balance: number; canjearPlaces: number; earnPlaces: number } | null>(null);
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -849,7 +851,13 @@ export default function FeedPage() {
             <>
               {/* Digital Pass / Membership Card */}
               <div className="px-1">
-                <MembershipCard user={user} levelName={user?.level?.name || '1'} isDark={isDark} />
+                <MembershipCard
+                  user={user}
+                  levelName={user?.level?.name || '1'}
+                  isDark={isDark}
+                  canjearPlaces={bunzSummary?.canjearPlaces}
+                  earnPlaces={bunzSummary?.earnPlaces}
+                />
               </div>
 
               {/* Rabbitty Vibe Passport Quick Banner — solo si el founder lo
@@ -892,6 +900,7 @@ export default function FeedPage() {
                 userLat={userLat}
                 userLng={userLng}
                 fallbackBalance={Math.max(0, (user?.totalBunzEarned ?? 0) - (user?.totalBunzSpent ?? 0))}
+                onSummary={setBunzSummary}
               />
             </>
           )}

@@ -642,6 +642,15 @@ export default function PosPage() {
   // ── Fase 2: la terminal opera con su propia sesión y solo ve SU sucursal ──
   // En modo admin se conserva el query de siempre, sin cambios.
   const isTerminalDevice = typeof window !== "undefined" && !!getPosTerminalToken();
+  // Aviso "este dispositivo no es un terminal": se oculta por equipo.
+  const [deviceNudgeDismissed, setDeviceNudgeDismissed] = useState(false);
+  useEffect(() => {
+    try {
+      setDeviceNudgeDismissed(localStorage.getItem("rabbitty_pos_device_nudge") === "1");
+    } catch {
+      /* sin storage */
+    }
+  }, []);
   const { data: posSession } = trpc.posTerminals.sessionContext.useQuery(undefined, {
     retry: false,
   });
@@ -2481,6 +2490,31 @@ export default function PosPage() {
             <LogOut className="h-3.5 w-3.5" />
             Salir a Ventas Reales
           </button>
+        </div>
+      )}
+
+      {/* ── Primer dispositivo vs. terminal (ADR-014) ── */}
+      {!isTerminalDevice && !deviceNudgeDismissed && (
+        <div className="flex items-center justify-between gap-3 border-b border-cyan-500/20 bg-cyan-500/10 px-4 py-1.5 text-[10.5px] font-semibold text-cyan-100">
+          <span className="min-w-0 truncate">
+            Estás en el POS con tu cuenta de administrador. Si este equipo es una <b>caja, KDS o comandero</b>, vincúlalo para que abra directo y no dependa de tu sesión.
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <Link href="/pos/link" className="font-black text-cyan-300 underline">
+              Vincular
+            </Link>
+            <button
+              type="button"
+              aria-label="Ocultar aviso"
+              onClick={() => {
+                setDeviceNudgeDismissed(true);
+                try { localStorage.setItem("rabbitty_pos_device_nudge", "1"); } catch { /* noop */ }
+              }}
+              className="rounded-full px-1.5 text-cyan-300/70 hover:text-white"
+            >
+              ×
+            </button>
+          </span>
         </div>
       )}
 

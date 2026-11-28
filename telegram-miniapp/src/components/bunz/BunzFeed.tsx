@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Wallet, Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import FeedCard from '@/components/ui/FeedCard';
 import { SkeletonCard } from '@/components/ui/Skeleton';
@@ -42,9 +42,11 @@ interface Props {
   userLat?: number | null;
   userLng?: number | null;
   fallbackBalance?: number;
+  /** Resume el feed para mostrarlo dentro del Rabbitty Pass (sin duplicar). */
+  onSummary?: (summary: { balance: number; canjearPlaces: number; earnPlaces: number }) => void;
 }
 
-export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0 }: Props) {
+export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0, onSummary }: Props) {
   const [businesses, setBusinesses] = useState<Biz[]>([]);
   const [balance, setBalance] = useState(fallbackBalance);
   const [loading, setLoading] = useState(true);
@@ -94,27 +96,13 @@ export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0
   const canjearCount = businesses.filter((b) => b.spend?.affordable && b.spend.canjesDisponibles > 0).length;
   const earnCount = businesses.filter((b) => b.bunz > 0).length;
 
+  useEffect(() => {
+    if (!onSummary) return;
+    onSummary({ balance, canjearPlaces: canjearCount, earnPlaces: earnCount });
+  }, [onSummary, balance, canjearCount, earnCount]);
+
   return (
     <div>
-      {/* Cinta de billetera: contexto, no control */}
-      <div
-        className="mb-3 flex items-center gap-2 rounded-2xl px-3 py-2.5"
-        style={{
-          background: isDark ? 'rgba(233,30,99,0.10)' : 'rgba(233,30,99,0.07)',
-          border: '1px solid rgba(233,30,99,0.22)',
-        }}
-      >
-        <Wallet size={15} className="shrink-0 text-[#E91E63]" />
-        <p className="m-0 text-[11.5px] font-bold leading-snug" style={{ color: 'var(--text-secondary)' }}>
-          <span className="font-black" style={{ color: 'var(--text-primary)' }}>
-            {Number(balance).toLocaleString('es-MX')} Bunz
-          </span>
-          {canjearCount > 0
-            ? ` · puedes canjear en ${canjearCount} ${canjearCount === 1 ? 'lugar' : 'lugares'}`
-            : ` · gana tus primeros en ${earnCount} ${earnCount === 1 ? 'lugar' : 'lugares'}`}
-        </p>
-      </div>
-
       {/* Buscador: único control */}
       <div className="relative mb-4">
         <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
