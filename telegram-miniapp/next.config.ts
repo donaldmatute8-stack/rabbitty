@@ -49,7 +49,9 @@ const nextConfig: NextConfig = {
               "worker-src 'self' blob:",
               "child-src 'self' blob:",
               "connect-src 'self' https: wss:",
-              "frame-src 'self' https://telegram.org https://js.stripe.com https://*.stripe.com",
+              // Landings de tenant (626cafe.rabbitty.me, etc.) se muestran en el
+              // navegador in-app: sin esto el iframe queda en blanco por CSP.
+              "frame-src 'self' https://telegram.org https://js.stripe.com https://*.stripe.com https://rabbitty.me https://*.rabbitty.me",
               "manifest-src 'self'",
             ].join("; "),
           },

@@ -219,6 +219,7 @@ function AffiliateProfileContent() {
   // Modals
   const [showMapSelector, setShowMapSelector] = useState(false);
   const [showInAppBrowser, setShowInAppBrowser] = useState(false);
+  const [webLoading, setWebLoading] = useState(true);
   const [showMessageSelector, setShowMessageSelector] = useState(false);
   const [showMoodCheckIn, setShowMoodCheckIn] = useState(false);
   const [checkingInPresence, setCheckingInPresence] = useState(false);
@@ -1259,7 +1260,7 @@ function AffiliateProfileContent() {
                       </div>
                     </div>
                     <button
-                      onClick={() => setShowInAppBrowser(true)}
+                      onClick={() => { setWebLoading(true); setShowInAppBrowser(true); }}
                       className="px-3.5 py-1.5 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/15"
                     >
                       Visitar
@@ -1838,11 +1839,20 @@ function AffiliateProfileContent() {
               Abrir en Navegador
             </button>
           </div>
-          <iframe
-            src={formattedWebUrl}
-            className="w-full flex-1 border-none bg-white"
-            title={`Web de ${affiliate.name}`}
-          />
+          <div className="relative flex-1">
+            {webLoading && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bg-primary)]">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-[#E91E63]" />
+                <p className="m-0 text-[11px] font-bold text-white/50">Cargando el sitio…</p>
+              </div>
+            )}
+            <iframe
+              src={formattedWebUrl}
+              onLoad={() => setWebLoading(false)}
+              className="h-full w-full border-none bg-white"
+              title={`Web de ${affiliate.name}`}
+            />
+          </div>
         </div>
       )}
 
