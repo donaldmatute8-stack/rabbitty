@@ -7,6 +7,7 @@ import { sendEcosystemNotification } from "@/lib/push/notify";
 import crypto from "crypto";
 import { resolveLoyaltyBonus } from "@/lib/membershipLoyalty";
 import { restaurantDb } from "@/db/restaurant";
+import { resolveLedgerSandbox } from "@/lib/ledgerSandbox";
 import { checkOperation } from "@rabbitty/api/services/bunzControls";
 import {
   bunzControlState,
@@ -292,6 +293,12 @@ export async function POST(request: Request) {
         remainingMint -= payoff;
       }
 
+      // Asiento de prueba (orden isTest o negocio sandbox) NO entra al ancla.
+      const ledgerSandbox = await resolveLedgerSandbox(restaurantDb, {
+        orderId: order_id || null,
+        businessId: effectiveBusinessId || null,
+      });
+
       // Atomic SQL transaction with pessimistic row lock and authoritative Ledger entry
       await db.transaction(async (tx) => {
         const [lockedUser] = await tx
@@ -349,6 +356,7 @@ export async function POST(request: Request) {
             type: 'EARN',
             referenceId: order_id || txId,
             idempotencyKey,
+            sandbox: ledgerSandbox,
             metadata: {
               orderId: order_id,
               amountUsd: amount_usd,

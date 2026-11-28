@@ -6,6 +6,7 @@ import { orders, restaurants, branches } from "@rabbitty/database-restaurant/sch
 import { eq, and, desc, gt, sql, gte } from "drizzle-orm";;
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 import { recordLedgerTransaction, findLedgerEntry } from "@/lib/ledgerHelper";
+import { resolveLedgerSandbox } from "@/lib/ledgerSandbox";
 import { sendEcosystemNotification } from "@/lib/push/notify";
 import { checkRateLimit } from "@/lib/rateLimit";
 import crypto from "crypto";
@@ -312,6 +313,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El importe del ticket no genera Bunz suficientes." }, { status: 400 });
     }
 
+    // Asiento de prueba (orden isTest o negocio sandbox) NO entra al ancla.
+    const ledgerSandbox = await resolveLedgerSandbox(restaurantDb, {
+      orderId,
+      businessId: businessId || null,
+    });
+
     // 6. Transacción atómica en coreDb: Deducción de inventario de Bóveda y acreditación a usuario
     try {
     await db.transaction(async (tx) => {
@@ -373,12 +380,15 @@ export async function POST(req: NextRequest) {
       await recordLedgerTransaction(
         {
           branchId: order.branchId,
-          payerSubjectId: businessId || "POS_CLAIM",
+          // Sujeto canónico: sin negocio no se puede escribir un UUID desnudo ni
+          // "POS_CLAIM" (viola la restricción del ledger).
+          payerSubjectId: businessId ? `biz_${businessId}` : "sys_pos_claim",
           payeeSubjectId: `usr_${caller.id}`,
           amount: bunzToMint,
           type: "EARN",
           referenceId: orderId,
           idempotencyKey,
+          sandbox: ledgerSandbox,
           metadata: { orderId, total: order.total, claimedViaTicket: true },
         },
         tx

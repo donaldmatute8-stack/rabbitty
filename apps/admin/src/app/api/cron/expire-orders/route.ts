@@ -18,7 +18,8 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Registro en Railway cron → GET /api/cron/expire-orders (Authorization: Bearer CRON_SECRET).
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get("Authorization") !== `Bearer ${CRON_SECRET}`) {
+  // Sin secreto configurado, "Bearer undefined" no debe pasar.
+  if (!CRON_SECRET || req.headers.get("Authorization") !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -44,7 +45,9 @@ export async function GET(req: NextRequest) {
       .where(
         and(
           inArray(orders.branchId, branchIds.map((b) => b.id)),
-          inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"]),
+          // PENDING_PAYMENT = pedido de la app aún sin pagar. Antes el cron lo
+          // dejaba fuera y, si nadie abría el POS, quedaba vivo para siempre.
+          inArray(orders.status, ["PENDING", "PENDING_PAYMENT", "CASH_PAYMENT_REQUESTED"]),
           lt(orders.createdAt, cutoff),
         )
       )) as unknown as { id: string }[];

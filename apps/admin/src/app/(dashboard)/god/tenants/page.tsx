@@ -11,6 +11,7 @@ interface Tenant {
   category: string | null;
   status: string;
   slug: string | null;
+  participationModel: "POS" | "LITE" | string | null;
   package: string | null;
   creditLimit: number | null;
   creditUsed: number | null;
@@ -42,6 +43,11 @@ export default function GodTenantsPage() {
   const [startingAs, setStartingAs] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState<string | null>(null);
   const [linkModal, setLinkModal] = useState<{ url: string; tenant: string; expiresAt?: string } | null>(null);
+  // Modelo POS/LITE: cambio sensible con confirmación escrita + motivo.
+  const [modelModal, setModelModal] = useState<{ tenant: Tenant; model: "POS" | "LITE" } | null>(null);
+  const [modelReason, setModelReason] = useState("");
+  const [modelConfirm, setModelConfirm] = useState("");
+  const [savingModel, setSavingModel] = useState(false);
 
   const loadTenants = async () => {
     setLoadError(null);
@@ -177,6 +183,40 @@ export default function GodTenantsPage() {
     }
   };
 
+  const saveParticipationModel = async () => {
+    if (!modelModal) return;
+    setSavingModel(true);
+    try {
+      const r = await fetch("/api/trpc/god.setBusinessParticipationModel?batch=1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          "0": {
+            json: {
+              businessId: modelModal.tenant.id,
+              model: modelModal.model,
+              confirmation: modelConfirm,
+              reason: modelReason,
+            },
+          },
+        }),
+      });
+      const data = await r.json();
+      if (data?.[0]?.error) {
+        throw new Error(data[0].error?.json?.message || data[0].error?.message || "No se pudo cambiar el modelo");
+      }
+      toast.success(`${modelModal.tenant.name} ahora opera en modo ${modelModal.model}`);
+      setModelModal(null);
+      setModelReason("");
+      setModelConfirm("");
+      await loadTenants();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al cambiar el modelo");
+    } finally {
+      setSavingModel(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050508] p-6 lg:p-10">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-6xl mx-auto space-y-6">
@@ -303,6 +343,14 @@ export default function GodTenantsPage() {
                   {t.slug?.startsWith("test-") && (
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-cyan-500/15 text-cyan-400 border border-cyan-500/25">Prueba</span>
                   )}
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-[9px] font-black uppercase border",
+                    t.participationModel === "LITE"
+                      ? "bg-sky-500/15 text-sky-300 border-sky-500/25"
+                      : "bg-white/5 text-gray-400 border-white/10"
+                  )}>
+                    {t.participationModel === "LITE" ? "LITE" : "POS"}
+                  </span>
                 </div>
                 <p className="text-[10px] text-gray-500 mt-1">
                   {t.category ?? "—"} · {t.ownerName ?? "sin owner"} · {t.restaurantName ?? "sin restaurante"} · {t.branchName ?? "sin sucursal"} ({t.branchCount})
@@ -310,6 +358,19 @@ export default function GodTenantsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    setModelModal({
+                      tenant: t,
+                      model: t.participationModel === "LITE" ? "POS" : "LITE",
+                    });
+                    setModelReason("");
+                    setModelConfirm("");
+                  }}
+                  className="rounded-xl px-4 py-2.5 text-xs font-black cursor-pointer border border-sky-500/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20 transition-all"
+                >
+                  Modelo: {t.participationModel === "LITE" ? "LITE" : "POS"}
+                </Button>
                 <Button
                   onClick={() => void createReonboardingLink(t)}
                   disabled={generatingLink !== null}
@@ -409,6 +470,87 @@ export default function GodTenantsPage() {
           </div>
         </div>
       )}
+
+      {modelModal && (() => {
+        const expected = modelModal.model === "LITE" ? "CAMBIAR A LITE" : "CAMBIAR A POS";
+        const canSave = !savingModel
+          && modelReason.trim().length >= 10
+          && modelConfirm.trim().toUpperCase() === expected;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <Card className="w-full max-w-md rounded-3xl border border-sky-500/30 bg-[#08131f] p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">
+                    Modelo de operación
+                  </p>
+                  <h3 className="m-0 mt-1 text-lg font-black text-white">
+                    {modelModal.tenant.name}
+                  </h3>
+                  <p className="m-0 mt-1 text-[11px] text-white/50">
+                    POS usa caja, mesas y KDS. LITE solo perfil, Bunz, ofertas y canjes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setModelModal(null)}
+                  className="rounded-full p-1.5 text-white/50 hover:bg-white/10 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <label className="mt-4 block text-[10px] font-black uppercase tracking-wider text-gray-400">
+                Nuevo modelo
+              </label>
+              <select
+                value={modelModal.model}
+                onChange={(e) => setModelModal({ ...modelModal, model: e.target.value as "POS" | "LITE" })}
+                className="mt-1 w-full rounded-xl border border-white/10 bg-black/50 px-3 py-2.5 text-sm font-bold text-white"
+              >
+                <option value="POS">POS · caja, mesas y KDS</option>
+                <option value="LITE">LITE · sin POS, solo Bunz y canjes</option>
+              </select>
+
+              <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-gray-400">
+                Motivo (queda en auditoría)
+              </label>
+              <Input
+                value={modelReason}
+                onChange={(e) => setModelReason(e.target.value)}
+                placeholder="Ej. El comercio no usa caja ni mesas"
+                className="mt-1 bg-black/50 border-white/10 text-white text-xs h-10"
+              />
+
+              <label className="mt-3 block text-[10px] font-black uppercase tracking-wider text-gray-400">
+                Escribe <span className="text-sky-300">{expected}</span> para confirmar
+              </label>
+              <Input
+                value={modelConfirm}
+                onChange={(e) => setModelConfirm(e.target.value)}
+                placeholder={expected}
+                className="mt-1 bg-black/50 border-white/10 text-white text-xs h-10"
+              />
+
+              <div className="mt-4 flex gap-2">
+                <Button
+                  onClick={() => void saveParticipationModel()}
+                  disabled={!canSave}
+                  className="flex-1 rounded-xl bg-sky-600 hover:bg-sky-500 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
+                >
+                  {savingModel ? <RefreshCw className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                  Cambiar a {modelModal.model}
+                </Button>
+                <Button
+                  onClick={() => setModelModal(null)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-black text-white/70"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }

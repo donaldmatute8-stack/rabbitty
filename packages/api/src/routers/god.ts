@@ -42,6 +42,7 @@ import {
   bunzRedemptionAttempts,
   bunzControlState,
   bunzReconciliationRuns,
+  cashShifts,
 } from "@rabbitty/database-restaurant/schema";
 // Campañas viven en coreDb
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
@@ -63,7 +64,7 @@ import {
 } from "../services/bunzControls";
 import { runReconciliation } from "../services/bunzReconciliation";
 import { runValidationCapture } from "../services/validationCapture";
-import { getFundBalance } from "../services/growthFund";
+import { getFundBalance, fundCoop, fundMatch, monthPeriod, coopAmount, matchAmount, getCoopPreview, getMatchPreview } from "../services/growthFund";
 import { logAudit } from "../middleware/auditLog";
 
 /** Desenrolla result de drizzle raw SQL (rows array en pg driver). */
@@ -83,6 +84,102 @@ async function sandboxUserIds(db: any, businessId: string): Promise<string[]> {
   `);
   const rows = (res as { rows?: Array<{ userId?: string }> })?.rows ?? (Array.isArray(res) ? res : []);
   return rows.map((r) => String(r.userId || "")).filter(Boolean);
+}
+
+/**
+ * Ejecuta el fondeo co-op + match del periodo en una sola transacción.
+ * Lo comparten el interruptor único (activación) y el botón "Fondear ahora":
+ * no hay dos caminos distintos para la misma acción.
+ */
+async function runCoopMatchFunding(
+  ctx: any,
+  opts: { pct?: number; matchRequested?: number | null; businessIds?: string[]; force?: boolean } = {},
+) {
+  const period = monthPeriod();
+  const pct = opts.pct ?? 0.1;
+
+  const accounts = await ctx.coreDb
+    .select({ businessId: merchantCapacityAccounts.affiliateId })
+    .from(merchantCapacityAccounts)
+    .where(
+      opts.businessIds?.length
+        ? inArray(merchantCapacityAccounts.affiliateId, opts.businessIds)
+        : eq(merchantCapacityAccounts.status, "ACTIVE"),
+    );
+
+  const balanceBefore = await getFundBalance(ctx.restaurantDb);
+  const [pending] = await ctx.coreDb
+    .select({ amount: sql<number>`coalesce(sum("rewardAmount"), 0)::int` })
+    .from(referrals)
+    .where(eq(referrals.status, "PENDING"));
+  const target = Math.max(Number(pending?.amount ?? 0), 50);
+
+  if (balanceBefore.balance >= target && !opts.force) {
+    return {
+      skipped: true as const,
+      reason: "ALREADY_FUNDED" as const,
+      periodStart: period.start,
+      balanceBefore: balanceBefore.balance,
+      balanceAfter: balanceBefore.balance,
+      target,
+      coop: [] as any[],
+      coopTotal: 0,
+      match: null as any,
+      matchTotal: 0,
+      mintedTotal: 0,
+    };
+  }
+
+  const results = await ctx.restaurantDb.transaction(async (tx: any) => {
+    // Serializa fondeos concurrentes para no sobregirar el fondo.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('sys_growth_fund'))`);
+
+    const coop: Array<{ businessId: string; ok: boolean; amount: number; reason?: string; alreadyDone?: boolean }> = [];
+    for (const account of accounts) {
+      const res = await fundCoop(tx, {
+        businessId: account.businessId,
+        pct,
+        periodStart: period.start,
+        periodEnd: period.end,
+      });
+      coop.push({
+        businessId: res.businessId,
+        ok: res.ok,
+        amount: res.amount,
+        reason: res.reason,
+        alreadyDone: res.alreadyDone,
+      });
+    }
+
+    const match = await fundMatch(tx, {
+      program: "madriguera",
+      periodStart: period.start,
+      requested: opts.matchRequested ?? null,
+    });
+
+    return { coop, match };
+  });
+
+  const balanceAfter = await getFundBalance(ctx.restaurantDb);
+  const coopTotal = results.coop.reduce(
+    (acc: number, c: { ok: boolean; amount: number; alreadyDone?: boolean }) =>
+      acc + (c.ok && !c.alreadyDone ? c.amount : 0),
+    0,
+  );
+  const matchTotal = results.match && results.match.ok && !results.match.alreadyDone ? results.match.amount : 0;
+
+  return {
+    skipped: false as const,
+    periodStart: period.start,
+    balanceBefore: balanceBefore.balance,
+    balanceAfter: balanceAfter.balance,
+    target,
+    coop: results.coop,
+    coopTotal,
+    match: results.match,
+    matchTotal,
+    mintedTotal: coopTotal + matchTotal,
+  };
 }
 
 /**
@@ -119,6 +216,7 @@ export const godRouter = router({
         creditLimit: ownedBusinesses.creditLimit,
         creditUsed: ownedBusinesses.creditUsed,
         bunzBalance: ownedBusinesses.bunzBalance,
+        participationModel: ownedBusinesses.participationModel,
         createdAt: ownedBusinesses.createdAt,
         ownerName: users.firstName,
         ownerUsername: users.username,
@@ -157,6 +255,84 @@ export const godRouter = router({
       };
     });
   }),
+
+  /**
+   * ── Modelo de participación: POS o LITE (solo God) ────────────────────────
+   *
+   * Antes el modelo solo se podía fijar directo en la base: no había forma de
+   * dar de alta un negocio Lite. Mismo candado que el resto de acciones
+   * sensibles: allowlist God + 2FA + confirmación escrita + motivo auditado.
+   * No se puede pasar a LITE con una caja abierta: el POS se bloquearía con el
+   * turno a medias.
+   */
+  setBusinessParticipationModel: godAdminProcedure
+    .input(
+      z.object({
+        businessId: z.string().min(1),
+        model: z.enum(["POS", "LITE"]),
+        confirmation: z.string().min(1),
+        reason: z.string().trim().min(10).max(300),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const expected = input.model === "LITE" ? "CAMBIAR A LITE" : "CAMBIAR A POS";
+      if (input.confirmation.trim().toUpperCase() !== expected) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `La confirmación debe ser exactamente: ${expected}`,
+        });
+      }
+
+      const [biz] = await ctx.coreDb
+        .select({
+          id: ownedBusinesses.id,
+          name: ownedBusinesses.name,
+          model: ownedBusinesses.participationModel,
+        })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, input.businessId))
+        .limit(1);
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado." });
+      if (biz.model === input.model) {
+        return { success: true, unchanged: true, model: input.model };
+      }
+
+      if (input.model === "LITE") {
+        const openShift = await ctx.restaurantDb
+          .select({ id: cashShifts.id })
+          .from(cashShifts)
+          .innerJoin(branches, eq(branches.id, cashShifts.branchId))
+          .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+          .where(and(eq(restaurants.businessId, input.businessId), eq(cashShifts.status, "OPEN")))
+          .limit(1);
+        if (openShift.length > 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Este negocio tiene una caja abierta. Cierra el turno antes de cambiar a LITE.",
+          });
+        }
+      }
+
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ participationModel: input.model })
+        .where(eq(ownedBusinesses.id, input.businessId));
+
+      logAudit({
+        userId: ctx.userId ?? null,
+        action: "BUSINESS_PARTICIPATION_MODEL_CHANGED",
+        resource: "ownedBusinesses",
+        resourceId: input.businessId,
+        details: {
+          businessName: biz.name,
+          from: biz.model,
+          to: input.model,
+          reason: input.reason,
+        },
+      });
+
+      return { success: true, unchanged: false, model: input.model };
+    }),
 
   /**
    * ── Comisión de plataforma (solo God) ─────────────────────────────────────
@@ -1542,6 +1718,10 @@ export const godRouter = router({
         identityEmail: z.string().email(),
         confirmation: z.string().min(1),
         reason: z.string().trim().min(10).max(300),
+        /** Mismo interruptor: al activar, fondear co-op + match en la misma acción. */
+        fundCoopMatch: z.boolean().optional(),
+        pct: z.number().min(0.01).max(0.5).optional(),
+        matchRequested: z.number().min(0).max(1_000_000).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1578,6 +1758,24 @@ export const godRouter = router({
           set: { value, updatedAt: new Date() },
         });
 
+      // Un solo interruptor: si se activa con fondeo, se ejecuta en la misma
+      // acción y con la misma confirmación de identidad (no hay dos controles).
+      // El fondeo es best-effort: si falla, la activación queda hecha y se
+      // reporta el error para reintentar desde "Fondear ahora".
+      let funding: Awaited<ReturnType<typeof runCoopMatchFunding>> | null = null;
+      let fundingError: string | null = null;
+      if (input.enabled && input.fundCoopMatch) {
+        try {
+          funding = await runCoopMatchFunding(ctx, {
+            pct: input.pct,
+            matchRequested: input.matchRequested ?? null,
+          });
+        } catch (err) {
+          fundingError = err instanceof Error ? err.message : String(err);
+          console.error("[GROWTH_FUND] fondeo falló al activar:", fundingError);
+        }
+      }
+
       logAudit({
         userId: ctx.userId ?? null,
         action: input.enabled
@@ -1589,10 +1787,208 @@ export const godRouter = router({
           enabled: input.enabled,
           reason: input.reason,
           identityEmail: input.identityEmail,
+          funded: Boolean(funding),
+          fundingError,
+          coopTotal: funding?.coopTotal ?? 0,
+          matchTotal: funding?.matchTotal ?? 0,
+          skipped: funding?.skipped ?? null,
         },
       });
 
-      return { success: true, enabled: input.enabled };
+      if (funding) {
+        logAudit({
+          userId: ctx.userId ?? null,
+          action: "GROWTH_FUND_COOP_MATCH_FUNDED",
+          resource: "ledger_entries",
+          resourceId: `coop-match:${funding.periodStart.toISOString()}`,
+          details: {
+            reason: input.reason,
+            identityEmail: input.identityEmail,
+            pct: input.pct ?? 0.1,
+            skipped: funding.skipped,
+            coopTotal: funding.coopTotal,
+            matchTotal: funding.matchTotal,
+            balanceBefore: funding.balanceBefore,
+            balanceAfter: funding.balanceAfter,
+            coop: funding.coop,
+            match: funding.match,
+          },
+        });
+      }
+
+      return { success: true, enabled: input.enabled, funding, fundingError };
+    }),
+
+  /**
+   * ── Fondeo co-op + match · preview ───────────────────────────────────────
+   * Mismo interruptor que los referidos: una sola activación enciende la
+   * economía del fondo (pago de referidos + fondeo co-op + match). Aquí solo
+   * se lee: cuánto aportaría cada afiliado activo y cuánto match hay.
+   */
+  getGrowthFundFundingPreview: godAdminProcedure.query(async ({ ctx }) => {
+    const [toggle] = await ctx.coreDb
+      .select({ value: systemSettings.value, updatedAt: systemSettings.updatedAt })
+      .from(systemSettings)
+      .where(eq(systemSettings.key, "growth_fund_referral_payouts_enabled"))
+      .limit(1);
+
+    const enabled = toggle?.value === "1";
+    const period = monthPeriod();
+
+    const accounts = await ctx.coreDb
+      .select({
+        businessId: merchantCapacityAccounts.affiliateId,
+        name: ownedBusinesses.name,
+        status: merchantCapacityAccounts.status,
+        promoAuthorized: merchantCapacityAccounts.promoAuthorized,
+        sandbox: merchantCapacityAccounts.sandbox,
+      })
+      .from(merchantCapacityAccounts)
+      .leftJoin(ownedBusinesses, eq(ownedBusinesses.id, merchantCapacityAccounts.affiliateId));
+
+    const fundedRows = sqlRows(
+      await ctx.coreDb.execute(sql`
+        SELECT "source", "subjectId", COALESCE(SUM("amount"), 0)::int AS "amount"
+          FROM "fund_contributions"
+         WHERE "periodStart" = ${period.start}
+         GROUP BY "source", "subjectId"
+      `),
+    ) as Array<{ source: string; subjectId: string; amount: number }>;
+
+    const coopDone = new Map(
+      fundedRows.filter((r) => r.source === "coop").map((r) => [r.subjectId, Number(r.amount)]),
+    );
+    const matchDone = fundedRows
+      .filter((r) => r.source === "match")
+      .reduce((acc, r) => acc + Number(r.amount), 0);
+
+    const coop = accounts.map((account) => {
+      const amount = coopAmount(Number(account.promoAuthorized ?? 0), 0.1);
+      const done = coopDone.get(`biz_${account.businessId}`) ?? 0;
+      return {
+        businessId: account.businessId,
+        name: account.name ?? account.businessId,
+        status: account.status,
+        promoAuthorized: Number(account.promoAuthorized ?? 0),
+        pct: 0.1,
+        amount,
+        alreadyFunded: done,
+        available: account.status === "ACTIVE" && !account.sandbox && amount > 0 && done === 0,
+      };
+    });
+
+    const match = await getMatchPreview(ctx.coreDb, "madriguera", period.start);
+
+    const [pending] = await ctx.coreDb
+      .select({ amount: sql<number>`coalesce(sum("rewardAmount"), 0)::int` })
+      .from(referrals)
+      .where(eq(referrals.status, "PENDING"));
+
+    const balance = await getFundBalance(ctx.restaurantDb);
+    const pendingAmount = Number(pending?.amount ?? 0);
+    // Objetivo mínimo: cubrir los referidos pendientes; si no hay, un bono.
+    const target = Math.max(pendingAmount, 50);
+
+    return {
+      enabled,
+      periodStart: period.start,
+      periodEnd: period.end,
+      fundBalance: balance.balance,
+      fundHealthy: balance.healthy,
+      target,
+      deficit: Math.max(0, target - balance.balance),
+      coop,
+      coopTotal: coop.filter((c) => c.available).reduce((acc, c) => acc + c.amount, 0),
+      match: { ...match, alreadyFunded: matchDone },
+      matchTotal: match.available ? match.amount : 0,
+    };
+  }),
+
+  /**
+   * ── Fondeo co-op + match · ejecución ─────────────────────────────────────
+   * MINT `biz_ → sys_growth_fund` (co-op) y `sys_treasury → sys_growth_fund`
+   * (match). Solo con el interruptor de la economía del fondo encendido y con
+   * identidad God. Idempotente por periodo: repetir no duplica aportes.
+   */
+  fundGrowthCoopMatch: godAdminProcedure
+    .input(
+      z.object({
+        identityEmail: z.string().email(),
+        confirmation: z.string().min(1),
+        reason: z.string().trim().min(10).max(300),
+        pct: z.number().min(0.01).max(0.5).optional(),
+        matchRequested: z.number().min(0).max(1_000_000).nullable().optional(),
+        businessIds: z.array(z.string().min(1)).max(50).optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.confirmation.trim().toUpperCase() !== "FONDAR COOP Y MATCH") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "La confirmación debe ser exactamente: FONDAR COOP Y MATCH",
+        });
+      }
+
+      let email = (ctx.user?.email ?? "").trim().toLowerCase();
+      if (!email && ctx.userId) {
+        const [row] = await ctx.coreDb
+          .select({ email: users.email })
+          .from(users)
+          .where(eq(users.id, ctx.userId))
+          .limit(1);
+        email = (row?.email ?? "").trim().toLowerCase();
+      }
+      if (!email || input.identityEmail.trim().toLowerCase() !== email) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "El correo de identidad no coincide con la sesión God.",
+        });
+      }
+
+      const [toggle] = await ctx.coreDb
+        .select({ value: systemSettings.value })
+        .from(systemSettings)
+        .where(eq(systemSettings.key, "growth_fund_referral_payouts_enabled"))
+        .limit(1);
+
+      if (toggle?.value !== "1") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Activa primero la economía del fondo (referidos + co-op + match). El fondeo no corre con el interruptor apagado.",
+        });
+      }
+
+      const pct = input.pct ?? 0.1;
+      const funding = await runCoopMatchFunding(ctx, {
+        pct,
+        matchRequested: input.matchRequested ?? null,
+        businessIds: input.businessIds,
+        force: input.force,
+      });
+
+      logAudit({
+        userId: ctx.userId ?? null,
+        action: "GROWTH_FUND_COOP_MATCH_FUNDED",
+        resource: "ledger_entries",
+        resourceId: `coop-match:${funding.periodStart.toISOString()}`,
+        details: {
+          reason: input.reason,
+          identityEmail: input.identityEmail,
+          pct,
+          matchRequested: input.matchRequested ?? null,
+          skipped: funding.skipped,
+          coopTotal: funding.coopTotal,
+          matchTotal: funding.matchTotal,
+          balanceBefore: funding.balanceBefore,
+          balanceAfter: funding.balanceAfter,
+          coop: funding.coop,
+          match: funding.match,
+        },
+      });
+
+      return { success: true, ...funding };
     }),
 
   createHatTrick: godAdminProcedure

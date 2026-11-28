@@ -92,9 +92,9 @@ export async function POST(req: Request) {
       // Record in authoritative Ledger
       await recordLedgerTransaction(
         {
-          branchId: business.id,
-          payerSubjectId: business.id,
-          payeeSubjectId: 'TREASURY',
+          branchId: null,
+          payerSubjectId: `biz_${business.id}`,
+          payeeSubjectId: 'sys_treasury',
           amount: feeAmount,
           type: 'BURN',
           referenceId: business.id,

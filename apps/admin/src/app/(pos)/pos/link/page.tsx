@@ -38,6 +38,10 @@ export default function PosLinkPage() {
   const [name, setName] = useState(defaultName);
   const [hours, setHours] = useState(DEFAULT_HOURS);
   const [linked, setLinked] = useState<string | null>(null);
+  // ¿Qué es este dispositivo? (ADR-014) — se decide AQUÍ, no en otra pantalla.
+  const [kind, setKind] = useState<'CASHIER' | 'COMANDERO' | 'KDS'>('CASHIER');
+  const [registerCode, setRegisterCode] = useState('MAIN');
+  const [stationId, setStationId] = useState('');
 
   const { data: feature, isLoading: featureLoading } = trpc.posTerminals.featureEnabled.useQuery(undefined, {
     retry: false,
@@ -45,6 +49,8 @@ export default function PosLinkPage() {
   const { data: profile, isLoading: profileLoading, error: profileError } = trpc.admin.getProfile.useQuery(undefined, {
     retry: false,
   });
+  const { data: registers } = trpc.registers.list.useQuery(undefined, { retry: false });
+  const { data: stations } = trpc.stations.list.useQuery(undefined, { retry: false });
 
   useEffect(() => {
     if (getPosTerminalToken()) {
@@ -100,7 +106,12 @@ export default function PosLinkPage() {
   };
 
   const featureOff = !featureLoading && feature?.enabled !== true;
-  const canActivate = !featureOff && !!deviceKey && name.trim().length >= 2 && !activate.isPending;
+  const canActivate =
+    !featureOff &&
+    !!deviceKey &&
+    name.trim().length >= 2 &&
+    (kind !== 'CASHIER' || !!registerCode) &&
+    !activate.isPending;
 
   return (
     <div className="h-[100dvh] w-screen overflow-y-auto bg-black text-white p-5">
@@ -164,6 +175,86 @@ export default function PosLinkPage() {
                   Sesión de admin detectada ({profile.role}). La terminal quedará atada a tu sucursal actual.
                 </p>
 
+                <div>
+                  <p className="m-0 mb-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                    ¿Qué es este dispositivo?
+                  </p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([
+                      { id: 'CASHIER' as const, label: 'Caja', hint: 'Cobra y cobra turno' },
+                      { id: 'COMANDERO' as const, label: 'Comandero', hint: 'Toma pedidos' },
+                      { id: 'KDS' as const, label: 'KDS', hint: 'Cocina / estación' },
+                    ]).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setKind(opt.id);
+                          if (opt.id === 'CASHIER' && name.startsWith('Caja')) return;
+                          if (opt.id === 'COMANDERO') setName('Comandero');
+                          if (opt.id === 'KDS') setName('KDS');
+                          if (opt.id === 'CASHIER') setName('Caja');
+                        }}
+                        className={`rounded-xl border px-2 py-2 text-left transition-colors ${
+                          kind === opt.id
+                            ? 'border-cyan-400/60 bg-cyan-400/10'
+                            : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <span className="block text-[12px] font-black text-white">{opt.label}</span>
+                        <span className="mt-0.5 block text-[9.5px] leading-tight text-gray-400">{opt.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {kind === 'CASHIER' && (
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Caja
+                    </span>
+                    <select
+                      value={registerCode}
+                      onChange={(e) => setRegisterCode(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white"
+                    >
+                      {(registers && registers.length > 0
+                        ? registers
+                        : [{ id: 'MAIN', code: 'MAIN', name: 'Caja principal', isActive: true }]
+                      )
+                        .filter((r) => r.isActive !== false)
+                        .map((r) => (
+                          <option key={r.id} value={r.code}>
+                            {r.name} · {r.code}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="m-0 mt-1 text-[10px] text-gray-500">
+                      Cada caja abre su propio turno. Si falta una, créala en Configuración → Terminales.
+                    </p>
+                  </label>
+                )}
+
+                {kind === 'KDS' && (
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
+                      Estación
+                    </span>
+                    <select
+                      value={stationId}
+                      onChange={(e) => setStationId(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white"
+                    >
+                      <option value="">Sin estación fija</option>
+                      {(stations ?? []).map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name} · {st.type}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-gray-400">
                     Nombre de la terminal
@@ -193,7 +284,17 @@ export default function PosLinkPage() {
                 </label>
 
                 <Button
-                  onClick={() => activate.mutate({ name: name.trim(), deviceKey, platform: "web", hours })}
+                  onClick={() =>
+                    activate.mutate({
+                      name: name.trim(),
+                      deviceKey,
+                      platform: 'web',
+                      hours,
+                      kind,
+                      ...(kind === 'CASHIER' ? { registerId: registerCode } : {}),
+                      ...(kind === 'KDS' && stationId ? { stationId } : {}),
+                    })
+                  }
                   disabled={!canActivate}
                   className="w-full"
                 >

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2, Zap, Megaphone, ChevronRight } from 'lucide-react';
+import { QrCode, Inbox, Check, X, ArrowLeft, BookOpen, AlertTriangle, BarChart3, Users, Settings2, Zap, Megaphone, ChevronRight, Wallet } from 'lucide-react';
 import RabbittyCode from '@/components/ui/RabbittyCode';
 import QRDiscovery from '@/components/QRDiscovery';
 import { PlatformBridge } from '@/lib/platform';
@@ -18,6 +18,7 @@ interface BusinessProfile {
   creditUsed?: number;
   bunzBalance?: number;
   sandbox?: boolean;
+  participationModel?: 'POS' | 'LITE' | string;
   package?: string;
   startTime?: string;
   endTime?: string;
@@ -318,6 +319,20 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
               Portal de negocio
             </p>
             <h1 className="m-0 mt-1 text-xl font-black">{business?.name || 'Tu negocio'}</h1>
+            <span
+              className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
+                business?.participationModel === 'LITE'
+                  ? 'border-sky-400/40 bg-sky-400/10 text-sky-200'
+                  : 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+              }`}
+              title={
+                business?.participationModel === 'LITE'
+                  ? 'Negocio Lite: perfil, respaldo Bunz, ofertas y canjes. Sin POS.'
+                  : 'Negocio con sistema del local (POS, caja, KDS).'
+              }
+            >
+              {business?.participationModel === 'LITE' ? 'Negocio Lite' : 'Con POS'}
+            </span>
           </div>
 
           {/* Candado biométrico con halo animado */}
@@ -538,6 +553,54 @@ export default function MobileAffiliateDashboard({ business }: MobileAffiliateDa
               </p>
             )}
           </button>
+        )}
+
+        {/* ── Operación Lite: lo único que un negocio sin POS necesita a diario ── */}
+        {business?.participationModel === 'LITE' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="mb-3 overflow-hidden rounded-3xl p-4"
+            style={{
+              background: 'linear-gradient(135deg, rgba(56,189,248,0.14) 0%, rgba(139,92,246,0.12) 100%)',
+              border: '1px solid rgba(56,189,248,0.30)',
+            }}
+          >
+            <p className="m-0 text-[10px] font-black uppercase tracking-[0.18em] text-sky-300">
+              Operación Lite
+            </p>
+            <p className="m-0 mt-1 text-[13px] font-black" style={{ color: 'var(--text-primary)' }}>
+              Das Bunz y validas canjes desde el teléfono. Sin caja ni terminal.
+            </p>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { PlatformBridge.hapticFeedback('medium'); router.push('/business/scan'); }}
+                className="flex items-center gap-2 rounded-2xl bg-sky-500 px-3 py-3 text-left text-gray-950"
+              >
+                <QrCode size={18} />
+                <span className="text-[12px] font-black leading-tight">Dar Bunz<br />a un cliente</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { PlatformBridge.hapticFeedback('light'); setActiveSubTab('ledger'); }}
+                className="flex items-center gap-2 rounded-2xl border border-white/12 bg-white/5 px-3 py-3 text-left"
+              >
+                <Wallet size={18} color="#E91E63" />
+                <span className="text-[12px] font-black leading-tight" style={{ color: 'var(--text-primary)' }}>
+                  Mi respaldo<br />
+                  <span className="font-bold" style={{ color: 'var(--text-muted)' }}>
+                    {Number(business?.bunzBalance || 0).toLocaleString('es-MX')} Bunz
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <p className="m-0 mt-3 text-[10.5px] leading-snug" style={{ color: 'var(--text-muted)' }}>
+              Tu respaldo es lo que puedes honrar cuando un Rabbitter canjea aquí. Si baja,
+              te avisamos antes de pausar tus ofertas.
+            </p>
+          </motion.div>
         )}
 
         {/* Métricas: una sola pieza (no cuatro tarjetas sueltas) */}

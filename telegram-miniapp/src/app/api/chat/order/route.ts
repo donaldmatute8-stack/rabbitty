@@ -6,6 +6,7 @@ import { branches, orders, restaurants } from '@rabbitty/database-restaurant/sch
 import { and, eq, or } from 'drizzle-orm';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { resolveTelegramRecipient, notifyChatRecipient, isBusinessOpen } from '@/lib/chat';
+import { hasOpenCashShiftForBusiness } from '@/lib/orderingStatus';
 import { withOrderCreate } from "@rabbitty/api/services/orderIntegrity";
 
 export async function POST(req: Request) {
@@ -33,14 +34,20 @@ export async function POST(req: Request) {
     if (!business) {
       return NextResponse.json({ error: 'Comercio no encontrado' }, { status: 404 });
     }
-    // Fuera de horario el local no recibe pedidos (el chat normal sigue vivo).
+    // Fuera de horario el local no recibe pedidos (el chat normal sigue vivo),
+    // SALVO que la caja siga abierta: entonces está atendiendo de verdad.
     if (!isBusinessOpen(business)) {
-      return NextResponse.json(
-        {
-          error: `El local está cerrado ahora (${business.startTime}–${business.endTime}). Puedes pedir dentro del horario.`,
-        },
-        { status: 409 },
-      );
+      const stillServing = await hasOpenCashShiftForBusiness(restaurantDb, businessId);
+      if (!stillServing) {
+        console.warn('[CHAT_ORDER_REJECT]', JSON.stringify({ code: 'CLOSED', businessId }));
+        return NextResponse.json(
+          {
+            code: 'CLOSED',
+            error: `El local está cerrado ahora (${business.startTime}–${business.endTime}). Puedes pedir dentro del horario.`,
+          },
+          { status: 409 },
+        );
+      }
     }
 
     let conversation = await db.query.conversations.findFirst({

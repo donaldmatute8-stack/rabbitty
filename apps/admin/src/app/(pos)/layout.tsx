@@ -117,6 +117,13 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     if (onboarding?.pending) router.replace("/onboarding");
   }, [onboarding?.pending, terminalMode, router]);
 
+  // ── Modelo LITE: este negocio no opera POS (ADR-CORE-012) ──
+  const { data: participation } = trpc.settings.getParticipationModel.useQuery(undefined, {
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    enabled: !terminalMode && !!profileQuery.data,
+  });
+
   const isLoading = hasTerminalToken
     ? featureLoading ||
       (terminalMode && (sessionQuery.isLoading || (sessionQuery.error && adminFallbackQuery.isLoading)))
@@ -159,6 +166,81 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   if (isLoading) return <div className="h-[100dvh] w-screen bg-black" />;
+
+  // ── Regla dura (opt-in): sin terminal no se opera el POS ──
+  // Se activa con POS_REQUIRE_TERMINAL=1 (staging). Producción la mantiene
+  // apagada hasta que ninguna caja dependa de la sesión de administrador.
+  if (!terminalMode && !hasTerminalToken && feature?.requiresTerminal === true) {
+    return (
+      <div className="h-[100dvh] w-screen bg-black text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-3">
+          <p className="m-0 text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Dispositivo no vinculado</p>
+          <p className="m-0 text-lg font-black">Este equipo no es una terminal</p>
+          <p className="m-0 text-sm text-gray-300">
+            El POS solo opera en dispositivos vinculados (caja, comandero o KDS). Así cada
+            venta queda atada a su caja y a su turno.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => router.replace("/pos/link")}
+              className="flex-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 px-4 py-2.5 text-xs font-black text-gray-950"
+            >
+              Vincular este dispositivo
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace("/")}
+              className="flex-1 rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2.5 text-xs font-black"
+            >
+              Ir al panel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Negocio LITE: el POS no aplica ──
+  // El bloqueo real está en `posProcedure`; esto solo lo explica y ofrece salida.
+  if (!terminalMode && participation?.model === "LITE") {
+    return (
+      <div className="h-[100dvh] w-screen bg-black text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-3xl border border-sky-500/30 bg-sky-500/10 p-6 space-y-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">
+            Modo Lite
+          </p>
+          <p className="text-lg font-black m-0">
+            {participation.businessName || "Tu negocio"} no opera con POS
+          </p>
+          <p className="text-sm text-gray-300 m-0">
+            En modo Lite participas del ecosistema Bunz sin caja, mesas ni KDS: das Bunz a
+            tus clientes y validas canjes desde el teléfono.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => router.replace("/business")}
+              className="flex-1 rounded-xl bg-sky-500 hover:bg-sky-400 text-gray-950 px-4 py-2.5 text-xs font-black cursor-pointer"
+            >
+              Ir a mi portal
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace("/business/scan")}
+              className="flex-1 rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2.5 text-xs font-black cursor-pointer"
+            >
+              Escanear
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500 m-0">
+            ¿Necesitas POS, caja y KDS? Pídelo a Rabbitty: cambiamos tu modelo sin perder
+            tu historial.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ── Reautorización desde el móvil (Fase 4) ──
   if (canReauth) {

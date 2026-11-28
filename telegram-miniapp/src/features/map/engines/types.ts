@@ -43,6 +43,8 @@ export interface MapEngineOptions {
   /** Toque en el mapa vacío: se cierra la tarjeta del spot. */
   onDeselect?: () => void;
   onReady: () => void;
+  /** Aviso de movimiento programático (fly/fit): la UI muestra "buscando". */
+  onBusy?: (durationMs: number) => void;
 }
 
 export interface MapEngine {

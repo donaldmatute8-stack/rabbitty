@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Store, Users, Settings, ScanLine } from 'lucide-react';
+import { Store, Users, Settings, ScanLine, Ticket } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
 import { PlatformBridge } from '@/lib/platform';
 
@@ -18,6 +18,7 @@ export default function BusinessLayout({ children }: { children: React.ReactNode
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Panel Principal', icon: Store, href: '/business' },
     { id: 'scan', label: 'Escáner (Caja)', icon: ScanLine, href: '/business/scan' },
+    { id: 'offers', label: 'Ofertas · Stock', icon: Ticket, href: '/business/offers' },
     { id: 'clients', label: 'Mis Clientes', icon: Users, href: '/business/clients' },
     { id: 'settings', label: 'Configuración', icon: Settings, href: '/business/settings' },
   ];

@@ -60,7 +60,7 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   const { user, logout } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [walletOpen, setWalletOpen] = useState(true);
+  const [walletOpen, setWalletOpen] = useState(false);
   const [feedbackType, setFeedbackType] = useState<'BUG' | 'FEEDBACK'>('BUG');
   const avatarUrl = useUserAvatar(user, 'E91E63');
 
@@ -191,7 +191,15 @@ export default function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
             <div className="h-px w-full bg-(--border-subtle) opacity-40 my-1" />
 
             {/* Navigation Menu (Group 1: Principal, Group 2: Negocio y Ajustes) */}
-            <div className="flex-1 min-h-0 flex flex-col justify-between px-3 py-3 overflow-y-auto gap-3">
+            <div
+              className="flex-1 min-h-0 flex flex-col gap-3 px-3 py-3 overflow-y-auto overscroll-contain"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                // El safe-area inferior va AQUÍ (no en el aside) para que el
+                // último botón no quede debajo del home indicator.
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 18px)',
+              }}
+            >
               {/* Grupo Principal (tarjeta redondeada con sombra y borde sutil estilo Twitter/iOS) */}
               <div 
                 className="flex flex-col gap-1 p-2 rounded-2xl"

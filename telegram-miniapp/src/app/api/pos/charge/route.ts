@@ -136,7 +136,7 @@ export async function POST(request: Request) {
           // branchId tiene FK a branches — business_id NO es branch; payee atribuye al comercio
           branchId: null,
           payerSubjectId: `usr_${user.id}`,
-          payeeSubjectId: business_id || 'POS',
+          payeeSubjectId: business_id ? `biz_${business_id}` : 'sys_pos',
           amount: bunzRequired,
           type: 'SPEND',
           referenceId: order_id || txId,

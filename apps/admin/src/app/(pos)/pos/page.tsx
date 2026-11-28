@@ -530,6 +530,44 @@ export default function PosPage() {
     () => (activeTabsData?.activeTabs ?? []).filter((t) => t.fromApp).length,
     [activeTabsData],
   );
+
+  /**
+   * Alerta fullscreen: si el POS está en medio de otra operación (cobro, corte,
+   * otra comanda) el botón "Revisar" manda el pedido a la cola en vez de
+   * interrumpir. El pedido ya está en la cola; el aviso solo deja de tapar.
+   */
+  const posBusy = Boolean(
+    stripePayModal ||
+      qrPaymentModal ||
+      sendBillModal ||
+      activeTabsModal ||
+      etaPrompt ||
+      tableModal ||
+      orderZoomModal ||
+      receiptModal ||
+      pausedCartsModal ||
+      recentOrdersModal ||
+      adminPinModal ||
+      showBusinessQrModal,
+  );
+
+  /** Detalle corto de los pedidos pendientes para la alerta fullscreen. */
+  const alertOrders = useMemo(
+    () =>
+      appPendingOrders.slice(0, 3).map((t) => ({
+        orderId: t.orderId,
+        label: t.tableNumber
+          ? `Mesa #${t.tableNumber}`
+          : t.orderType === "TO_GO"
+            ? "Para llevar"
+            : String(t.orderType ?? "Pedido"),
+        total: Number(t.total ?? 0),
+        minutesAgo: t.createdAt
+          ? Math.max(0, Math.round((Date.now() - new Date(t.createdAt).getTime()) / 60000))
+          : 0,
+      })),
+    [appPendingOrders],
+  );
   // B1: la lista que se pinta según la vista elegida dentro de "Operación"
   const visibleTabs = useMemo(() => {
     const all = activeTabsData?.activeTabs ?? [];
@@ -604,6 +642,15 @@ export default function PosPage() {
   // ── Fase 2: la terminal opera con su propia sesión y solo ve SU sucursal ──
   // En modo admin se conserva el query de siempre, sin cambios.
   const isTerminalDevice = typeof window !== "undefined" && !!getPosTerminalToken();
+  // Aviso "este dispositivo no es un terminal": se oculta por equipo.
+  const [deviceNudgeDismissed, setDeviceNudgeDismissed] = useState(false);
+  useEffect(() => {
+    try {
+      setDeviceNudgeDismissed(localStorage.getItem("rabbitty_pos_device_nudge") === "1");
+    } catch {
+      /* sin storage */
+    }
+  }, []);
   const { data: posSession } = trpc.posTerminals.sessionContext.useQuery(undefined, {
     retry: false,
   });
@@ -2446,6 +2493,31 @@ export default function PosPage() {
         </div>
       )}
 
+      {/* ── Primer dispositivo vs. terminal (ADR-014) ── */}
+      {!isTerminalDevice && !deviceNudgeDismissed && (
+        <div className="flex items-center justify-between gap-3 border-b border-cyan-500/20 bg-cyan-500/10 px-4 py-1.5 text-[10.5px] font-semibold text-cyan-100">
+          <span className="min-w-0 truncate">
+            Estás en el POS con tu cuenta de administrador. Si este equipo es una <b>caja, KDS o comandero</b>, vincúlalo para que abra directo y no dependa de tu sesión.
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <Link href="/pos/link" className="font-black text-cyan-300 underline">
+              Vincular
+            </Link>
+            <button
+              type="button"
+              aria-label="Ocultar aviso"
+              onClick={() => {
+                setDeviceNudgeDismissed(true);
+                try { localStorage.setItem("rabbitty_pos_device_nudge", "1"); } catch { /* noop */ }
+              }}
+              className="rounded-full px-1.5 text-cyan-300/70 hover:text-white"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      )}
+
       {/* ── Top Header ── */}
       {/* ── Modern Streamlined POS Header ── */}
       <header className="flex h-16 shrink-0 items-center justify-between bg-black/80 backdrop-blur-2xl px-4 lg:px-6 border-b border-white/10 relative z-20 gap-3">
@@ -2529,7 +2601,7 @@ export default function PosPage() {
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-purple-500/30 text-purple-200">
                 {activeTabsData?.totalActiveCount ?? 0}
               </span>
-              {appPendingCount > 0 && (
+              {appPendingCount > 0 ? (
                 <span
                   className="flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-pink-500/25 text-pink-200 border border-pink-500/40 animate-pulse"
                   title={`${appPendingCount} pedido(s) nuevo(s) desde la app sin tomar`}
@@ -2537,7 +2609,18 @@ export default function PosPage() {
                   <Smartphone className="h-2.5 w-2.5" />
                   {appPendingCount}
                 </span>
-              )}
+              ) : appTabsCount > 0 ? (
+                // Punto persistente: hay pedidos de la app activos hoy (aunque
+                // ya se hayan tomado). Se reutiliza el mismo indicador del
+                // header; no se crea un segundo badge.
+                <span
+                  className="relative flex h-2.5 w-2.5"
+                  title={`${appTabsCount} pedido(s) de la app activos`}
+                >
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pink-400 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-pink-400 shadow-[0_0_8px_rgba(244,114,182,0.9)]" />
+                </span>
+              ) : null}
             </button>
           </div>
 
@@ -5600,13 +5683,25 @@ export default function PosPage() {
         </div>
       </Dialog>
 
-      {/* ── Alerta gigante + sonido: pedido nuevo desde la app ── */}
+      {/* ── Alerta fullscreen + sonido: pedido nuevo desde la app ── */}
       <PosOrderAlert
         open={orderAlertOpen}
         count={appPendingCount}
         soundEnabled={orderAlertCfg?.soundEnabled !== false}
+        busy={posBusy}
+        orders={alertOrders}
         onOpen={() => {
           setOrderAlertOpen(false);
+          // POS ocupado: el pedido se queda en la cola (ya está en Operación)
+          // y se avisa por toast. Nunca se pierde y no interrumpe el cobro.
+          if (posBusy) {
+            const label =
+              appPendingCount === 1
+                ? "Pedido en cola"
+                : `${appPendingCount} pedidos en cola`;
+            toast.success(`${label} · Operación → Desde la app`);
+            return;
+          }
           setTabsView("APP");
           setActiveTabsModal(true);
         }}

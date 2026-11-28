@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, posProcedure, posPermission, adminOnlyProcedure, resolveBranchId } from "../trpc";
-import { branches, cashDrops, cashShiftEvents, cashShifts, expenses, staff } from "@rabbitty/database-restaurant/schema";
+import { branches, cashDrops, cashShiftEvents, cashShifts, expenses, orders, staff } from "@rabbitty/database-restaurant/schema";
 import {
   CASHIER_ROLES,
   MANAGER_ROLES,
@@ -348,6 +348,31 @@ export const cashShiftsRouter = router({
       let clearedForNotify: Array<{ id: string; customerId: string | null; total: number; orderType: string | null }> = [];
       const result = await ctx.restaurantDb.transaction(async (tx: any) => {
         await lockShift(tx, shift.id);
+
+        // ── No se cierra caja con pedidos PAGADOS sin resolver ──
+        // Los no cobrados se expiran (abajo). Un pedido PAID ya es dinero del
+        // negocio: no se puede "purgar" sin devolverlo, así que el corte se
+        // detiene hasta que el equipo lo complete o lo reembolse. Sin esto
+        // quedaban pedidos vivos en Operación después del cierre.
+        const paid = (await tx
+          .select({ id: orders.id })
+          .from(orders)
+          .where(and(
+            eq(orders.branchId, branchId),
+            eq(orders.status, "PAID"),
+            // Una cuenta "solo factura" ya cumplió: no exige preparación.
+            eq(orders.billOnly, false),
+          ))
+          .limit(25)) as Array<{ id: string }>;
+        if (paid.length > 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: paid.length === 1
+              ? "Hay 1 pedido pagado sin completar. Complétalo o reembólsalo antes de cerrar caja."
+              : `Hay ${paid.length === 25 ? "25+" : paid.length} pedidos pagados sin completar. Complétalos o reembólsalos antes de cerrar caja.`,
+          });
+        }
+
         const totals = await computeShiftTotals(tx, shift);
 
         // ── Pago opcional de propinas de tarjeta desde caja ──

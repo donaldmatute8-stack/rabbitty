@@ -47,6 +47,13 @@ interface OrderCartSheetProps {
    * confirmar en el local": nunca se inventa una tarifa.
    */
   branchOrBusinessId?: string | null;
+  /**
+   * Estado de pedidos del local (horario + caja). Se muestra dentro del carrito
+   * para que el Rabbitter sepa, ANTES de confirmar, si el pedido va a entrar.
+   */
+  orderingNotice?: { tone: 'success' | 'info' | 'warn' | 'error'; message: string } | null;
+  /** true = el local no está recibiendo pedidos: no se puede confirmar. */
+  orderingBlocked?: boolean;
 }
 
 export type CartPaymentMethod = 'CASH' | 'BUNZ' | 'CARD';
@@ -66,6 +73,8 @@ export function OrderCartSheet({
   onUpdateQuantity,
   onClearCart,
   onSubmitOrder,
+  orderingNotice = null,
+  orderingBlocked = false,
   tableNumber,
   currency = 'MXN',
   rewardPercentage = 10,
@@ -557,18 +566,37 @@ export function OrderCartSheet({
                     <span>${total.toFixed(2)} {currency}</span>
                   </div>
 
+                  {orderingNotice && (
+                    <div
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-semibold leading-snug ${
+                        orderingNotice.tone === 'error'
+                          ? 'border-red-500/40 bg-red-500/10 text-red-200'
+                          : orderingNotice.tone === 'warn'
+                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                            : orderingNotice.tone === 'info'
+                              ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
+                              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                      }`}
+                      role="status"
+                    >
+                      {orderingNotice.message}
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={submitting || (orderType === 'DELIVERY' && !addressValid)}
+                    disabled={submitting || orderingBlocked || (orderType === 'DELIVERY' && !addressValid)}
                     className="w-full bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white py-3.5 px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 active:scale-98 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     <span>
                       {submitting
                         ? 'Enviando orden...'
-                        : orderType === 'DELIVERY'
-                          ? 'Confirmar pedido a domicilio'
-                          : 'Confirmar y Enviar Pedido'}
+                        : orderingBlocked
+                          ? 'El local está cerrado'
+                          : orderType === 'DELIVERY'
+                            ? 'Confirmar pedido a domicilio'
+                            : 'Confirmar y Enviar Pedido'}
                     </span>
                     <ChevronRight size={18} />
                   </button>

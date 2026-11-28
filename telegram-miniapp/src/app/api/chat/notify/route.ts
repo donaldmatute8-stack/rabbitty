@@ -11,7 +11,8 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     const secret = process.env.RABBITTY_API_SECRET;
-    if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
+    // Fail-closed: sin secreto configurado el endpoint no queda abierto.
+    if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
     const body = await req.json().catch(() => ({}));

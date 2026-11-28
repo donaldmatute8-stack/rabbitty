@@ -3848,12 +3848,13 @@ export const posRouter = router({
           // Pedidos de la app SIN mesa y aún sin pagar: la cocina no los cocina
           // (el KDS sigue exigiendo mesa o pago), pero el POS **debe verlos** para
           // cobrarlos. Antes quedaban invisibles: el cliente los veía "en curso"
-          // y en el local no aparecían por ningún lado. Solo con cliente
-          // identificado: un pedido anónimo de QR no llena esta cola.
+          // y en el local no aparecían por ningún lado. Se acepta cliente
+          // identificado O canal APP (el checkout siempre marca `channel='APP'`):
+          // si el header de auth falla, el pedido no puede desaparecer.
           and(
             eq(orders.status, ORDER_STATUS.PENDING_PAYMENT),
             isNull(orders.tableId),
-            isNotNull(orders.customerId)
+            or(isNotNull(orders.customerId), eq(orders.channel, "APP"))
           )
         )
       ))
@@ -3959,8 +3960,11 @@ export const posRouter = router({
         items: items.map((it) => ({ status: it.status })),
       });
       // PENDING_PAYMENT solo lo crea el checkout de la app; un pedido de mesa
-      // de la app también debe entrar a la cola/alert del POS.
-      const fromApp = Boolean(resolvedCustomerId) &&
+      // de la app también debe entrar a la cola/alert del POS. Se acepta el
+      // canal APP como respaldo: si el cliente no quedó identificado, el
+      // pedido sigue siendo un pedido de la app y no puede caer en "Comandas".
+      const appChannel = String((ord as any).channel ?? "").toUpperCase() === "APP";
+      const fromApp = (Boolean(resolvedCustomerId) || appChannel) &&
         (ord.status === ORDER_STATUS.PENDING_PAYMENT || !ord.tableId);
       // Pendiente de pago y sin mesa: existe en el POS para cobrarse, pero no se
       // envía a cocina hasta que se cobre.

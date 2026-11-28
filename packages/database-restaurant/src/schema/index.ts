@@ -921,6 +921,26 @@ export const cashDrops = pgTable("cash_drops", {
 }, (t) => [index("cash_drops_shift_idx").on(t.shiftId)]);
 
 // Sesión de caja/gaveta (contable). NO confundir con staff_shifts (asistencia/RRHH).
+/**
+ * ── Cajas (registers) ──────────────────────────────────────────────────────
+ * `code` es lo que guardan `cash_shifts.registerId` y `pos_terminals.registerId`
+ * ("MAIN", "C2"). El catálogo permite nombrarlas, asignar terminales y saber
+ * qué cajas existen en la sucursal sin tocar los datos existentes.
+ */
+export const registers = pgTable("registers", {
+  id: id(),
+  branchId: fkId("branchId").references(() => branches.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  location: text("location"),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: integer("sortOrder").default(0).notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("registers_branch_code_uidx").on(t.branchId, sql`lower(${t.code})`),
+  index("registers_branch_idx").on(t.branchId, t.isActive, t.sortOrder),
+]);
+
 export const cashShifts = pgTable(
   "cash_shifts",
   {

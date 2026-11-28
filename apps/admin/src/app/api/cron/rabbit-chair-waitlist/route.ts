@@ -16,7 +16,9 @@ export const runtime = "nodejs";
  * GET /api/cron/rabbit-chair-waitlist  (Authorization: Bearer CRON_SECRET)
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get("Authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Sin secreto configurado, "Bearer undefined" no debe pasar.
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.get("Authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

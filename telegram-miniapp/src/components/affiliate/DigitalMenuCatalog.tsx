@@ -21,6 +21,9 @@ interface DigitalMenuCatalogProps {
   /** Guarda el producto en la lista de deseos del Rabbitter. */
   onWishlist?: (item: CatalogItem) => void;
   digitalOrderingEnabled?: boolean;
+  /** El local está cerrado: se puede ver el menú, no agregar. */
+  orderingBlocked?: boolean;
+  orderingMessage?: string | null;
 }
 
 export function DigitalMenuCatalog({
@@ -30,6 +33,8 @@ export function DigitalMenuCatalog({
   onAddToCart,
   onWishlist,
   digitalOrderingEnabled = true,
+  orderingBlocked = false,
+  orderingMessage = null,
 }: DigitalMenuCatalogProps) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -271,7 +276,7 @@ export function DigitalMenuCatalog({
                         </p>
                         <div className="mt-auto flex items-center justify-between pt-1">
                           <span className="text-[12.5px] font-black text-white">${item.price}</span>
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white">
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full bg-linear-to-r from-[#FF2E93] to-[#E91E63] text-white ${orderingBlocked ? 'opacity-40' : ''}`}>
                             <Plus size={13} />
                           </span>
                         </div>
@@ -358,8 +363,8 @@ export function DigitalMenuCatalog({
                             </button>
                           )}
                           <div className="flex items-center gap-1 text-xs font-black text-white bg-linear-to-r from-[#FF2E93] to-[#E91E63] group-hover:brightness-110 px-3 py-1 rounded-xl transition-all shadow-sm shadow-pink-500/20">
-                            <Plus size={13} className="shrink-0" />
-                            <span>{digitalOrderingEnabled ? 'Agregar' : 'Ver'}</span>
+                            <Plus size={13} className={`shrink-0 ${orderingBlocked ? 'opacity-40' : ''}`} />
+                            <span>{digitalOrderingEnabled && !orderingBlocked ? 'Agregar' : 'Ver'}</span>
                           </div>
                         </div>
                       </div>
@@ -383,6 +388,8 @@ export function DigitalMenuCatalog({
         item={activeItem}
         onClose={() => setActiveItem(null)}
         onAddToCart={onAddToCart}
+        orderingBlocked={orderingBlocked}
+        orderingMessage={orderingMessage}
         currency={currency}
         rewardPercentage={rewardPercentage}
       />

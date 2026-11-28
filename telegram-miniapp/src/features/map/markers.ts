@@ -78,7 +78,10 @@ export function pinColor(a: PinBusiness): string {
 }
 
 export function markerHTML(a: PinBusiness, selected: boolean, isDark: boolean) {
-  const rw = a.rewardPercentage || a.reward_percentage || 0;
+  // El pin se construye como HTML: el % viene del backend y se fuerza a número
+  // para que un valor inesperado no pueda inyectar markup en el mapa.
+  const rwRaw = Number(a.rewardPercentage ?? a.reward_percentage ?? 0);
+  const rw = Number.isFinite(rwRaw) ? Math.max(0, Math.min(100, rwRaw)) : 0;
   const isStockOnly = (a.acceptsBunz || a.accepts_bunz) && !(a.givesBunz || a.gives_bunz);
   const r = isStockOnly ? { color: '#E91E63', label: 'Stock' } : RARITY[getRarity(rw)];
   const sz = selected ? 52 : 44;

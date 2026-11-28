@@ -79,8 +79,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             await recordLedgerTransaction(
               {
-                branchId: locked.businessId,
-                payerSubjectId: locked.businessId || 'system',
+                branchId: null,
+                payerSubjectId: locked.businessId ? `biz_${locked.businessId}` : 'sys_refund',
                 payeeSubjectId: `usr_${lockedUser.id}`,
                 amount: locked.bunzCost,
                 type: 'REFUND',

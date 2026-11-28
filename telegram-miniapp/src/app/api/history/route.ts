@@ -8,7 +8,7 @@ import {
   branches as rBranches,
   restaurants as rRestaurants,
 } from "@rabbitty/database-restaurant/schema";
-import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, ne, or } from "drizzle-orm";
 import { getAuthenticatedUser } from "@/lib/serverAuth";
 
 export interface AuthoritativeHistoryItem {
@@ -63,9 +63,13 @@ export async function GET(req: NextRequest) {
       })
       .from(ledgerEntries)
       .where(
-        or(
-          inArray(ledgerEntries.payeeSubjectId, subjects),
-          inArray(ledgerEntries.payerSubjectId, subjects)
+        and(
+          or(
+            inArray(ledgerEntries.payeeSubjectId, subjects),
+            inArray(ledgerEntries.payerSubjectId, subjects)
+          ),
+          // Los asientos de demo/App Review no son de la economía real.
+          eq(ledgerEntries.sandbox, false)
         )
       )
       .orderBy(desc(ledgerEntries.createdAt))
@@ -83,6 +87,7 @@ export async function GET(req: NextRequest) {
       createdAt: Date | null;
       businessName: string | null;
       branchName: string | null;
+      businessId: string | null;
     }> = [];
     try {
       fiatRows = await restaurantDb
@@ -96,6 +101,7 @@ export async function GET(req: NextRequest) {
           createdAt: rPayments.createdAt,
           businessName: rRestaurants.name,
           branchName: rBranches.name,
+          businessId: rRestaurants.businessId,
         })
         .from(rPayments)
         .innerJoin(rOrders, eq(rOrders.id, rPayments.orderId))
@@ -105,11 +111,29 @@ export async function GET(req: NextRequest) {
           and(
             eq(rOrders.customerId, caller.id),
             eq(rPayments.status, "COMPLETED"),
-            ne(rPayments.method, "BUNZ")
+            // Solo pagos reales: fuera Bunz (viene del ledger), membresías
+            // (no son compras) y pruebas (`orders.isTest`).
+            eq(rOrders.isTest, false),
+            gt(rPayments.amount, 0),
+            ne(rPayments.method, "BUNZ"),
+            ne(rPayments.method, "MEMBERSHIP")
           )
         )
         .orderBy(desc(rPayments.createdAt))
         .limit(60);
+      // Fuera negocios archivados o de prueba: son datos viejos que ya no son
+      // parte del ecosistema (Ka13, sandbox) y ensuciaban la billetera.
+      const bizIds = Array.from(new Set(fiatRows.map((r) => r.businessId).filter((v): v is string => Boolean(v))));
+      if (bizIds.length > 0) {
+        const hidden = await db
+          .select({ id: ownedBusinesses.id, status: ownedBusinesses.status, sandbox: ownedBusinesses.sandbox })
+          .from(ownedBusinesses)
+          .where(inArray(ownedBusinesses.id, bizIds));
+        const hiddenSet = new Set(
+          hidden.filter((b) => b.sandbox === true || String(b.status).toUpperCase() === "ARCHIVED").map((b) => b.id),
+        );
+        fiatRows = fiatRows.filter((r) => !r.businessId || !hiddenSet.has(r.businessId));
+      }
     } catch (fiatErr) {
       // No bloquear el historial Bunz si la DB restaurante falla.
       console.error("[GET_HISTORY] fiat:", fiatErr);

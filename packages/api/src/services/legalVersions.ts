@@ -37,3 +37,27 @@ export const BUSINESS_DOCS: Array<{ doc: BusinessDoc; label: string; published: 
 ];
 
 export const REQUIRED_BUSINESS_DOCS = BUSINESS_DOCS.filter((d) => d.published).map((d) => d.doc);
+
+/**
+ * Documentos que aplican según el modelo de participación (ADR-CORE-012).
+ *
+ * Un negocio LITE no cobra con nuestra terminal ni tiene comisiones ni equipos,
+ * así que no se le pide que acepte esos anexos: solo lo que de verdad rige su
+ * relación (plataforma, datos, privacidad y economía Bunz). Pedirle de más es
+ * fricción sin valor legal.
+ */
+export type ParticipationModel = "POS" | "LITE";
+
+const LITE_DOCS: BusinessDoc[] = ["TERMS", "PRIVACY", "DPA", "BUNZ"];
+
+export function requiredDocsFor(model: ParticipationModel = "POS"): BusinessDoc[] {
+  if (model === "LITE") {
+    return BUSINESS_DOCS.filter((d) => d.published && LITE_DOCS.includes(d.doc)).map((d) => d.doc);
+  }
+  return REQUIRED_BUSINESS_DOCS;
+}
+
+export function docsFor(model: ParticipationModel = "POS") {
+  const required = new Set(requiredDocsFor(model));
+  return BUSINESS_DOCS.filter((d) => d.published && required.has(d.doc));
+}

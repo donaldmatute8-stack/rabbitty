@@ -113,6 +113,7 @@ interface BusinessResponse {
   business: AffiliateData;
   restaurant?: { id: string; name: string; currency?: string } | null;
   primaryBranch?: { id: string; name: string } | null;
+  branches?: Array<{ id: string; name: string; address?: string | null; lat?: number | null; lng?: number | null }>;
   categories: CatalogCategory[];
   tables: Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>;
   capabilities: {
@@ -124,6 +125,16 @@ interface BusinessResponse {
     loyaltyEnabled: boolean;
     moodEnabled: boolean;
   };
+  /** Horario + caja: si el local recibe pedidos AHORA (misma regla que checkout). */
+  ordering?: {
+    canOrder: boolean;
+    state: 'OPEN' | 'NO_TILL' | 'EXTENDED' | 'CLOSED';
+    scheduleOpen: boolean;
+    cashShiftOpen: boolean;
+    message: string | null;
+    tone: 'success' | 'info' | 'warn' | 'error';
+    nextOpenLabel: string | null;
+  } | null;
 }
 
 function AffiliateProfileContent() {
@@ -135,8 +146,14 @@ function AffiliateProfileContent() {
 
   const { user } = useAuth();
   const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
+  // Multi-sucursal: la ficha y el pedido deben caer en la MISMA sucursal.
+  const [primaryBranch, setPrimaryBranch] = useState<{ id: string; name: string } | null>(null);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; address?: string | null }>>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [tables, setTables] = useState<Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>>([]);
+  // ¿El local recibe pedidos ahora? (horario + caja) Lo resuelve el servidor.
+  const [ordering, setOrdering] = useState<BusinessResponse['ordering']>(null);
   const [capabilities, setCapabilities] = useState<BusinessResponse['capabilities']>({
     menuEnabled: true,
     digitalOrderingEnabled: true,
@@ -207,6 +224,7 @@ function AffiliateProfileContent() {
   // Modals
   const [showMapSelector, setShowMapSelector] = useState(false);
   const [showInAppBrowser, setShowInAppBrowser] = useState(false);
+  const [webLoading, setWebLoading] = useState(true);
   const [showMessageSelector, setShowMessageSelector] = useState(false);
   const [showMoodCheckIn, setShowMoodCheckIn] = useState(false);
   const [checkingInPresence, setCheckingInPresence] = useState(false);
@@ -270,14 +288,22 @@ function AffiliateProfileContent() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`/api/business/${id}`)
+    const params = new URLSearchParams();
+    if (selectedBranchId) params.set('branchId', selectedBranchId);
+    // El QR de mesa no trae sucursal: el servidor elige la que tiene esa mesa.
+    if (initialTableNum != null) params.set('table', String(initialTableNum));
+    const branchQuery = params.toString() ? `?${params.toString()}` : '';
+    fetch(`/api/business/${id}${branchQuery}`)
       .then(res => res.json())
       .then((data: { success: boolean } & BusinessResponse) => {
         if (data.success && data.business) {
           setAffiliate(data.business);
+          setPrimaryBranch(data.primaryBranch ?? null);
+          setBranches(data.branches ?? []);
           setCategories(data.categories || []);
           setTables(data.tables || []);
           if (data.capabilities) setCapabilities(data.capabilities);
+          setOrdering(data.ordering ?? null);
 
           // If initialTableNum exists, resolve its tableId
           if (data.tables && initialTableNum !== null) {
@@ -288,7 +314,7 @@ function AffiliateProfileContent() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [id, initialTableNum]);
+  }, [id, initialTableNum, selectedBranchId]);
 
   // H-TRACK-LOCAL: pedido en curso de ESTE negocio (mismo endpoint del home).
   // Polling 15s + al volver a foreground, igual que useOrderTracking.
@@ -547,6 +573,13 @@ function AffiliateProfileContent() {
     address?: { text: string; data: Record<string, unknown> },
     paymentMethod: 'CASH' | 'BUNZ' | 'CARD' = 'CASH',
   ) => {
+    // El local no está recibiendo pedidos: se avisa AQUÍ y no se manda nada.
+    // Antes el pedido se armaba, se enviaba y el servidor lo rechazaba (o el
+    // Rabbitter se quedaba esperando un pedido que nunca entró al POS).
+    if (ordering && !ordering.canOrder) {
+      showToast(ordering.message || 'El local está cerrado ahora.', 'error');
+      return;
+    }
     PlatformBridge.hapticFeedback('heavy');
 
     const payload = {
@@ -554,10 +587,10 @@ function AffiliateProfileContent() {
       deliveryAddress: orderType === 'DELIVERY' ? address?.text ?? null : null,
       deliveryAddressData: orderType === 'DELIVERY' ? address?.data ?? null : null,
       // Sin mesa elegida el pedido puede salir "producto solo" — el POS la
-      // vincula a mesa después si procede. branchId permite crear la orden
-      // cuando no hay mesa (el id del perfil afiliado ES la branch).
+      // vincula a mesa después si procede. Se manda la sucursal mostrada (si
+      // existe) para que el pedido caiga en la misma carta que vio el cliente.
       tableId: tableId || null,
-      branchId: affiliate?.id || null,
+      branchId: primaryBranch?.id || affiliate?.id || null,
       items: cart.map(item => ({
         id: item.menuItemId,
         price: item.price,
@@ -644,6 +677,10 @@ function AffiliateProfileContent() {
   const formattedWebUrl = targetWebsite.startsWith('http')
     ? targetWebsite
     : `https://${targetWebsite}`;
+  // El CSP solo permite iframes de *.rabbitty.me. Un dominio propio quedaría
+  // en blanco con el spinner pegado: en ese caso se ofrece abrirlo fuera.
+  const isEmbeddableWebsite = /^https?:\/\/([a-z0-9-]+\.)*rabbitty\.me(?::\d+)?(\/|$)/i.test(formattedWebUrl)
+    || /^https?:\/\/localhost(:\d+)?(\/|$)/i.test(formattedWebUrl);
 
   // Horario real (días + horas configurados en el admin), no un texto fijo.
   const openState = resolveOpenState(
@@ -896,9 +933,25 @@ function AffiliateProfileContent() {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`text-[10px] font-black uppercase tracking-[0.14em] ${
-              openNow ? 'text-[var(--success)]' : 'text-[var(--text-muted)]'
+              ordering
+                ? ordering.canOrder
+                  ? 'text-[var(--success)]'
+                  : 'text-[var(--text-muted)]'
+                : openNow
+                  ? 'text-[var(--success)]'
+                  : 'text-[var(--text-muted)]'
             }`}>
-              ● {openNow ? 'Abierto ahora' : 'Cerrado'}
+              ● {ordering
+                ? ordering.state === 'EXTENDED'
+                  ? 'Atendiendo (fuera de horario)'
+                  : ordering.state === 'NO_TILL'
+                    ? 'Abierto · caja cerrada'
+                    : ordering.canOrder
+                      ? 'Abierto ahora'
+                      : 'Cerrado'
+                : openNow
+                  ? 'Abierto ahora'
+                  : 'Cerrado'}
             </span>
             {affiliate.category && (
               <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
@@ -917,7 +970,58 @@ function AffiliateProfileContent() {
           <p className="m-0 text-[13px] font-bold text-[var(--text-secondary)]">
             Devuelve <span className="text-[var(--rabbitty-pink)]">+{affiliate.rewardPercentage}% en Bunz</span> en cada consumo
           </p>
+          {branches.length > 1 && (
+            <div className="mt-2 flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-1)] px-3 py-2">
+              <MapPin size={14} className="shrink-0 text-[var(--rabbitty-pink)]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Sucursal
+              </span>
+              <select
+                value={primaryBranch?.id ?? ''}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  // El menú, las mesas y el pedido son de UNA sucursal: al
+                  // cambiar se limpia el carrito para no mezclar cartas.
+                  setSelectedBranchId(next);
+                  setCart([]);
+                  setTableId(null);
+                }}
+                className="ml-auto min-w-0 flex-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1.5 text-[12px] font-bold text-[var(--text-primary)] outline-none"
+                aria-label="Elegir sucursal"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
+
+        {/* ── Estado de pedidos (horario + caja): se sabe ANTES de armar el pedido ── */}
+        {ordering?.message && (
+          <div
+            role="status"
+            className={`flex items-start gap-2 rounded-2xl border px-3 py-2.5 text-[11.5px] font-semibold leading-snug ${
+              ordering.state === 'CLOSED'
+                ? 'border-red-500/40 bg-red-500/10 text-red-200'
+                : ordering.state === 'NO_TILL'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                  : ordering.state === 'EXTENDED'
+                    ? 'border-sky-500/40 bg-sky-500/10 text-sky-200'
+                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+            }`}
+          >
+            <Clock size={14} className="mt-0.5 shrink-0" />
+            <span>
+              {ordering.message}
+              {!ordering.canOrder && (
+                <span className="mt-1 block text-[10.5px] font-bold opacity-80">
+                  El menú sigue visible; ya puedes elegir y pedir cuando abra.
+                </span>
+              )}
+            </span>
+          </div>
+        )}
 
         {/* Action Quick Links (Llegar, Mood, Mesa, Mensaje) Rediseñados */}
         <div className="grid grid-cols-4 gap-2 py-2 px-2 bg-white/[0.03] border border-white/10 rounded-2xl backdrop-blur-xl shadow-lg">
@@ -1027,6 +1131,8 @@ function AffiliateProfileContent() {
         {activeTab === 'menu' && (
           <div className="space-y-6">
             <DigitalMenuCatalog
+              orderingBlocked={ordering ? !ordering.canOrder : false}
+              orderingMessage={ordering?.message ?? null}
               categories={menuOnlyCategories}
               currency="MXN"
               rewardPercentage={affiliate.rewardPercentage}
@@ -1054,7 +1160,10 @@ function AffiliateProfileContent() {
           <div className="space-y-5">
         {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ──
             H-PRESYNC: se oculta si ya estás checkeado (no puedes "planeo ir"
-            cuando ya te registraste aquí), y muestra tu estado hidratado. */}
+            cuando ya te registraste aquí), y muestra tu estado hidratado.
+            Si el local está CERRADO no se ofrece: no tiene sentido avisar que
+            vas a un lugar que ahora no atiende. */}
+        {(hasPresenceCheckedIn || openNow) && (
         <div className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="min-w-0">
             {hasPresenceCheckedIn ? (
@@ -1103,6 +1212,7 @@ function AffiliateProfileContent() {
             </button>
           )}
         </div>
+        )}
 
         {/* ── Membresías del negocio (marketplace compacto) ── */}
         <MembershipMarketplace businessId={id} compact />
@@ -1191,7 +1301,7 @@ function AffiliateProfileContent() {
                       </div>
                     </div>
                     <button
-                      onClick={() => setShowInAppBrowser(true)}
+                      onClick={() => { setWebLoading(true); setShowInAppBrowser(true); }}
                       className="px-3.5 py-1.5 rounded-xl bg-white/10 text-white text-xs font-bold hover:bg-white/15"
                     >
                       Visitar
@@ -1354,7 +1464,7 @@ function AffiliateProfileContent() {
               const res = await fetch('/api/pos/claim-table', {
                 method: 'POST',
                 headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tableId: id, branchId: affiliate?.id, userLat, userLng }),
+                body: JSON.stringify({ tableId: id, branchId: primaryBranch?.id || affiliate?.id, userLat, userLng }),
               });
               const data = await res.json().catch(() => null);
               if (res.ok && data?.success) {
@@ -1375,6 +1485,8 @@ function AffiliateProfileContent() {
       {/* Detalle de producto de la tienda (mismo modal que el menú) */}
       <ProductDetailModal
         item={storeProduct}
+        orderingBlocked={ordering ? !ordering.canOrder : false}
+        orderingMessage={ordering?.message ?? null}
         onClose={() => setStoreProduct(null)}
         onAddToCart={(item, quantity, modifiers, notes) => {
           handleAddToCart(item, quantity, modifiers, notes);
@@ -1414,6 +1526,8 @@ function AffiliateProfileContent() {
         checkedIn={hasPresenceCheckedIn}
         branchOrBusinessId={affiliate.id}
         bunzBalance={Math.max(0, (user?.totalBunzEarned ?? 0) - (user?.totalBunzSpent ?? 0))}
+        orderingNotice={ordering?.message ? { tone: ordering.tone, message: ordering.message } : null}
+        orderingBlocked={ordering ? !ordering.canOrder : false}
       />
 
       {/* Pedido en rampa: identidad de tarjeta de pedido + barra de 5 s */}
@@ -1766,11 +1880,31 @@ function AffiliateProfileContent() {
               Abrir en Navegador
             </button>
           </div>
-          <iframe
-            src={formattedWebUrl}
-            className="w-full flex-1 border-none bg-white"
-            title={`Web de ${affiliate.name}`}
-          />
+          <div className="relative flex-1">
+            {isEmbeddableWebsite ? (
+              <>
+                {webLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bg-primary)]">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-[#E91E63]" />
+                    <p className="m-0 text-[11px] font-bold text-white/50">Cargando el sitio…</p>
+                  </div>
+                )}
+                <iframe
+                  src={formattedWebUrl}
+                  onLoad={() => setWebLoading(false)}
+                  className="h-full w-full border-none bg-white"
+                  title={`Web de ${affiliate.name}`}
+                />
+              </>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                <p className="m-0 text-sm font-black text-white">Este sitio se abre en el navegador</p>
+                <p className="m-0 text-[11.5px] text-white/60">
+                  Por seguridad, la app no incrusta dominios externos. Usa “Abrir en Navegador”.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

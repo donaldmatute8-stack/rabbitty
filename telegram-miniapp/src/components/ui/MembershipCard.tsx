@@ -44,6 +44,10 @@ interface MembershipCardProps {
   } | null;
   levelName?: string;
   isDark?: boolean;
+  /** Cuántos negocios puede canjear hoy (resumen de Bunz). */
+  canjearPlaces?: number;
+  /** Cuántos negocios le dan Bunz (para el mensaje sin saldo). */
+  earnPlaces?: number;
 }
 
 /** Membresía del usuario (subconjunto de /api/memberships). */
@@ -177,7 +181,7 @@ const daysUntil = (iso: string | null): number | null => {
 
 const emptySubscribe = () => () => {};
 
-export default function MembershipCard({ user, levelName = '1', isDark: isDarkProp }: MembershipCardProps) {
+export default function MembershipCard({ user, levelName = '1', isDark: isDarkProp, canjearPlaces, earnPlaces }: MembershipCardProps) {
   const { isDark: themeIsDark } = useTheme();
   const isDark = isDarkProp ?? themeIsDark;
   const isClient = useSyncExternalStore(emptySubscribe, () => true, () => false);
@@ -361,6 +365,16 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
   const labelOf = (s: { kind: 'pass' } | { kind: 'membership'; m: PassMembership }) =>
     s.kind === 'pass' ? 'Rabbitty Pass' : s.m.planName || s.m.businessName || 'Membresía';
 
+  // Resumen Bunz dentro del pase (evita la franja duplicada sobre el feed).
+  const placesText =
+    canjearPlaces === undefined
+      ? ''
+      : canjearPlaces > 0
+        ? `${canjearPlaces} lugar${canjearPlaces === 1 ? '' : 'es'} para canjear`
+        : (earnPlaces ?? 0) > 0
+          ? `gana tus primeros en ${earnPlaces}`
+          : '';
+
   const collapsedValue =
     settings.collapsedView === 'balance' ? (
       <span className="flex items-baseline gap-1">
@@ -489,7 +503,14 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                         Lvl. {levelName}
                       </span>
                     </div>
-                    <div className="mt-0.5 min-w-0">{collapsedValue}</div>
+                    <div className="mt-0.5 flex min-w-0 items-baseline gap-1.5">
+                      <div className="min-w-0 truncate">{collapsedValue}</div>
+                      {placesText && (
+                        <span className="shrink-0 truncate text-[9.5px] font-black" style={{ color: palette.accent }}>
+                          · {placesText}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <button
@@ -555,6 +576,12 @@ export default function MembershipCard({ user, levelName = '1', isDark: isDarkPr
                       />
                       <span className="text-lg font-black tracking-wide" style={{ color: palette.accent }}>BUNZ</span>
                     </div>
+                    {placesText && (
+                      <p className="m-0 mt-1.5 flex items-center gap-1.5 text-[11px] font-black" style={{ color: palette.accent }}>
+                        <Ticket size={12} />
+                        {placesText}
+                      </p>
+                    )}
                   </div>
 
                   {/* Aviso de vencimiento (si hay fecha y está activado) */}

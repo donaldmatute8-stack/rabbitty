@@ -8,9 +8,11 @@ interface TabsProps {
   onChange: (tab: string) => void;
   isScrolled?: boolean;
   isDark?: boolean;
+  /** Etiqueta visible por valor de tab (el valor interno no cambia). */
+  labels?: Record<string, string>;
 }
 
-export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, isDark: isDarkProp }: TabsProps) {
+export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, isDark: isDarkProp, labels }: TabsProps) {
   const { isDark: themeIsDark } = useTheme();
   const isDark = isDarkProp ?? themeIsDark;
   return (
@@ -52,7 +54,7 @@ export default function Tabs({ tabs, activeTab, onChange, isScrolled = false, is
           <span className={`${activeTab === tab 
             ? (isDark ? 'text-white font-normal' : 'text-[#111111] font-normal') 
             : (isDark ? 'text-white/40 font-light' : 'text-[#8A8A8A] font-light')}`}>
-            {tab}
+            {labels?.[tab] ?? tab}
           </span>
           {activeTab === tab && (
             <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#E91E63]" />

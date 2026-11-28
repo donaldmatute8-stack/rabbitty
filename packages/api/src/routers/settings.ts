@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { verify as verifyTotp } from "otplib";
 import { router, protectedProcedure } from "../trpc";
 import { users, trustedSessions, passkeys, ownedBusinesses } from "@rabbitty/database-core";
+import { branches, restaurants } from "@rabbitty/database-restaurant/schema";
 import { TRPCError } from "@trpc/server";
 import { decryptText } from "../services/crypto";
 
@@ -16,6 +17,38 @@ async function requireTotpIfEnabled(coreDb: any, userId: string, code?: string) 
 }
 
 export const settingsRouter = router({
+  /**
+   * Modelo de participación del negocio (ADR-CORE-012). Lo usa el layout del POS
+   * para mostrar una pantalla clara a un negocio LITE en vez de un menú que no
+   * le aplica (el bloqueo real está en `posProcedure`).
+   */
+  getParticipationModel: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const [br] = await ctx.restaurantDb
+        .select({ restaurantId: branches.restaurantId })
+        .from(branches)
+        .where(eq(branches.id, ctx.branchId))
+        .limit(1);
+      if (!br?.restaurantId) return { model: "POS" as const, businessName: null };
+      const [rest] = await ctx.restaurantDb
+        .select({ businessId: restaurants.businessId })
+        .from(restaurants)
+        .where(eq(restaurants.id, br.restaurantId))
+        .limit(1);
+      if (!rest?.businessId) return { model: "POS" as const, businessName: null };
+      const [biz] = await ctx.coreDb
+        .select({ model: ownedBusinesses.participationModel, name: ownedBusinesses.name })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, rest.businessId))
+        .limit(1);
+      return {
+        model: (biz?.model === "LITE" ? "LITE" : "POS") as "POS" | "LITE",
+        businessName: biz?.name ?? null,
+      };
+    } catch {
+      return { model: "POS" as const, businessName: null };
+    }
+  }),
   updateEmail: protectedProcedure
     .input(z.object({ email: z.string().email(), verificationCode: z.string().length(6).optional() }))
     .mutation(async ({ ctx, input }) => {

@@ -20,6 +20,7 @@ export async function GET(req: Request) {
       .where(
         and(
           eq(ownedBusinesses.status, 'APPROVED'),
+          eq(ownedBusinesses.sandbox, false),
           query
             ? or(
                 ilike(ownedBusinesses.name, `%${query}%`),

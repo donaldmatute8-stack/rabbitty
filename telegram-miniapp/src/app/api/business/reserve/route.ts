@@ -101,9 +101,9 @@ export async function POST(req: NextRequest) {
       // Record authoritative Ledger entry
       await recordLedgerTransaction(
         {
-          branchId: business.id,
+          branchId: null,
           payerSubjectId: `usr_${user.id}`,
-          payeeSubjectId: business.id,
+          payeeSubjectId: `biz_${business.id}`,
           amount: bunzCost,
           type: 'SPEND',
           referenceId: resRow.id,

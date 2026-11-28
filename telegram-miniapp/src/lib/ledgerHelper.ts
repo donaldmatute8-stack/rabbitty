@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { ledgerEntries } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { normalizeLedgerSubject } from "@rabbitty/api/services/ledgerSubjects";
 
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -13,6 +14,11 @@ export interface RecordTransactionParams {
   referenceId?: string | null;
   idempotencyKey: string;
   metadata?: Record<string, unknown>;
+  /**
+   * true = asiento de prueba/demo (orden `isTest` o negocio sandbox). No entra
+   * al ancla y no consume `seq`; el trigger de la base lo deja con seq = NULL.
+   */
+  sandbox?: boolean;
 }
 
 /**
@@ -42,14 +48,18 @@ export async function recordLedgerTransaction(params: RecordTransactionParams, t
     .insert(ledgerEntries)
     .values({
       branchId: params.branchId || undefined,
-      payerSubjectId: params.payerSubjectId,
-      payeeSubjectId: params.payeeSubjectId,
+      // Defensa final: la base rechaza sujetos no canónicos y tumba la operación
+      // completa. Se normaliza aquí (alias de sistema) y se falla claro si es un
+      // UUID sin prefijo, en vez de dejar un 500 opaco.
+      payerSubjectId: normalizeLedgerSubject(params.payerSubjectId),
+      payeeSubjectId: normalizeLedgerSubject(params.payeeSubjectId),
       amount: Math.round(params.amount),
       currency: "BUNZ",
       type: params.type,
       referenceId: params.referenceId || undefined,
       idempotencyKey: params.idempotencyKey,
       metadata: params.metadata || null,
+      sandbox: params.sandbox === true,
     })
     .onConflictDoNothing({ target: ledgerEntries.idempotencyKey })
     .returning();

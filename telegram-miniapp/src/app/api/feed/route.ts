@@ -20,8 +20,11 @@ const parseSafeJson = <T>(str: string | null | undefined, fallback: T): T => {
 
 export async function GET() {
   try {
+    // Los negocios sandbox (demo, pruebas del fundador) viven en la misma tabla
+    // pero NO son parte del catálogo público. Antes Ka13 y Bull Box aparecían a
+    // usuarios reales porque solo se filtraba por status.
     const businesses = await db.select().from(ownedBusinesses)
-      .where(eq(ownedBusinesses.status, 'APPROVED'))
+      .where(and(eq(ownedBusinesses.status, 'APPROVED'), eq(ownedBusinesses.sandbox, false)))
       .orderBy(desc(ownedBusinesses.createdAt))
       .limit(100);
 

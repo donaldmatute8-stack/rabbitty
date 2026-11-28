@@ -25,8 +25,13 @@ const nextConfig: NextConfig = {
           {
             // Allow Web Bluetooth, WebUSB, and Web Serial APIs
             // Without this, Chrome blocks navigator.bluetooth even on HTTPS
+            //
+            // Cámara: el POS, el comandero y el escáner de Rabbitter usan
+            // getUserMedia (html5-qrcode). `camera=()` la bloqueaba incluso en
+            // el mismo origen, así que el escáner nunca podía abrir el video.
+            // `(self)` la habilita solo para el admin, nunca para terceros.
             key: "Permissions-Policy",
-            value: "bluetooth=*, usb=*, serial=*, camera=(), microphone=(), geolocation=()",
+            value: "bluetooth=*, usb=*, serial=*, camera=(self), microphone=(), geolocation=()",
           },
           {
             key: "Content-Security-Policy",

@@ -5,6 +5,7 @@ import {
   membershipPlans,
   membershipPlanVersions,
   membershipSubscriptions,
+  ownedBusinesses,
 } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
@@ -19,6 +20,16 @@ export async function GET(req: NextRequest) {
     const businessId = new URL(req.url).searchParams.get('businessId');
     if (!businessId) return NextResponse.json({ error: 'businessId requerido' }, { status: 400 });
 
+    // El dueño ve todos sus planes; cualquier otro solo los públicos.
+    // Sin esto, un plan privado (p. ej. "Nido Familiar") se podía listar
+    // llamando al endpoint con el businessId.
+    const [biz] = await db
+      .select({ ownerId: ownedBusinesses.ownerId })
+      .from(ownedBusinesses)
+      .where(eq(ownedBusinesses.id, businessId))
+      .limit(1);
+    const isOwner = Boolean(biz?.ownerId && biz.ownerId === caller.id);
+
     const rows = await db
       .select({ plan: membershipPlans, version: membershipPlanVersions })
       .from(membershipPlans)
@@ -27,6 +38,7 @@ export async function GET(req: NextRequest) {
         eq(membershipPlans.businessId, businessId),
         eq(membershipPlans.isActive, true),
         eq(membershipPlanVersions.isPublished, true),
+        ...(isOwner ? [] : [eq(membershipPlans.isMarketplaceVisible, true)]),
       ));
 
     const mySubs = await db

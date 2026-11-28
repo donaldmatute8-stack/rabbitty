@@ -10,6 +10,10 @@ import {
   coopAmount,
   matchAmount,
   levelFromContribution,
+  monthPeriod,
+  periodKey,
+  fundCoop,
+  fundMatch,
 } from "./growthFund";
 
 function fakeLedger(row: {
@@ -136,5 +140,111 @@ describe("La Madriguera · Fase 1 (solo lectura)", () => {
     expect(flags.referralPayouts).toBe(false);
     expect(flags.affiliateCoop).toBe(false);
     expect(flags.match).toBe(false);
+  });
+});
+
+describe("Fondeo co-op + match (ADR-CORE-011)", () => {
+  it("el periodo es el mes calendario en UTC", () => {
+    const period = monthPeriod(new Date("2026-11-27T05:00:00.000Z"));
+    expect(period.start.toISOString()).toBe("2026-11-01T00:00:00.000Z");
+    expect(period.end.toISOString()).toBe("2026-12-01T00:00:00.000Z");
+    expect(periodKey(period.start)).toBe("2026-11-01");
+  });
+
+  /** Executor falso: guarda las escrituras y responde como Postgres. */
+  function fakeExecutor(seed: {
+    contribution?: boolean;
+    account?: { promoAuthorized: number; status: string; sandbox: boolean } | null;
+    budget?: { id: string; budgeted: number; spent: number } | null;
+  }) {
+    const writes: string[] = [];
+    const executor = {
+      execute: async (query: any) => {
+        const text = (Array.isArray(query?.queryChunks) ? query.queryChunks : [])
+          .map((chunk: any) => {
+            if (typeof chunk === "string") return chunk;
+            if (Array.isArray(chunk?.value)) return chunk.value.join("");
+            return "";
+          })
+          .join(" ");
+        if (text.includes('FROM "fund_contributions"')) {
+          return { rows: seed.contribution ? [{ id: "c1", amount: 150, ledgerEntryId: "l1" }] : [] };
+        }
+        if (text.includes('FROM "merchant_capacity_accounts"')) {
+          return { rows: seed.account ? [seed.account] : [] };
+        }
+        if (text.includes('FROM "platform_budgets"')) {
+          return { rows: seed.budget ? [seed.budget] : [] };
+        }
+        if (text.includes('SELECT "id", "committed"')) return { rows: [] };
+        writes.push(text);
+        if (text.includes("RETURNING \"id\"")) return { rows: [{ id: "c-new" }] };
+        return { rows: [] };
+      },
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: () => ({ returning: async () => [{ id: "l-new" }] }),
+        }),
+      }),
+    };
+    return { executor, writes };
+  }
+
+  it("co-op es MINT biz_ → fondo y no toca el saldo del negocio", async () => {
+    const { executor, writes } = fakeExecutor({
+      account: { promoAuthorized: 1500, status: "ACTIVE", sandbox: false },
+    });
+    const res = await fundCoop(executor as never, {
+      businessId: "fb7f4847-920f-4482-8ae3-c810a20e75ad",
+      periodStart: new Date("2026-11-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-12-01T00:00:00.000Z"),
+    });
+    expect(res.ok).toBe(true);
+    expect(res.amount).toBe(150);
+    expect(res.idempotencyKey).toBe("coop:fb7f4847-920f-4482-8ae3-c810a20e75ad:2026-11-01");
+    expect(writes.join(" ")).not.toContain("bunzBalance");
+  });
+
+  it("co-op se salta si el mes ya se fondeó (idempotente)", async () => {
+    const { executor } = fakeExecutor({ contribution: true });
+    const res = await fundCoop(executor as never, {
+      businessId: "biz-1",
+      periodStart: new Date("2026-11-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-12-01T00:00:00.000Z"),
+    });
+    expect(res.alreadyDone).toBe(true);
+    expect(res.amount).toBe(150);
+  });
+
+  it("co-op no fondea afiliado suspendido ni sandbox", async () => {
+    const { executor } = fakeExecutor({
+      account: { promoAuthorized: 1500, status: "SUSPENDED", sandbox: false },
+    });
+    const res = await fundCoop(executor as never, {
+      businessId: "biz-1",
+      periodStart: new Date("2026-11-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-12-01T00:00:00.000Z"),
+    });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe("NOT_ACTIVE");
+  });
+
+  it("match se acota al presupuesto disponible", async () => {
+    const { executor } = fakeExecutor({ budget: { id: "b1", budgeted: 150, spent: 40 } });
+    const res = await fundMatch(executor as never, {
+      periodStart: new Date("2026-11-01T00:00:00.000Z"),
+      requested: 500,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.amount).toBe(110);
+  });
+
+  it("match sin presupuesto no emite", async () => {
+    const { executor } = fakeExecutor({});
+    const res = await fundMatch(executor as never, {
+      periodStart: new Date("2026-11-01T00:00:00.000Z"),
+    });
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe("NO_BUDGET");
   });
 });

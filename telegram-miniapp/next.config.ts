@@ -44,12 +44,18 @@ const nextConfig: NextConfig = {
               `script-src ${scriptSrc}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
+              // Notas de voz: se reproducen desde blob: (descarga autenticada)
+              // y desde data: (audios históricos). Sin esta directiva caen en
+              // default-src y el navegador las bloquea ("Load failed").
+              "media-src 'self' blob: data:",
               "font-src 'self' data:",
               // MapLibre GL crea su worker desde un blob local (tiles vectoriales).
               "worker-src 'self' blob:",
               "child-src 'self' blob:",
               "connect-src 'self' https: wss:",
-              "frame-src 'self' https://telegram.org https://js.stripe.com https://*.stripe.com",
+              // Landings de tenant (626cafe.rabbitty.me, etc.) se muestran en el
+              // navegador in-app: sin esto el iframe queda en blanco por CSP.
+              "frame-src 'self' https://telegram.org https://js.stripe.com https://*.stripe.com https://rabbitty.me https://*.rabbitty.me",
               "manifest-src 'self'",
             ].join("; "),
           },

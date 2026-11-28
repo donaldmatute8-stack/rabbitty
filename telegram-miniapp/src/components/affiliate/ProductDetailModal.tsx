@@ -41,6 +41,9 @@ interface ProductDetailModalProps {
   onAddToCart?: (item: CatalogItem, quantity: number, selectedModifiers: CatalogModifier[], notes: string) => void;
   currency?: string;
   rewardPercentage?: number;
+  /** El local no recibe pedidos ahora: no se puede agregar. */
+  orderingBlocked?: boolean;
+  orderingMessage?: string | null;
 }
 
 export function ProductDetailModal({
@@ -49,6 +52,8 @@ export function ProductDetailModal({
   onAddToCart,
   currency = 'MXN',
   rewardPercentage = 10,
+  orderingBlocked = false,
+  orderingMessage = null,
 }: ProductDetailModalProps) {
   // Use item ID as key or reset state on item transition
   const [prevItemId, setPrevItemId] = React.useState<string | null>(null);
@@ -204,6 +209,12 @@ export function ProductDetailModal({
             </div>
           </div>
 
+          {orderingBlocked && (
+            <p className="m-0 mx-4 mb-0 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-bold text-amber-200">
+              {orderingMessage || 'El local está cerrado ahora. Podrás pedir cuando abra.'}
+            </p>
+          )}
+
           {/* Bottom Action Footer */}
           <div className="p-4 sm:p-5 border-t border-white/10 bg-[#161622] flex items-center gap-3">
             {/* Quantity Stepper */}
@@ -231,15 +242,25 @@ export function ProductDetailModal({
             {/* Add to order / consult button */}
             <button
               type="button"
+              disabled={Boolean(onAddToCart) && orderingBlocked}
               onClick={() => {
+                if (Boolean(onAddToCart) && orderingBlocked) return;
                 if (onAddToCart) {
                   onAddToCart(item, quantity, selectedModifiers, specialInstructions);
                 }
                 onClose();
               }}
-              className="flex-1 h-12 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 active:scale-98 transition-all flex items-center justify-between cursor-pointer"
+              className={`flex-1 h-12 bg-linear-to-r from-[#E91E63] to-[#FF4081] text-white px-4 rounded-2xl font-black text-sm tracking-wide shadow-lg shadow-[#E91E63]/30 transition-all flex items-center justify-between ${
+                Boolean(onAddToCart) && orderingBlocked ? 'opacity-50 cursor-not-allowed' : 'active:scale-98 cursor-pointer'
+              }`}
             >
-              <span className="truncate">{onAddToCart ? 'Agregar al pedido' : 'Listo'}</span>
+              <span className="truncate">
+                {Boolean(onAddToCart) && orderingBlocked
+                  ? 'El local está cerrado'
+                  : onAddToCart
+                    ? 'Agregar al pedido'
+                    : 'Listo'}
+              </span>
               <span className="font-extrabold text-sm sm:text-base font-mono shrink-0 ml-2">
                 ${totalPrice.toFixed(0)} {currency}
               </span>

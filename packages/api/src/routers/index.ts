@@ -41,6 +41,7 @@ import { aiRouter } from "./ai";
 import { sandboxRouter } from "./sandbox";
 import { cashDropsRouter } from "./cashDrops";
 import { cashShiftsRouter } from "./cashShifts";
+import { registersRouter } from "./registers";
 import { customerChatRouter } from "./customerChat";
 import { supportInboxRouter } from "./supportInbox";
 import { moodRouter } from "./mood";
@@ -97,6 +98,7 @@ export const appRouter = router({
   sandbox: sandboxRouter,
   cashDrops: cashDropsRouter,
   cashShifts: cashShiftsRouter,
+  registers: registersRouter,
   customerChat: customerChatRouter,
   supportInbox: supportInboxRouter,
   mood: moodRouter,
