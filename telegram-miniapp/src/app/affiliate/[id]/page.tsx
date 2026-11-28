@@ -1116,7 +1116,10 @@ function AffiliateProfileContent() {
           <div className="space-y-5">
         {/* ── "Planeo ir": acciona la proximidad y avisa al comercio ──
             H-PRESYNC: se oculta si ya estás checkeado (no puedes "planeo ir"
-            cuando ya te registraste aquí), y muestra tu estado hidratado. */}
+            cuando ya te registraste aquí), y muestra tu estado hidratado.
+            Si el local está CERRADO no se ofrece: no tiene sentido avisar que
+            vas a un lugar que ahora no atiende. */}
+        {(hasPresenceCheckedIn || openNow) && (
         <div className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="min-w-0">
             {hasPresenceCheckedIn ? (
@@ -1165,6 +1168,7 @@ function AffiliateProfileContent() {
             </button>
           )}
         </div>
+        )}
 
         {/* ── Membresías del negocio (marketplace compacto) ── */}
         <MembershipMarketplace businessId={id} compact />
