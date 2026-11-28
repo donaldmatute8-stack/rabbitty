@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { businessOffers, offerRedemptions, ownedBusinesses, users } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getClientIp } from '@/lib/otp';
 import { normalizeOfferCode } from '@rabbitty/api/services/offers';
 
 /**
@@ -15,9 +17,28 @@ import { normalizeOfferCode } from '@rabbitty/api/services/offers';
  */
 export async function POST(req: Request) {
   try {
+    // Los códigos son de 6 caracteres: sin límite, una cuenta podría probar
+    // miles por minuto. 30/min cubre un mostrador con fila y frena el barrido.
+    const ip = getClientIp(req as unknown as NextRequest);
+    const ipLimit = await checkRateLimit(`offer_validate_ip:${ip}`, 60, 60);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { success: false, code: 'RATE_LIMITED', error: 'Demasiados intentos seguidos. Espera un momento.' },
+        { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) } },
+      );
+    }
+
     const caller = await getAuthenticatedUser(req);
     if (!caller) {
       return NextResponse.json({ success: false, code: 'NEED_SESSION', error: 'Inicia sesión.' }, { status: 401 });
+    }
+
+    const userLimit = await checkRateLimit(`offer_validate:${caller.id}`, 30, 60);
+    if (!userLimit.allowed) {
+      return NextResponse.json(
+        { success: false, code: 'RATE_LIMITED', error: 'Demasiados intentos seguidos. Espera un momento.' },
+        { status: 429, headers: { 'Retry-After': String(userLimit.retryAfterSeconds) } },
+      );
     }
 
     const body = await req.json().catch(() => ({}));

@@ -1,15 +1,42 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { db } from '@/db';
-import { businessOffers, offerRedemptions, ownedBusinesses } from '@/db/schema';
+import { auditEntries, businessOffers, offerRedemptions, ownedBusinesses } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
+import { getClientIp } from '@/lib/otp';
 
 /**
  * ── Ofertas del comercio (Stock) ───────────────────────────────────────────
  * Un negocio (POS o Lite) publica lo que se compromete a honrar con Bunz.
  * La disponibilidad visible es `min(stock, floor(bunzBalance / bunzCost))`.
  */
+
+/**
+ * Bitácora de ofertas. Es best-effort a propósito: un fallo al auditar no
+ * puede impedir que el comercio publique o pause su oferta.
+ */
+async function logOfferAudit(params: {
+  req: Request;
+  userId: string;
+  action: 'OFFER_CREATED' | 'OFFER_UPDATED' | 'OFFER_PAUSED' | 'OFFER_RESUMED';
+  offerId: string;
+  businessId: string;
+  details?: Record<string, unknown>;
+}) {
+  try {
+    await db.insert(auditEntries).values({
+      userId: params.userId,
+      action: params.action,
+      resource: 'business_offers',
+      resourceId: params.offerId,
+      details: JSON.stringify({ businessId: params.businessId, ...params.details }),
+      ipAddress: getClientIp(params.req as unknown as NextRequest),
+    });
+  } catch (error) {
+    console.warn('[BUSINESS_OFFERS_AUDIT]', error instanceof Error ? error.message : error);
+  }
+}
 
 async function resolveBusiness(callerId: string, role: string | null | undefined, businessIdFromQuery?: string | null) {
   if (businessIdFromQuery && role === 'ADMIN') {
@@ -138,6 +165,14 @@ export async function POST(req: Request) {
         .set(patch)
         .where(eq(businessOffers.id, id))
         .returning();
+      await logOfferAudit({
+        req,
+        userId: caller.id,
+        action: 'OFFER_UPDATED',
+        offerId: id,
+        businessId: biz.id,
+        details: { title, bunzCost, stockTotal, perUserLimit, status: patch.status },
+      });
       return NextResponse.json({ success: true, offer: updated });
     }
 
@@ -150,6 +185,14 @@ export async function POST(req: Request) {
         ...patch,
       })
       .returning();
+    await logOfferAudit({
+      req,
+      userId: caller.id,
+      action: 'OFFER_CREATED',
+      offerId: created.id,
+      businessId: biz.id,
+      details: { title, bunzCost, stockTotal, perUserLimit, status: patch.status },
+    });
     return NextResponse.json({ success: true, offer: created });
   } catch (error: unknown) {
     console.error('[BUSINESS_OFFERS_POST]', error instanceof Error ? error.message : error);
@@ -178,6 +221,15 @@ export async function PATCH(req: Request) {
       .where(and(eq(businessOffers.id, id), eq(businessOffers.businessId, biz.id)))
       .returning();
     if (!updated) return NextResponse.json({ success: false, error: 'Oferta no encontrada.' }, { status: 404 });
+
+    await logOfferAudit({
+      req,
+      userId: caller.id,
+      action: status === 'PAUSED' ? 'OFFER_PAUSED' : 'OFFER_RESUMED',
+      offerId: id,
+      businessId: biz.id,
+      details: { status },
+    });
 
     return NextResponse.json({ success: true, offer: updated });
   } catch (error: unknown) {

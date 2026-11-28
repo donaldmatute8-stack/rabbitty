@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { db } from '@/db';
 import { businessOffers, offerRedemptions, ownedBusinesses, users } from '@/db/schema';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 import { recordLedgerTransaction } from '@/lib/ledgerHelper';
+import { checkRateLimit } from '@/lib/rateLimit';
+import { getClientIp } from '@/lib/otp';
 import {
   generateOfferCode,
   isOfferLive,
@@ -23,9 +25,30 @@ import {
  */
 export async function POST(req: Request) {
   try {
+    // Cortafuegos por IP antes de tocar la base: evita que muchas cuentas
+    // agoten stock o respaldo de un negocio en ráfaga.
+    const ip = getClientIp(req as unknown as NextRequest);
+    const ipLimit = await checkRateLimit(`offer_redeem_ip:${ip}`, 30, 60);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { success: false, code: 'RATE_LIMITED', error: 'Demasiados canjes seguidos. Espera un momento.' },
+        { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) } },
+      );
+    }
+
     const caller = await getAuthenticatedUser(req);
     if (!caller) {
       return NextResponse.json({ success: false, code: 'NEED_SESSION', error: 'Inicia sesión para canjear.' }, { status: 401 });
+    }
+
+    // Límite por persona: 8 canjes por minuto es de sobra para el uso real y
+    // corta el doble clic/script sin afectar al Rabbitter normal.
+    const userLimit = await checkRateLimit(`offer_redeem:${caller.id}`, 8, 60);
+    if (!userLimit.allowed) {
+      return NextResponse.json(
+        { success: false, code: 'RATE_LIMITED', error: 'Vas muy rápido. Intenta de nuevo en unos segundos.' },
+        { status: 429, headers: { 'Retry-After': String(userLimit.retryAfterSeconds) } },
+      );
     }
 
     const body = await req.json().catch(() => ({}));
