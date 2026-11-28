@@ -288,7 +288,11 @@ function AffiliateProfileContent() {
   useEffect(() => {
     if (!id) return;
 
-    const branchQuery = selectedBranchId ? `?branchId=${encodeURIComponent(selectedBranchId)}` : '';
+    const params = new URLSearchParams();
+    if (selectedBranchId) params.set('branchId', selectedBranchId);
+    // El QR de mesa no trae sucursal: el servidor elige la que tiene esa mesa.
+    if (initialTableNum != null) params.set('table', String(initialTableNum));
+    const branchQuery = params.toString() ? `?${params.toString()}` : '';
     fetch(`/api/business/${id}${branchQuery}`)
       .then(res => res.json())
       .then((data: { success: boolean } & BusinessResponse) => {

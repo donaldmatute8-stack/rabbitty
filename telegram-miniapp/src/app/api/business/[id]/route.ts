@@ -109,6 +109,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       // Rabbitter (?lat/lng). Así el menú y el pedido caen en la MISMA sucursal.
       const urlParams = new URL(req.url).searchParams;
       const requestedBranchId = urlParams.get('branchId');
+      const requestedTable = Number(urlParams.get('table'));
       const userLat = Number(urlParams.get('lat'));
       const userLng = Number(urlParams.get('lng'));
       const hasCoords = Number.isFinite(userLat) && Number.isFinite(userLng);
@@ -129,6 +130,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       let chosen = requestedBranchId
         ? candidates.find((b) => b.id === requestedBranchId) ?? null
         : null;
+
+      // QR de mesa (?table=N): la sucursal correcta es la que tiene esa mesa,
+      // no la primera del negocio. Sin esto, en multi-sucursal la mesa no
+      // resolvía y el pedido caía en otra carta.
+      if (!chosen && Number.isFinite(requestedTable) && requestedTable > 0 && candidates.length > 0) {
+        const [tableHit] = await restaurantDb
+          .select({ branchId: tables.branchId })
+          .from(tables)
+          .where(and(
+            inArray(tables.branchId, candidates.map((b) => b.id)),
+            eq(tables.number, requestedTable),
+          ))
+          .limit(1);
+        if (tableHit?.branchId) {
+          chosen = candidates.find((b) => b.id === tableHit.branchId) ?? null;
+        }
+      }
 
       if (!chosen && candidates.length > 0) {
         const candidateIds = candidates.map((b) => b.id);
