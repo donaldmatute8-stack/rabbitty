@@ -90,6 +90,31 @@ NEXT_PUBLIC_CENTRIFUGO_URL=wss://<host>/connection/websocket
 REALTIME_POC_ENABLED=1
 ```
 
+### ⚠️ Orígenes permitidos: separados por ESPACIOS
+
+`CENTRIFUGO_CLIENT_ALLOWED_ORIGINS` es un `[]string`; Centrifugo lo parte por
+**espacios**, no por comas. Si se pone JSON o comas, queda **un solo string**
+y todo handshake con `Origin` recibe `403` (así estuvo caído el chat en vivo):
+
+```bash
+# ✅ correcto
+CENTRIFUGO_CLIENT_ALLOWED_ORIGINS="https://app.rabbitty.me https://kds.rabbitty.me"
+# ❌ incorrecto (un único origen con comas dentro)
+CENTRIFUGO_CLIENT_ALLOWED_ORIGINS='["https://app.rabbitty.me","https://kds.rabbitty.me"]'
+```
+
+Verificación rápida (debe abrir con el origen propio y dar `403` con uno ajeno):
+
+```bash
+node -e "const W=require('ws');const w=new W('wss://<host>/connection/websocket',{origin:'https://app.rabbitty.me'});w.on('open',()=>{console.log('OPEN');w.close()});w.on('unexpected-response',(q,r)=>console.log('HTTP',r.statusCode))"
+```
+
+El otro lado del contrato es el secreto: el `CENTRIFUGO_TOKEN_SECRET` de la app
+debe ser **el mismo** que `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` de Railway.
+Si no coincide, el handshake abre pero el frame `connect` se rechaza. Se
+verifica pidiendo un token a `POST /api/realtime/centrifugo` y enviándolo en el
+frame `connect`.
+
 ---
 
 ## Pendiente (Fase 3 en adelante)
