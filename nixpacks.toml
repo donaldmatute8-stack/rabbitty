@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["...", "openssl", "postgresql_17"]
+nixPkgs = ["...", "openssl", "postgresql_18"]
 
 [phases.install]
 cmds = ["pnpm install --no-frozen-lockfile"]
