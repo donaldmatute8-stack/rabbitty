@@ -38,6 +38,9 @@ export default function InteractiveMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<MapEngine | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  // Movimiento programático (fly/fit): evita que el mapa parezca vacío.
+  const [mapBusy, setMapBusy] = useState(false);
+  const busyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [engineKind, setEngineKind] = useState<'maplibre' | 'leaflet'>('leaflet');
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
@@ -489,6 +492,11 @@ export default function InteractiveMap({
       isDark,
       onSelect: (b) => setSelected(b),
       onDeselect: () => setSelected(null),
+      onBusy: (durationMs: number) => {
+        setMapBusy(true);
+        if (busyTimerRef.current) clearTimeout(busyTimerRef.current);
+        busyTimerRef.current = setTimeout(() => setMapBusy(false), Math.max(400, durationMs + 250));
+      },
       onReady: () => {
         if (cancelled) return;
         setMapReady(true);
@@ -616,6 +624,15 @@ export default function InteractiveMap({
       />
 
       {/* Mientras el motor no reporta listo: mismo loader que el inicio */}
+      {mapBusy && !nativeMapActive && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
+          <div className="flex items-center gap-2 rounded-full bg-black/75 px-4 py-2 text-[11px] font-black text-white shadow-lg">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/25 border-t-white" />
+            Buscando spots…
+          </div>
+        </div>
+      )}
+
       {!mapReady && !nativeMapActive && (
         <div
           className="absolute inset-0 z-10 flex items-center justify-center"

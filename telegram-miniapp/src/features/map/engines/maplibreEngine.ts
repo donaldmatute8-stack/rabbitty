@@ -374,6 +374,7 @@ export async function createMapLibreEngine(opts: MapEngineOptions): Promise<MapE
     },
 
     flyTo(lat, lng, zoom = 15, durationMs = 1200) {
+      opts.onBusy?.(durationMs);
       map.flyTo({ center: [lng, lat], zoom, duration: durationMs, essential: true });
     },
 
@@ -381,6 +382,7 @@ export async function createMapLibreEngine(opts: MapEngineOptions): Promise<MapE
       const pts = items.map(coordsOf).filter((p): p is { lat: number; lng: number } => p !== null);
       if (pts.length === 0) return;
       if (pts.length === 1) {
+        opts.onBusy?.(900);
         map.flyTo({ center: [pts[0].lng, pts[0].lat], zoom: 16, duration: 900 });
         return;
       }
@@ -392,6 +394,7 @@ export async function createMapLibreEngine(opts: MapEngineOptions): Promise<MapE
         maxLng = Math.max(maxLng, p.lng);
       }
       const bounds: LngLatBoundsLike = [[minLng, minLat], [maxLng, maxLat]];
+      opts.onBusy?.(700);
       map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 700 });
     },
 

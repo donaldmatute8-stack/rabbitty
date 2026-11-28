@@ -157,6 +157,7 @@ export async function createLeafletEngine(opts: MapEngineOptions): Promise<MapEn
     },
 
     flyTo(lat, lng, zoom = 15, durationMs = 1200) {
+      opts.onBusy?.(durationMs);
       map.flyTo([lat, lng], zoom, { duration: Math.max(0.2, durationMs / 1000) });
     },
 
@@ -166,6 +167,7 @@ export async function createLeafletEngine(opts: MapEngineOptions): Promise<MapEn
         .filter((p): p is { lat: number; lng: number } => p !== null)
         .map((p) => [p.lat, p.lng] as [number, number]);
       if (pts.length === 0) return;
+      opts.onBusy?.(700);
       map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 });
     },
 
