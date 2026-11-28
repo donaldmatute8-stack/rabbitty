@@ -139,19 +139,37 @@ async function orderGate(branchId: string) {
       startTime: ownedBusinesses.startTime,
       endTime: ownedBusinesses.endTime,
       timezone: ownedBusinesses.timezone,
+      participationModel: ownedBusinesses.participationModel,
     })
     .from(ownedBusinesses)
     .where(eq(ownedBusinesses.id, biz.businessId))
     .limit(1);
   if (!owner) return null;
 
-  return resolveOrderingStatus(restaurantDb, {
+  const gate = await resolveOrderingStatus(restaurantDb, {
     branchId,
     activeDays: owner.activeDays,
     startTime: owner.startTime,
     endTime: owner.endTime,
     timezone: owner.timezone,
   });
+
+  // Un negocio LITE no tiene POS ni KDS: si aceptara pedidos, nadie los vería.
+  // Se corta en el servidor, no solo en la UI.
+  if (owner.participationModel === 'LITE') {
+    return {
+      ...gate,
+      canOrder: false,
+      state: 'CLOSED' as const,
+      scheduleOpen: false,
+      cashShiftOpen: false,
+      message: 'Este negocio no recibe pedidos desde la app; puedes canjear sus Bunz en el local.',
+      tone: 'info' as const,
+      nextOpenLabel: null,
+    };
+  }
+
+  return gate;
 }
 
 /** Rechazo con código estable + log para diagnóstico (sin datos del cliente). */

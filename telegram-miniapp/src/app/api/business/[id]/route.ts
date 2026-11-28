@@ -71,20 +71,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return NextResponse.json({ error: 'Business not found' }, { status: 404 });
     }
 
-    // Try finding direct restaurant profile, with graceful fallback to pilot restaurant if F&B
-    let restaurant = await restaurantDb.query.restaurants.findFirst({
-      where: eq(restaurants.businessId, businessId)
-    });
-
-    const isFoodAndBeverage = ['restaurant', 'cafeteria', 'cafe', 'bar', 'alimentos', 'comida', 'mariscos'].some(k => 
+    const isFoodAndBeverage = ['restaurant', 'cafeteria', 'cafe', 'bar', 'alimentos', 'comida', 'mariscos'].some(k =>
       (business.category || '').toLowerCase().includes(k)
     );
 
-    if (!restaurant && isFoodAndBeverage) {
-      restaurant = await restaurantDb.query.restaurants.findFirst({
-        where: eq(restaurants.businessId, 'rabbitty-main')
-      });
-    }
+    // El perfil del restaurante se busca por el ID REAL del negocio, no por el
+    // parámetro de la URL: si llega el slug (`626cafe`) antes no encontraba su
+    // restaurante y la ficha salía sin menú. En multi-tenant NO se cae a un
+    // restaurante "piloto": cada negocio ve solo su propia carta.
+    const restaurant = await restaurantDb.query.restaurants.findFirst({
+      where: eq(restaurants.businessId, business.id)
+    });
 
     let primaryBranch: BranchRecord | null = null;
     let categoriesWithItems: CategoryWithItems[] = [];
@@ -231,7 +228,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
     const capabilities = {
       menuEnabled: hasStructuredMenu || isFoodAndBeverage,
-      digitalOrderingEnabled: hasStructuredMenu && (primaryBranch !== null || isFoodAndBeverage),
+      // LITE no tiene POS que reciba el pedido: no se ofrece ordering.
+      digitalOrderingEnabled: business.participationModel !== 'LITE'
+        && hasStructuredMenu
+        && (primaryBranch !== null || isFoodAndBeverage),
       tableServiceEnabled: branchTables.length > 0,
       reservationsEnabled: true,
       appointmentBookingEnabled: isServiceOrWellness,
@@ -268,13 +268,27 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     // ¿Se puede pedir ahora? El cliente lo necesita ANTES de armar el carrito:
     // si el local está cerrado no debe escribir el pedido para descubrirlo al
     // final. Misma regla que usa `/api/pos/checkout`.
-    const ordering = await resolveOrderingStatus(restaurantDb, {
+    const orderingBase = await resolveOrderingStatus(restaurantDb, {
       branchId: primaryBranch?.id ?? null,
       activeDays: business.activeDays,
       startTime: business.startTime,
       endTime: business.endTime,
       timezone: business.timezone,
     });
+    // Un negocio LITE solo participa en Bunz (perfil, ofertas y canjes): no
+    // tiene POS que reciba pedidos, así que la app no debe ofrecer "pedir".
+    const ordering = business.participationModel === 'LITE'
+      ? {
+          ...orderingBase,
+          canOrder: false,
+          state: 'CLOSED' as const,
+          scheduleOpen: false,
+          cashShiftOpen: false,
+          message: 'Este negocio no recibe pedidos desde la app; puedes canjear sus Bunz en el local.',
+          tone: 'info' as const,
+          nextOpenLabel: null,
+        }
+      : orderingBase;
 
     return NextResponse.json({
       success: true,
