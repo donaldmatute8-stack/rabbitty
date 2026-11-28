@@ -1089,6 +1089,8 @@ function AffiliateProfileContent() {
         {activeTab === 'menu' && (
           <div className="space-y-6">
             <DigitalMenuCatalog
+              orderingBlocked={ordering ? !ordering.canOrder : false}
+              orderingMessage={ordering?.message ?? null}
               categories={menuOnlyCategories}
               currency="MXN"
               rewardPercentage={affiliate.rewardPercentage}
