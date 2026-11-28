@@ -4,7 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Bookmark, Share2, X, Check, Heart, ExternalLink, MessageCircle } from 'lucide-react';
+import { MoreHorizontal, Bookmark, Share2, X, Check, Heart, ExternalLink, MessageCircle, Sparkles, Clock } from 'lucide-react';
 import { PlatformBridge } from '@/lib/platform';
 import { useToast } from '@/contexts/ToastContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -20,6 +20,20 @@ interface FeedCardProps {
   initialSavedCount?: number;
   initialSharedCount?: number;
   index: number;
+  /** Capa Bunz (opcional): cuánto cuesta canjear y si te alcanza. */
+  spend?: {
+    title: string;
+    minCost: number;
+    canjesDisponibles: number;
+    affordable: boolean;
+    faltan: number;
+    /** Cuántos canjes alcanzan con el saldo del Rabbitter (lo calcula el feed). */
+    canjesParaMi?: number;
+  } | null;
+  /** Horario + caja: si el local está abierto ahora. */
+  open?: boolean;
+  /** "07:00–21:00" para mostrar cierre/apertura. */
+  hours?: string;
 }
 
 const emptySubscribe = () => () => {};
@@ -34,7 +48,10 @@ export default function FeedCard({
   initialHops, 
   initialSavedCount, 
   initialSharedCount, 
-  index 
+  index,
+  spend = null,
+  open,
+  hours,
 }: FeedCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -220,6 +237,22 @@ export default function FeedCard({
             </div>
           )}
 
+          {/* Capa Bunz: cinta solo cuando de verdad puede canjear */}
+          {spend?.affordable && spend.canjesDisponibles > 0 && (
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: 'linear-gradient(90deg, #E91E63 0%, #FF4081 100%)',
+              padding: '7px 12px',
+              display: 'flex', alignItems: 'center', gap: 6,
+              zIndex: 9,
+            }}>
+              <Sparkles size={12} color="#fff" />
+              <span style={{ fontSize: 10.5, fontWeight: 900, color: '#fff', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                Puedes canjear aquí · desde {spend.minCost}
+              </span>
+            </div>
+          )}
+
           {/* Pill compartido: Ubicación / Cerca + Tres puntos (...) funcionales */}
           <div 
             style={{
@@ -289,6 +322,26 @@ export default function FeedCard({
                 {user}
               </p>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 500 }}>{device}</p>
+              {(spend || open === false) && (
+                <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {spend && (
+                    <p style={{
+                      margin: 0, fontSize: 12.5, fontWeight: 800,
+                      color: spend.affordable ? '#E91E63' : 'var(--text-muted)',
+                    }}>
+                      Desde {spend.minCost} Bunz
+                      {spend.affordable
+                        ? ` · te alcanza para ${Math.max(1, spend.canjesParaMi ?? Math.min(spend.canjesDisponibles, 1))}`
+                        : ` · te faltan ${spend.faltan}`}
+                    </p>
+                  )}
+                  {open === false && (
+                    <p style={{ margin: 0, fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Clock size={11} /> Cerrado{hours ? ` · abre ${hours.split('–')[0]}` : ''}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               <button
@@ -330,7 +383,7 @@ export default function FeedCard({
                 }}
                 className="active:scale-95 transition-transform"
               >
-                Abrir
+                {spend?.affordable ? 'Canjear' : 'Abrir'}
               </button>
             </div>
           </div>

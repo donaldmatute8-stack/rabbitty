@@ -8,7 +8,7 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import BottomNav from '@/components/BottomNav';
 import Tabs from '@/components/ui/Tabs';
-import BunzDiscover from '@/components/bunz/BunzDiscover';
+import BunzFeed from '@/components/bunz/BunzFeed';
 import { useAuth } from '@/features/auth/AuthProvider';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
@@ -886,8 +886,8 @@ export default function FeedPage() {
               </div>
               )}
 
-              {/* Bunz v2: una lista que se adapta (earn + spend + horario). */}
-              <BunzDiscover
+              {/* Feed social de siempre + capa Bunz (canje, horario, alcanza). */}
+              <BunzFeed
                 isDark={isDark}
                 userLat={userLat}
                 userLng={userLng}

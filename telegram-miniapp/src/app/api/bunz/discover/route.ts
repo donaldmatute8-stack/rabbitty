@@ -164,8 +164,25 @@ export async function GET(req: Request) {
         if (earn) tags.push(`+${earn.pct}%`);
         if (!open) tags.push('Cerrado');
 
+        const label =
+          dist == null
+            ? 'Cerca'
+            : dist < 0.1
+              ? 'Aquí'
+              : dist < 1
+                ? `${Math.round(dist * 1000)} m`
+                : `${dist.toFixed(1)} km`;
+
         return {
           id: b.id,
+          // Campos que ya consumía la tarjeta social (FeedCard).
+          user: b.name,
+          device: b.category || 'General',
+          label,
+          bunz: earn?.pct ?? 0,
+          hops: b.hops || 0,
+          savedCount: b.savedCount || 0,
+          sharedCount: b.sharedCount || 0,
           name: b.name,
           category: b.category,
           niche: b.niche,
