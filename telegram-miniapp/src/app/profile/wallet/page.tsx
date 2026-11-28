@@ -18,6 +18,8 @@ interface Transaction {
   type: 'spent' | 'earned';
   date: string;
   icon: string;
+  /** BUNZ = movimientos de la economía · MXN = pagos en el local. */
+  currency?: 'BUNZ' | 'MXN';
 }
 
 interface RabbitterSuggestion {
@@ -334,7 +336,7 @@ export default function WalletPage() {
 
         {/* Transaction history */}
         <div className="bg-[#161622] rounded-2xl border border-white/10 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
-          <p className="font-extrabold text-white text-[15px] mb-4">Últimas transacciones (Ledger)</p>
+          <p className="font-extrabold text-white text-[15px] mb-4">Últimas transacciones</p>
 
           {historyLoading ? (
             <div className="flex flex-col gap-3">
@@ -372,7 +374,7 @@ export default function WalletPage() {
                     </div>
                   </div>
                   <span className="font-extrabold text-[15px]" style={{ color: tx.type === 'earned' ? '#34D399' : '#F472B6' }}>
-                    {tx.amount} bunz
+                    {tx.amount} {tx.currency === 'MXN' ? 'MXN' : 'bunz'}
                   </span>
                 </div>
               ))}

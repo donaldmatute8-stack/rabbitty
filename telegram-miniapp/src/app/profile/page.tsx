@@ -355,11 +355,11 @@ export default function ProfilePage() {
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/10 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-emerald-300/70">Ganados</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-emerald-300/70">Recibidos</p>
                     <AnimatedBunz value={earned} className="text-sm font-black text-emerald-300" />
                   </div>
                   <div className="rounded-xl border border-rose-400/15 bg-rose-400/10 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-rose-300/70">Usados</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-rose-300/70">Salidas</p>
                     <AnimatedBunz value={spent} className="text-sm font-black text-rose-300" />
                   </div>
                 </div>
