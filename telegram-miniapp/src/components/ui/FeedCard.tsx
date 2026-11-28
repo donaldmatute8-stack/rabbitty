@@ -22,6 +22,7 @@ interface FeedCardProps {
   index: number;
   /** Capa Bunz (opcional): cuánto cuesta canjear y si te alcanza. */
   spend?: {
+    offerId?: string;
     title: string;
     minCost: number;
     canjesDisponibles: number;
@@ -34,6 +35,8 @@ interface FeedCardProps {
   open?: boolean;
   /** "07:00–21:00" para mostrar cierre/apertura. */
   hours?: string;
+  /** Cuando la oferta es canjeable: abre el flujo de canje en vez de navegar. */
+  onRedeem?: () => void;
 }
 
 const emptySubscribe = () => () => {};
@@ -52,6 +55,7 @@ export default function FeedCard({
   spend = null,
   open,
   hours,
+  onRedeem,
 }: FeedCardProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -372,6 +376,10 @@ export default function FeedCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (spend?.affordable && onRedeem) {
+                    onRedeem();
+                    return;
+                  }
                   router.push(`/affiliate/${id}`);
                 }}
                 style={{

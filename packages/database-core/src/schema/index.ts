@@ -394,6 +394,61 @@ export const businessBalanceAdjustments = pgTable("business_balance_adjustments"
   index("business_balance_adjustments_business_idx").on(t.businessId, t.status, t.createdAt),
 ]);
 
+/**
+ * ── Ofertas reales (Stock) ─────────────────────────────────────────────────
+ * Lo que el negocio se compromete a honrar con Bunz. La disponibilidad real es
+ * `min(stockTotal - stockUsed, floor(bunzBalance / bunzCost))`: nunca se
+ * promete más de lo que el respaldo permite.
+ */
+export const businessOffers = pgTable("business_offers", {
+  id: id(),
+  businessId: fkId("businessId").references(() => ownedBusinesses.id, { onDelete: "cascade" }),
+  branchId: text("branchId"),
+  title: text("title").notNull(),
+  description: text("description"),
+  imageUrl: text("imageUrl"),
+  bunzCost: integer("bunzCost").notNull(),
+  fiatValue: real("fiatValue"),
+  menuItemId: text("menuItemId"),
+  stockTotal: integer("stockTotal").default(0).notNull(),
+  stockUsed: integer("stockUsed").default(0).notNull(),
+  perUserLimit: integer("perUserLimit").default(1).notNull(),
+  validFrom: timestamp("validFrom").defaultNow(),
+  validUntil: timestamp("validUntil"),
+  status: text("status").default("ACTIVE").notNull(), // ACTIVE | PAUSED | SOLD_OUT | EXPIRED
+  ...timestamps,
+}, (t) => [
+  index("business_offers_business_idx").on(t.businessId, t.status, t.createdAt),
+  index("business_offers_publicables_idx").on(t.status, t.bunzCost),
+]);
+
+/**
+ * ── Canjes de oferta ──────────────────────────────────────────────────────
+ * `RESERVED` (código emitido, esperando al comercio) → `VALIDATED`.
+ * Si expira sin validar, se devuelve el Bunz y se restaura el respaldo.
+ */
+export const offerRedemptions = pgTable("offer_redemptions", {
+  id: id(),
+  offerId: text("offerId").notNull(),
+  businessId: text("businessId").notNull(),
+  userId: text("userId").notNull(),
+  code: text("code").notNull(),
+  bunzCost: integer("bunzCost").notNull(),
+  status: text("status").default("RESERVED").notNull(), // RESERVED | VALIDATED | EXPIRED | CANCELLED
+  reservedAt: timestamp("reservedAt").defaultNow(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  validatedAt: timestamp("validatedAt"),
+  validatedBy: text("validatedBy"),
+  ledgerEntryId: text("ledgerEntryId"),
+  idempotencyKey: text("idempotencyKey").notNull(),
+  ...timestamps,
+}, (t) => [
+  uniqueIndex("offer_redemptions_code_uidx").on(t.code),
+  uniqueIndex("offer_redemptions_idem_uidx").on(t.idempotencyKey),
+  index("offer_redemptions_business_idx").on(t.businessId, t.status, t.createdAt),
+  index("offer_redemptions_user_idx").on(t.userId, t.offerId, t.status),
+]);
+
 export const platformBudgets = pgTable("platform_budgets", {
   id: id(),
   program: text("program").notNull(),

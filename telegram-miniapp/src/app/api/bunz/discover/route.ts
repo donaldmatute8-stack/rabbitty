@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
-import { ownedBusinesses, users } from '@/db/schema';
+import { ownedBusinesses, users, businessOffers } from '@/db/schema';
 import { restaurantDb } from '@/db/restaurant';
 import { branches, restaurants, cashShifts } from '@rabbitty/database-restaurant/schema';
 import { isBusinessOpen } from '@/lib/chat';
 import { resolveBusinessCover } from '@/lib/businessCover';
-import { syntheticOfferFor } from '@/lib/syntheticOffers';
+import { offerAvailableUnits, pickOfferForCard } from '@rabbitty/api/services/offers';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
@@ -83,6 +83,18 @@ export async function GET(req: Request) {
       .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
       .where(inArray(restaurants.businessId, ids));
 
+    // Ofertas reales: una sola consulta para todos los negocios de la lista.
+    const offerRows = await db
+      .select()
+      .from(businessOffers)
+      .where(and(inArray(businessOffers.businessId, ids), eq(businessOffers.status, 'ACTIVE')));
+    const offersByBusiness = new Map<string, typeof offerRows>();
+    for (const offer of offerRows) {
+      const list = offersByBusiness.get(offer.businessId) ?? [];
+      list.push(offer);
+      offersByBusiness.set(offer.businessId, list);
+    }
+
     const branchByBusiness = new Map<string, { id: string; name: string }>();
     const grouped = new Map<string, Array<{ id: string; name: string; isActive: boolean }>>();
     for (const row of branchRows) {
@@ -124,14 +136,15 @@ export async function GET(req: Request) {
         const shiftOpen = branch ? openShiftBranches.has(branch.id) : false;
         const open = scheduleOpen || shiftOpen;
 
-        const offer = syntheticOfferFor(b);
-        const spend = offer
+        const picked = pickOfferForCard(offersByBusiness.get(b.id) ?? [], Number(b.bunzBalance || 0));
+        const spend = picked
           ? {
-              title: offer.title,
-              minCost: offer.bunzCost,
-              canjesDisponibles: offer.canjesDisponibles,
-              affordable: balance >= offer.bunzCost,
-              faltan: balance >= offer.bunzCost ? 0 : offer.bunzCost - balance,
+              offerId: picked.id,
+              title: picked.title,
+              minCost: Number(picked.bunzCost),
+              canjesDisponibles: offerAvailableUnits(picked, Number(b.bunzBalance || 0)),
+              affordable: balance >= Number(picked.bunzCost),
+              faltan: balance >= Number(picked.bunzCost) ? 0 : Number(picked.bunzCost) - balance,
             }
           : null;
 

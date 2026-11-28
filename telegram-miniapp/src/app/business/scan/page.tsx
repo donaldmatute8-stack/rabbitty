@@ -22,7 +22,11 @@ export default function BusinessScanPage() {
   const [processing, setProcessing] = useState(false);
 
   // ── Modo: dar Bunz (recompensa) o cobrar Bunz (consumo) ──
-  const [mode, setMode] = useState<"mint" | "charge">("mint");
+  const [mode, setMode] = useState<"mint" | "charge" | "redeem">("mint");
+  // Validar canje (código que muestra el Rabbitter)
+  const [redeemCode, setRedeemCode] = useState("");
+  const [redeemBusy, setRedeemBusy] = useState(false);
+  const [redeemOk, setRedeemOk] = useState<{ title: string; bunzCost: number; businessName: string } | null>(null);
   const [chargeCustomer, setChargeCustomer] = useState<{ id: string; name: string } | null>(null);
   const [chargeStage, setChargeStage] = useState<"idle" | "waiting" | "done">("idle");
   const [chargeInfo, setChargeInfo] = useState<{ requestId: string; orderId: string } | null>(null);
@@ -216,16 +220,19 @@ export default function BusinessScanPage() {
           <p className="text-gray-500 text-sm mt-1">
             {mode === "charge"
               ? "Cobra con Bunz al Rabbitter. Se crea una orden real: la ves en el POS, en los turnos y en los reportes."
-              : "Escanea el código QR de los Rabbitters para validar sus certificados o asignarles recompensas por sus consumos."}
+              : mode === "redeem"
+                ? "Valida el código de un canje de Stock. El cliente ya pagó con Bunz; aquí solo confirmas que lo entregaste."
+                : "Escanea el código QR de los Rabbitters para validar sus certificados o asignarles recompensas por sus consumos."}
           </p>
         </div>
       </div>
 
       {/* Dar Bunz (recompensa) vs Cobrar Bunz (consumo) */}
-      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-gray-100 p-1">
+      <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl bg-gray-100 p-1">
         {([
           { key: "mint" as const, label: "Dar Bunz" },
           { key: "charge" as const, label: "Cobrar Bunz" },
+          { key: "redeem" as const, label: "Canje" },
         ]).map((opt) => (
           <button
             key={opt.key}
@@ -245,6 +252,66 @@ export default function BusinessScanPage() {
         </p>
       )}
 
+      {mode === "redeem" && (
+        <div className="bg-gray-50 border border-gray-100 rounded-3xl p-6">
+          <p className="m-0 text-xs font-black uppercase tracking-wider text-gray-500">Código del canje</p>
+          <div className="mt-2 flex gap-2">
+            <input
+              value={redeemCode}
+              onChange={(e) => setRedeemCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8))}
+              placeholder="ABC123"
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-xl font-black tracking-[0.2em] text-gray-900 outline-none"
+            />
+            <button
+              type="button"
+              disabled={redeemBusy || redeemCode.length < 4}
+              onClick={async () => {
+                setRedeemBusy(true);
+                setRedeemOk(null);
+                try {
+                  const headers = await PlatformBridge.getAuthHeaders().catch(() => null);
+                  const res = await fetch("/api/offers/validate", {
+                    method: "POST",
+                    headers: { ...(headers || {}), "Content-Type": "application/json" },
+                    body: JSON.stringify({ code: redeemCode }),
+                  });
+                  const data = await res.json().catch(() => null);
+                  if (!res.ok || !data?.success) {
+                    toast.error(data?.error || "No pudimos validar el canje.");
+                    return;
+                  }
+                  setRedeemOk({
+                    title: data.offerTitle || "Canje",
+                    bunzCost: Number(data.bunzCost || 0),
+                    businessName: data.businessName || "",
+                  });
+                  setRedeemCode("");
+                } finally {
+                  setRedeemBusy(false);
+                }
+              }}
+              className="shrink-0 rounded-xl bg-black px-5 py-3 text-sm font-black text-white disabled:opacity-50"
+            >
+              {redeemBusy ? "…" : "Validar"}
+            </button>
+          </div>
+
+          {redeemOk && (
+            <div className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-left">
+              <p className="m-0 text-xs font-black text-emerald-800">✅ Canje validado</p>
+              <p className="m-0 mt-0.5 text-sm font-bold text-emerald-900">
+                {redeemOk.title} · {redeemOk.bunzCost} Bunz
+              </p>
+              <p className="m-0 text-[11px] text-emerald-700">{redeemOk.businessName}</p>
+            </div>
+          )}
+          <p className="m-0 mt-3 text-[11px] leading-snug text-gray-500">
+            Si el código venció, el sistema devuelve los Bunz al cliente automáticamente.
+          </p>
+        </div>
+      )}
+
+      {mode !== "redeem" && (
       <div className="bg-gray-50 border border-gray-100 rounded-3xl p-8 flex flex-col items-center justify-center text-center mt-12">
         <div className="w-24 h-24 bg-white rounded-full shadow-sm flex items-center justify-center mb-6">
           <span className="text-4xl">📷</span>
@@ -262,6 +329,7 @@ export default function BusinessScanPage() {
           {processing ? 'Procesando...' : 'Abrir Escáner'}
         </button>
       </div>
+      )}
 
       {isScanning && (
         <QRScanner 

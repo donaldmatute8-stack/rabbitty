@@ -146,7 +146,14 @@ async function resolveScope(ctx: { restaurantDb: any; branchId: string }) {
 
 export const posTerminalsRouter = router({
   /** ¿Está habilitado el modelo de terminal? (el POS decide si lo usa) */
-  featureEnabled: publicProcedure.query(async () => ({ enabled: featureEnabled() })),
+  featureEnabled: publicProcedure.query(async () => ({
+    enabled: featureEnabled(),
+    /**
+     * Regla dura (opt-in por entorno): sin terminal vinculada no se opera el POS.
+     * Apagada por defecto para no romper sucursales que hoy usan sesión de admin.
+     */
+    requiresTerminal: process.env.POS_REQUIRE_TERMINAL === "1",
+  })),
 
   /**
    * ── Diagnóstico de la sucursal (soporte / monitoreo) ──

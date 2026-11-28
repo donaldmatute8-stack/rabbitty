@@ -167,6 +167,40 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) return <div className="h-[100dvh] w-screen bg-black" />;
 
+  // ── Regla dura (opt-in): sin terminal no se opera el POS ──
+  // Se activa con POS_REQUIRE_TERMINAL=1 (staging). Producción la mantiene
+  // apagada hasta que ninguna caja dependa de la sesión de administrador.
+  if (!terminalMode && !hasTerminalToken && feature?.requiresTerminal === true) {
+    return (
+      <div className="h-[100dvh] w-screen bg-black text-white flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-3xl border border-white/10 bg-white/[0.03] p-6 space-y-3">
+          <p className="m-0 text-[10px] font-black uppercase tracking-[0.22em] text-cyan-400">Dispositivo no vinculado</p>
+          <p className="m-0 text-lg font-black">Este equipo no es una terminal</p>
+          <p className="m-0 text-sm text-gray-300">
+            El POS solo opera en dispositivos vinculados (caja, comandero o KDS). Así cada
+            venta queda atada a su caja y a su turno.
+          </p>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => router.replace("/pos/link")}
+              className="flex-1 rounded-xl bg-cyan-500 hover:bg-cyan-400 px-4 py-2.5 text-xs font-black text-gray-950"
+            >
+              Vincular este dispositivo
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace("/")}
+              className="flex-1 rounded-xl bg-white/10 hover:bg-white/20 px-4 py-2.5 text-xs font-black"
+            >
+              Ir al panel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Negocio LITE: el POS no aplica ──
   // El bloqueo real está en `posProcedure`; esto solo lo explica y ofrece salida.
   if (!terminalMode && participation?.model === "LITE") {
