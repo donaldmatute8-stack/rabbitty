@@ -135,6 +135,9 @@ async function put(aws: AwsClient, host: string, bucket: string, key: string, bo
     body: new Uint8Array(body),
     headers: {
       "content-type": "application/octet-stream",
+      // R2/S3 exigen Content-Length explícito para cuerpos binarios; sin él
+      // responden 411 MissingContentLength y el respaldo no se sube.
+      "content-length": String(body.byteLength),
     },
   });
   if (!res.ok) {
