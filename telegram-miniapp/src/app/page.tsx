@@ -72,7 +72,7 @@ interface FeedItem {
 
 
 const TABS = ["bunz'in", 'Freehands'];
-const TAB_LABELS: Record<string, string> = { "bunz'in": 'Bunz', Freehands: 'Mapa' };
+const TAB_LABELS: Record<string, string> = { "bunz'in": "bunz'in", Freehands: 'Mapa' };
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
