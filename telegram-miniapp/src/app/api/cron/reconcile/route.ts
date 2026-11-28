@@ -17,8 +17,12 @@ export async function GET(req: NextRequest) {
     const authHeader = req.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
 
-    // Secure cron trigger via Bearer CRON_SECRET or verified admin header
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    // Secure cron trigger via Bearer CRON_SECRET or verified admin header.
+    // Fail-closed: sin CRON_SECRET el endpoint no puede quedar abierto.
+    if (!cronSecret) {
+      return NextResponse.json({ error: 'CRON_SECRET no configurado' }, { status: 401 });
+    }
+    if (authHeader !== `Bearer ${cronSecret}`) {
       const adminHeader = req.headers.get('x-telegram-id');
       if (!adminHeader || !ADMIN_TELEGRAM_IDS.includes(adminHeader)) {
         return NextResponse.json({ error: 'Unauthorized cron access' }, { status: 401 });

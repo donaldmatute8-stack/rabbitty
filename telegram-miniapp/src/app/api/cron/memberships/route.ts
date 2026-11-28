@@ -15,7 +15,8 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   const provided = req.headers.get('x-cron-secret') || req.headers.get('authorization')?.replace('Bearer ', '');
-  if (secret && provided !== secret) {
+  // Fail-closed: sin CRON_SECRET el cron no queda abierto a cualquiera.
+  if (!secret || provided !== secret) {
     return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
   }
 

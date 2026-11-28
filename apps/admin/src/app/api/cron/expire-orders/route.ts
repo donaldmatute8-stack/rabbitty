@@ -18,7 +18,8 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Registro en Railway cron → GET /api/cron/expire-orders (Authorization: Bearer CRON_SECRET).
  */
 export async function GET(req: NextRequest) {
-  if (req.headers.get("Authorization") !== `Bearer ${CRON_SECRET}`) {
+  // Sin secreto configurado, "Bearer undefined" no debe pasar.
+  if (!CRON_SECRET || req.headers.get("Authorization") !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

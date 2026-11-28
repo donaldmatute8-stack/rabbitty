@@ -10,6 +10,11 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * GET /api/cron/offers-expire · Authorization: Bearer CRON_SECRET
  */
 export async function GET(req: NextRequest) {
+  // Sin secreto configurado el endpoint queda cerrado: si no, "Bearer undefined"
+  // pasaría la comparación y cualquiera podría disparar el barrido.
+  if (!CRON_SECRET) {
+    return NextResponse.json({ error: "CRON_SECRET no configurado" }, { status: 401 });
+  }
   if (req.headers.get("Authorization") !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
