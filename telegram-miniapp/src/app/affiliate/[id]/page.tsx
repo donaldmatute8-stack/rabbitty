@@ -1443,6 +1443,8 @@ function AffiliateProfileContent() {
       {/* Detalle de producto de la tienda (mismo modal que el menú) */}
       <ProductDetailModal
         item={storeProduct}
+        orderingBlocked={ordering ? !ordering.canOrder : false}
+        orderingMessage={ordering?.message ?? null}
         onClose={() => setStoreProduct(null)}
         onAddToCart={(item, quantity, modifiers, notes) => {
           handleAddToCart(item, quantity, modifiers, notes);
