@@ -45,7 +45,9 @@ export async function GET(req: NextRequest) {
       .where(
         and(
           inArray(orders.branchId, branchIds.map((b) => b.id)),
-          inArray(orders.status, ["PENDING", "CASH_PAYMENT_REQUESTED"]),
+          // PENDING_PAYMENT = pedido de la app aún sin pagar. Antes el cron lo
+          // dejaba fuera y, si nadie abría el POS, quedaba vivo para siempre.
+          inArray(orders.status, ["PENDING", "PENDING_PAYMENT", "CASH_PAYMENT_REQUESTED"]),
           lt(orders.createdAt, cutoff),
         )
       )) as unknown as { id: string }[];

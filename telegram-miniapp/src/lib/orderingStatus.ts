@@ -59,6 +59,59 @@ function parseDays(raw: unknown): number[] {
 }
 
 /** Día (1=Lun…7=Dom) y minutos del reloj en la zona del negocio. */
+/** Minutos desde la última hora de cierre programada (null = no se pudo). */
+const EXTENDED_GRACE_MINUTES = 240;
+
+function hhmm(value: string | null | undefined, fallback: number): number {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(value ?? ''));
+  if (!m) return fallback;
+  return (Number(m[1]) % 24) * 60 + Number(m[2]);
+}
+
+/**
+ * "Fuera de horario pero con caja abierta" solo se acepta hasta 4 h después
+ * del cierre. Sin este tope, un turno que alguien olvidó cerrar dejaba al
+ * local recibiendo pedidos toda la madrugada (626 tenía un turno abierto a
+ * la 1 AM). Si el horario es nocturno (18:00–02:00) no se aplica el tope.
+ */
+export function withinExtendedGrace(schedule: OrderingSchedule): boolean {
+  const opens = hhmm(schedule.startTime, 9 * 60);
+  const closes = hhmm(schedule.endTime, 20 * 60);
+  if (closes <= opens) return true; // horario nocturno: el cierre ya es de madrugada
+
+  const { day, minutes } = localClock(schedule.timezone);
+  const yesterday = day === 1 ? 7 : day - 1;
+  let lastCloseMinutesAgo: number | null = null;
+
+  if (schedule.activeDays.includes(day) && minutes >= closes) {
+    lastCloseMinutesAgo = minutes - closes;
+  }
+  if (schedule.activeDays.includes(yesterday)) {
+    const diff = minutes + (1440 - closes);
+    if (lastCloseMinutesAgo == null || diff < lastCloseMinutesAgo) {
+      lastCloseMinutesAgo = diff;
+    }
+  }
+
+  if (lastCloseMinutesAgo == null) return false;
+  return lastCloseMinutesAgo <= EXTENDED_GRACE_MINUTES;
+}
+
+/** Versión para filas de negocio (activeDays viene como JSON/texto). */
+export function withinExtendedGraceForBusiness(input: {
+  activeDays?: unknown;
+  startTime?: string | null;
+  endTime?: string | null;
+  timezone?: string | null;
+}): boolean {
+  return withinExtendedGrace({
+    activeDays: parseDays(input.activeDays),
+    startTime: input.startTime || '09:00',
+    endTime: input.endTime || '20:00',
+    timezone: input.timezone || 'America/Mexico_City',
+  });
+}
+
 function localClock(timezone: string): { day: number; minutes: number } {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -213,7 +266,7 @@ export async function resolveOrderingStatus(
     };
   }
 
-  if (!scheduleOpen && cashShiftOpen) {
+  if (!scheduleOpen && cashShiftOpen && withinExtendedGrace(schedule)) {
     return {
       canOrder: true,
       state: 'EXTENDED',

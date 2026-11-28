@@ -5,6 +5,7 @@ import { ownedBusinesses, users, businessOffers } from '@/db/schema';
 import { restaurantDb } from '@/db/restaurant';
 import { branches, restaurants, cashShifts } from '@rabbitty/database-restaurant/schema';
 import { isBusinessOpen } from '@/lib/chat';
+import { withinExtendedGraceForBusiness } from '@/lib/orderingStatus';
 import { resolveBusinessCover } from '@/lib/businessCover';
 import { offerAvailableUnits, pickOfferForCard } from '@rabbitty/api/services/offers';
 import { getAuthenticatedUser } from '@/lib/serverAuth';
@@ -78,6 +79,8 @@ export async function GET(req: Request) {
         businessId: restaurants.businessId,
         name: branches.name,
         isActive: branches.isActive,
+        lat: branches.lat,
+        lng: branches.lng,
       })
       .from(branches)
       .innerJoin(restaurants, eq(branches.restaurantId, restaurants.id))
@@ -96,30 +99,69 @@ export async function GET(req: Request) {
     }
 
     const branchByBusiness = new Map<string, { id: string; name: string }>();
-    const grouped = new Map<string, Array<{ id: string; name: string; isActive: boolean }>>();
+    const grouped = new Map<string, Array<{
+      id: string;
+      name: string;
+      isActive: boolean;
+      lat: number | null;
+      lng: number | null;
+    }>>();
     for (const row of branchRows) {
       const list = grouped.get(row.businessId) ?? [];
-      list.push({ id: row.branchId, name: row.name, isActive: row.isActive !== false });
+      list.push({
+        id: row.branchId,
+        name: row.name,
+        isActive: row.isActive !== false,
+        lat: row.lat ?? null,
+        lng: row.lng ?? null,
+      });
       grouped.set(row.businessId, list);
     }
+
+    // Multi-sucursal: se descartan archivadas y de prueba. La sucursal que
+    // representa al negocio es la que tiene caja abierta y, si hay varias, la
+    // más cercana al Rabbitter. Antes se tomaba la primera y un negocio con
+    // otra sucursal abierta podía aparecer "cerrado" o con la carta equivocada.
+    const candidateByBusiness = new Map<string, Array<{
+      id: string;
+      name: string;
+      isActive: boolean;
+      lat: number | null;
+      lng: number | null;
+    }>>();
+    const allCandidateIds: string[] = [];
     for (const [businessId, list] of grouped) {
       const active = list.filter((b) => b.isActive);
-      const production =
-        active.find((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || '')) ??
-        active[0] ??
-        list[0];
-      if (production) branchByBusiness.set(businessId, { id: production.id, name: production.name });
+      const real = active.filter((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || ''));
+      const candidates = real.length > 0 ? real : active.length > 0 ? active : list;
+      candidateByBusiness.set(businessId, candidates);
+      for (const c of candidates) allCandidateIds.push(c.id);
     }
 
-    // Turnos de caja abiertos (una sola consulta).
-    const branchIds = [...branchByBusiness.values()].map((b) => b.id);
-    const openShiftRows = branchIds.length
+    // Turnos de caja abiertos de TODAS las sucursales candidatas (una consulta).
+    const openShiftRows = allCandidateIds.length
       ? await restaurantDb
           .select({ branchId: cashShifts.branchId })
           .from(cashShifts)
-          .where(and(inArray(cashShifts.branchId, branchIds), eq(cashShifts.status, 'OPEN')))
+          .where(and(inArray(cashShifts.branchId, allCandidateIds), eq(cashShifts.status, 'OPEN')))
       : [];
     const openShiftBranches = new Set(openShiftRows.map((r) => r.branchId));
+
+    for (const [businessId, candidates] of candidateByBusiness) {
+      const pool = candidates.filter((b) => openShiftBranches.has(b.id));
+      const pickFrom = pool.length > 0 ? pool : candidates;
+      const chosen = pickFrom.slice().sort((a, b) => {
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          const da = distanceKm(lat, lng, a.lat, a.lng);
+          const db = distanceKm(lat, lng, b.lat, b.lng);
+          if (da != null && db != null && Math.abs(da - db) > 0.05) return da - db;
+          if (da != null && db == null) return -1;
+          if (da == null && db != null) return 1;
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      })[0];
+      if (chosen) branchByBusiness.set(businessId, { id: chosen.id, name: chosen.name });
+    }
 
     const items = businesses
       .filter((b) => {
@@ -134,7 +176,9 @@ export async function GET(req: Request) {
         const branch = branchByBusiness.get(b.id) ?? null;
         const scheduleOpen = isBusinessOpen(b);
         const shiftOpen = branch ? openShiftBranches.has(branch.id) : false;
-        const open = scheduleOpen || shiftOpen;
+        // Mismo tope que la ficha: una caja olvidada abierta no mantiene al
+        // negocio "abierto" toda la madrugada.
+        const open = scheduleOpen || (shiftOpen && withinExtendedGraceForBusiness(b));
 
         const picked = pickOfferForCard(offersByBusiness.get(b.id) ?? [], Number(b.bunzBalance || 0));
         const spend = picked

@@ -10,7 +10,8 @@ import {
   menuItemModifiers,
   tables,
 } from '@/db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { cashShifts } from '@rabbitty/database-restaurant/schema';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { resolveBusinessCover } from '@/lib/businessCover';
 import { getProductStockMap } from '@rabbitty/api/services/storeStock';
 import { resolveOrderingStatus } from '@/lib/orderingStatus';
@@ -51,6 +52,17 @@ function normalizeToPercent(rate: number | null | undefined): number | null {
   return Math.round(rate);
 }
 
+function distanceKm(aLat: number | null, aLng: number | null, bLat: number | null, bLng: number | null) {
+  if (aLat == null || aLng == null || bLat == null || bLng == null) return null;
+  const DEG = Math.PI / 180;
+  const dLat = (bLat - aLat) * DEG;
+  const dLng = (bLng - aLng) * DEG;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(aLat * DEG) * Math.cos(bLat * DEG) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -86,24 +98,67 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     let primaryBranch: BranchRecord | null = null;
     let categoriesWithItems: CategoryWithItems[] = [];
     let branchTables: TableRecord[] = [];
+    let branchesOut: Array<{ id: string; name: string; address: string | null; lat: number | null; lng: number | null }> = [];
 
     if (restaurant) {
       // ── Sucursal de PRODUCCIÓN ──
       // El restaurante puede tener varias sucursales activas (incluida
-      // "Modo Entrenamiento (Sandbox)") y alguna archivada. `findFirst` a secas
-      // devolvía la que apareciera primero: el catálogo mostraba la carta de
-      // Sandbox (sin productos de tienda) o la de una sucursal archivada.
-      // Misma regla que el checkout y la cotización de envío.
+      // "Modo Entrenamiento (Sandbox)") y alguna archivada. Se descartan
+      // archivadas y de prueba. Con 2+ sucursales reales: manda la solicitada
+      // (?branchId), luego una con caja abierta, luego la más cercana al
+      // Rabbitter (?lat/lng). Así el menú y el pedido caen en la MISMA sucursal.
+      const urlParams = new URL(req.url).searchParams;
+      const requestedBranchId = urlParams.get('branchId');
+      const userLat = Number(urlParams.get('lat'));
+      const userLng = Number(urlParams.get('lng'));
+      const hasCoords = Number.isFinite(userLat) && Number.isFinite(userLng);
+
       const allBranches = (await restaurantDb.query.branches.findMany({
         where: eq(branches.restaurantId, restaurant.id),
       })) as BranchRecord[];
       const activeBranches = allBranches.filter((b) => b.isActive !== false);
-      const productionBranch =
-        activeBranches.find((b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || '')) ??
-        activeBranches[0] ??
-        allBranches[0] ??
-        null;
-      primaryBranch = productionBranch;
+      const realBranches = activeBranches.filter(
+        (b) => !/sandbox|entrenamiento|prueba|test/i.test(b.name || ''),
+      );
+      const candidates = realBranches.length > 0
+        ? realBranches
+        : activeBranches.length > 0
+          ? activeBranches
+          : allBranches;
+
+      let chosen = requestedBranchId
+        ? candidates.find((b) => b.id === requestedBranchId) ?? null
+        : null;
+
+      if (!chosen && candidates.length > 0) {
+        const candidateIds = candidates.map((b) => b.id);
+        const openRows = await restaurantDb
+          .select({ branchId: cashShifts.branchId })
+          .from(cashShifts)
+          .where(and(inArray(cashShifts.branchId, candidateIds), eq(cashShifts.status, 'OPEN')));
+        const openSet = new Set(openRows.map((r) => r.branchId));
+        const pool = candidates.filter((b) => openSet.has(b.id));
+        const pickFrom = pool.length > 0 ? pool : candidates;
+        chosen = pickFrom.slice().sort((a, b) => {
+          if (hasCoords) {
+            const da = distanceKm(userLat, userLng, a.lat, a.lng);
+            const db = distanceKm(userLat, userLng, b.lat, b.lng);
+            if (da != null && db != null && Math.abs(da - db) > 0.05) return da - db;
+            if (da != null && db == null) return -1;
+            if (da == null && db != null) return 1;
+          }
+          return String(a.name || '').localeCompare(String(b.name || ''));
+        })[0] ?? null;
+      }
+
+      primaryBranch = chosen;
+      branchesOut = candidates.map((b) => ({
+        id: b.id,
+        name: b.name,
+        address: b.address ?? null,
+        lat: b.lat ?? null,
+        lng: b.lng ?? null,
+      }));
 
       if (primaryBranch) {
         // Fetch categories for this branch
@@ -295,6 +350,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       business: unifiedBusiness,
       restaurant: unifiedRestaurant,
       primaryBranch: primaryBranch || null,
+      branches: branchesOut,
       categories: categoriesWithItems,
       tables: branchTables,
       capabilities,

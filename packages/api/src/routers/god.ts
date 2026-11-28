@@ -42,6 +42,7 @@ import {
   bunzRedemptionAttempts,
   bunzControlState,
   bunzReconciliationRuns,
+  cashShifts,
 } from "@rabbitty/database-restaurant/schema";
 // Campañas viven en coreDb
 import { affiliateCampaigns, campaignRedemptions } from "@rabbitty/database-core/schema";
@@ -215,6 +216,7 @@ export const godRouter = router({
         creditLimit: ownedBusinesses.creditLimit,
         creditUsed: ownedBusinesses.creditUsed,
         bunzBalance: ownedBusinesses.bunzBalance,
+        participationModel: ownedBusinesses.participationModel,
         createdAt: ownedBusinesses.createdAt,
         ownerName: users.firstName,
         ownerUsername: users.username,
@@ -253,6 +255,84 @@ export const godRouter = router({
       };
     });
   }),
+
+  /**
+   * ── Modelo de participación: POS o LITE (solo God) ────────────────────────
+   *
+   * Antes el modelo solo se podía fijar directo en la base: no había forma de
+   * dar de alta un negocio Lite. Mismo candado que el resto de acciones
+   * sensibles: allowlist God + 2FA + confirmación escrita + motivo auditado.
+   * No se puede pasar a LITE con una caja abierta: el POS se bloquearía con el
+   * turno a medias.
+   */
+  setBusinessParticipationModel: godAdminProcedure
+    .input(
+      z.object({
+        businessId: z.string().min(1),
+        model: z.enum(["POS", "LITE"]),
+        confirmation: z.string().min(1),
+        reason: z.string().trim().min(10).max(300),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const expected = input.model === "LITE" ? "CAMBIAR A LITE" : "CAMBIAR A POS";
+      if (input.confirmation.trim().toUpperCase() !== expected) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `La confirmación debe ser exactamente: ${expected}`,
+        });
+      }
+
+      const [biz] = await ctx.coreDb
+        .select({
+          id: ownedBusinesses.id,
+          name: ownedBusinesses.name,
+          model: ownedBusinesses.participationModel,
+        })
+        .from(ownedBusinesses)
+        .where(eq(ownedBusinesses.id, input.businessId))
+        .limit(1);
+      if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Negocio no encontrado." });
+      if (biz.model === input.model) {
+        return { success: true, unchanged: true, model: input.model };
+      }
+
+      if (input.model === "LITE") {
+        const openShift = await ctx.restaurantDb
+          .select({ id: cashShifts.id })
+          .from(cashShifts)
+          .innerJoin(branches, eq(branches.id, cashShifts.branchId))
+          .innerJoin(restaurants, eq(restaurants.id, branches.restaurantId))
+          .where(and(eq(restaurants.businessId, input.businessId), eq(cashShifts.status, "OPEN")))
+          .limit(1);
+        if (openShift.length > 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Este negocio tiene una caja abierta. Cierra el turno antes de cambiar a LITE.",
+          });
+        }
+      }
+
+      await ctx.coreDb
+        .update(ownedBusinesses)
+        .set({ participationModel: input.model })
+        .where(eq(ownedBusinesses.id, input.businessId));
+
+      logAudit({
+        userId: ctx.userId ?? null,
+        action: "BUSINESS_PARTICIPATION_MODEL_CHANGED",
+        resource: "ownedBusinesses",
+        resourceId: input.businessId,
+        details: {
+          businessName: biz.name,
+          from: biz.model,
+          to: input.model,
+          reason: input.reason,
+        },
+      });
+
+      return { success: true, unchanged: false, model: input.model };
+    }),
 
   /**
    * ── Comisión de plataforma (solo God) ─────────────────────────────────────

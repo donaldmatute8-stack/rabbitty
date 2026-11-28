@@ -113,6 +113,7 @@ interface BusinessResponse {
   business: AffiliateData;
   restaurant?: { id: string; name: string; currency?: string } | null;
   primaryBranch?: { id: string; name: string } | null;
+  branches?: Array<{ id: string; name: string; address?: string | null; lat?: number | null; lng?: number | null }>;
   categories: CatalogCategory[];
   tables: Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>;
   capabilities: {
@@ -145,6 +146,10 @@ function AffiliateProfileContent() {
 
   const { user } = useAuth();
   const [affiliate, setAffiliate] = useState<AffiliateData | null>(null);
+  // Multi-sucursal: la ficha y el pedido deben caer en la MISMA sucursal.
+  const [primaryBranch, setPrimaryBranch] = useState<{ id: string; name: string } | null>(null);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; address?: string | null }>>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   const [tables, setTables] = useState<Array<{ id: string; number: number; capacity?: number; location?: string | null; qrCode?: string | null }>>([]);
   // ¿El local recibe pedidos ahora? (horario + caja) Lo resuelve el servidor.
@@ -283,11 +288,14 @@ function AffiliateProfileContent() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`/api/business/${id}`)
+    const branchQuery = selectedBranchId ? `?branchId=${encodeURIComponent(selectedBranchId)}` : '';
+    fetch(`/api/business/${id}${branchQuery}`)
       .then(res => res.json())
       .then((data: { success: boolean } & BusinessResponse) => {
         if (data.success && data.business) {
           setAffiliate(data.business);
+          setPrimaryBranch(data.primaryBranch ?? null);
+          setBranches(data.branches ?? []);
           setCategories(data.categories || []);
           setTables(data.tables || []);
           if (data.capabilities) setCapabilities(data.capabilities);
@@ -302,7 +310,7 @@ function AffiliateProfileContent() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [id, initialTableNum]);
+  }, [id, initialTableNum, selectedBranchId]);
 
   // H-TRACK-LOCAL: pedido en curso de ESTE negocio (mismo endpoint del home).
   // Polling 15s + al volver a foreground, igual que useOrderTracking.
@@ -575,10 +583,10 @@ function AffiliateProfileContent() {
       deliveryAddress: orderType === 'DELIVERY' ? address?.text ?? null : null,
       deliveryAddressData: orderType === 'DELIVERY' ? address?.data ?? null : null,
       // Sin mesa elegida el pedido puede salir "producto solo" — el POS la
-      // vincula a mesa después si procede. branchId permite crear la orden
-      // cuando no hay mesa (el id del perfil afiliado ES la branch).
+      // vincula a mesa después si procede. Se manda la sucursal mostrada (si
+      // existe) para que el pedido caiga en la misma carta que vio el cliente.
       tableId: tableId || null,
-      branchId: affiliate?.id || null,
+      branchId: primaryBranch?.id || affiliate?.id || null,
       items: cart.map(item => ({
         id: item.menuItemId,
         price: item.price,
@@ -665,6 +673,10 @@ function AffiliateProfileContent() {
   const formattedWebUrl = targetWebsite.startsWith('http')
     ? targetWebsite
     : `https://${targetWebsite}`;
+  // El CSP solo permite iframes de *.rabbitty.me. Un dominio propio quedaría
+  // en blanco con el spinner pegado: en ese caso se ofrece abrirlo fuera.
+  const isEmbeddableWebsite = /^https?:\/\/([a-z0-9-]+\.)*rabbitty\.me(?::\d+)?(\/|$)/i.test(formattedWebUrl)
+    || /^https?:\/\/localhost(:\d+)?(\/|$)/i.test(formattedWebUrl);
 
   // Horario real (días + horas configurados en el admin), no un texto fijo.
   const openState = resolveOpenState(
@@ -954,6 +966,31 @@ function AffiliateProfileContent() {
           <p className="m-0 text-[13px] font-bold text-[var(--text-secondary)]">
             Devuelve <span className="text-[var(--rabbitty-pink)]">+{affiliate.rewardPercentage}% en Bunz</span> en cada consumo
           </p>
+          {branches.length > 1 && (
+            <div className="mt-2 flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--surface-1)] px-3 py-2">
+              <MapPin size={14} className="shrink-0 text-[var(--rabbitty-pink)]" />
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Sucursal
+              </span>
+              <select
+                value={primaryBranch?.id ?? ''}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  // El menú, las mesas y el pedido son de UNA sucursal: al
+                  // cambiar se limpia el carrito para no mezclar cartas.
+                  setSelectedBranchId(next);
+                  setCart([]);
+                  setTableId(null);
+                }}
+                className="ml-auto min-w-0 flex-1 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1.5 text-[12px] font-bold text-[var(--text-primary)] outline-none"
+                aria-label="Elegir sucursal"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* ── Estado de pedidos (horario + caja): se sabe ANTES de armar el pedido ── */}
@@ -1423,7 +1460,7 @@ function AffiliateProfileContent() {
               const res = await fetch('/api/pos/claim-table', {
                 method: 'POST',
                 headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tableId: id, branchId: affiliate?.id, userLat, userLng }),
+                body: JSON.stringify({ tableId: id, branchId: primaryBranch?.id || affiliate?.id, userLat, userLng }),
               });
               const data = await res.json().catch(() => null);
               if (res.ok && data?.success) {
@@ -1840,18 +1877,29 @@ function AffiliateProfileContent() {
             </button>
           </div>
           <div className="relative flex-1">
-            {webLoading && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bg-primary)]">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-[#E91E63]" />
-                <p className="m-0 text-[11px] font-bold text-white/50">Cargando el sitio…</p>
+            {isEmbeddableWebsite ? (
+              <>
+                {webLoading && (
+                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--bg-primary)]">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-[#E91E63]" />
+                    <p className="m-0 text-[11px] font-bold text-white/50">Cargando el sitio…</p>
+                  </div>
+                )}
+                <iframe
+                  src={formattedWebUrl}
+                  onLoad={() => setWebLoading(false)}
+                  className="h-full w-full border-none bg-white"
+                  title={`Web de ${affiliate.name}`}
+                />
+              </>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                <p className="m-0 text-sm font-black text-white">Este sitio se abre en el navegador</p>
+                <p className="m-0 text-[11.5px] text-white/60">
+                  Por seguridad, la app no incrusta dominios externos. Usa “Abrir en Navegador”.
+                </p>
               </div>
             )}
-            <iframe
-              src={formattedWebUrl}
-              onLoad={() => setWebLoading(false)}
-              className="h-full w-full border-none bg-white"
-              title={`Web de ${affiliate.name}`}
-            />
           </div>
         </div>
       )}
