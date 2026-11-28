@@ -109,11 +109,35 @@ export async function POST(req: Request) {
         .where(eq(businessOffers.id, row.offerId))
         .limit(1);
 
-      return { kind: 'ok' as const, already: false, row: updated, businessName: biz.name, offerTitle: offer?.title ?? null };
+      return {
+        kind: 'ok' as const,
+        already: false,
+        row: updated,
+        businessName: biz.name,
+        offerTitle: offer?.title ?? null,
+        userId: row.userId,
+      };
     });
 
     if (result.kind === 'error') {
       return NextResponse.json({ success: false, code: result.code, error: result.message }, { status: result.status });
+    }
+
+    if (!result.already && 'userId' in result && result.userId) {
+      try {
+        const { sendEcosystemNotification } = await import('@/lib/push/notify');
+        await sendEcosystemNotification({
+          userId: result.userId,
+          title: '✅ Canje validado',
+          message: `Disfruta "${result.offerTitle ?? 'tu canje'}" en ${result.businessName}.`,
+          type: 'REWARD',
+          route: '/history',
+          pushData: { code: result.row.code },
+          threadId: 'stock',
+        });
+      } catch (notifyError) {
+        console.warn('[OFFER_VALIDATE] aviso al cliente falló:', notifyError);
+      }
     }
 
     return NextResponse.json({

@@ -57,6 +57,7 @@ export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0
   const [query, setQuery] = useState('');
   const { showToast } = useToast();
   const [redeeming, setRedeeming] = useState<string | null>(null);
+  const [confirmBiz, setConfirmBiz] = useState<Biz | null>(null);
   const [redeemResult, setRedeemResult] = useState<{
     code: string;
     title: string;
@@ -203,7 +204,7 @@ export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0
             initialSavedCount={b.savedCount}
             initialSharedCount={b.sharedCount}
             index={i}
-            onRedeem={b.spend?.affordable ? () => void redeem(b) : undefined}
+            onRedeem={b.spend?.affordable ? () => setConfirmBiz(b) : undefined}
             spend={
               b.spend
                 ? {
@@ -223,6 +224,73 @@ export default function BunzFeed({ isDark, userLat, userLng, fallbackBalance = 0
           />
         ))
       )}
+
+      {/* Confirmación: nunca canjear sin decir cuánto y cuánto queda */}
+      <AnimatePresence>
+        {confirmBiz && confirmBiz.spend && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[125] flex items-end justify-center p-4 pb-8 sm:items-center"
+            style={{ background: 'rgba(6,4,10,0.88)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setConfirmBiz(null)}
+          >
+            <motion.div
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-3xl p-5"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+            >
+              <p className="m-0 text-[10px] font-black uppercase tracking-[0.2em] text-[#E91E63]">Confirmar canje</p>
+              <p className="m-0 mt-1 text-[16px] font-black" style={{ color: 'var(--text-primary)' }}>
+                {confirmBiz.spend.title}
+              </p>
+              <p className="m-0 text-[12px] font-bold" style={{ color: 'var(--text-muted)' }}>
+                {confirmBiz.user}
+              </p>
+
+              <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--bg-pressed)' }}>
+                <span className="text-[12px] font-bold" style={{ color: 'var(--text-secondary)' }}>Canjearás</span>
+                <span className="text-[15px] font-black text-[#E91E63]">{confirmBiz.spend.minCost} Bunz</span>
+              </div>
+              <div className="mt-1.5 flex items-center justify-between rounded-xl px-3 py-2" style={{ background: 'var(--bg-pressed)' }}>
+                <span className="text-[12px] font-bold" style={{ color: 'var(--text-secondary)' }}>Te quedarán</span>
+                <span className="text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>
+                  {Math.max(0, balance - confirmBiz.spend.minCost)} Bunz
+                </span>
+              </div>
+              <p className="m-0 mt-3 text-[10.5px] leading-snug" style={{ color: 'var(--text-muted)' }}>
+                Se reserva el stock y te damos un código de 24 h. Si no lo usas, se te devuelven.
+              </p>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmBiz(null)}
+                  className="flex-1 rounded-xl px-3 py-2.5 text-[12px] font-black"
+                  style={{ background: 'var(--bg-pressed)', color: 'var(--text-secondary)' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const b = confirmBiz;
+                    setConfirmBiz(null);
+                    void redeem(b);
+                  }}
+                  disabled={redeeming !== null}
+                  className="flex-1 rounded-xl bg-[#E91E63] px-3 py-2.5 text-[12px] font-black text-white disabled:opacity-50"
+                >
+                  {redeeming ? 'Reservando…' : 'Sí, canjear'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Código del canje */}
       <AnimatePresence>

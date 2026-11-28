@@ -178,11 +178,29 @@ export async function POST(req: Request) {
         tx,
       );
 
-      return { kind: 'ok' as const, row, offer, businessName: biz.name };
+      return { kind: 'ok' as const, row, offer, businessName: biz.name, ownerId: biz.ownerId ?? null };
     });
 
     if (result.kind === 'error') {
       return NextResponse.json({ success: false, code: result.code, error: result.message }, { status: result.status });
+    }
+
+    // Aviso al comercio: hay un canje esperando validación.
+    if (result.ownerId) {
+      try {
+        const { sendEcosystemNotification } = await import('@/lib/push/notify');
+        await sendEcosystemNotification({
+          userId: result.ownerId,
+          title: '🎟️ Nuevo canje por validar',
+          message: `${caller.username || 'Un Rabbitter'} canjeó "${result.offer?.title ?? 'una oferta'}" (${result.offer?.bunzCost ?? 0} Bunz). Código ${result.row.code}.`,
+          type: 'SYSTEM',
+          route: '/business/scan',
+          pushData: { redemptionId: result.row.id, code: result.row.code },
+          threadId: 'stock',
+        });
+      } catch (notifyError) {
+        console.warn('[OFFER_REDEEM] aviso al comercio falló:', notifyError);
+      }
     }
 
     return NextResponse.json({
