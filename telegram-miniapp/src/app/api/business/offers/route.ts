@@ -131,12 +131,18 @@ export async function POST(req: Request) {
     }
 
     const validUntil = body?.validUntil ? new Date(body.validUntil) : null;
+    // La imagen se pinta en <img>: solo rutas propias o http(s). Evita que un
+    // valor raro termine en el DOM o en un esquema no deseado.
+    const imageUrl = body?.imageUrl ? String(body.imageUrl).trim().slice(0, 500) : '';
+    const safeImageUrl = /^https?:\/\//i.test(imageUrl) || imageUrl.startsWith('/') ? imageUrl : null;
+    const fiatRaw = body?.fiatValue != null ? Number(body.fiatValue) : null;
+    const fiatValue = fiatRaw != null && Number.isFinite(fiatRaw) && fiatRaw >= 0 ? fiatRaw : null;
     const patch = {
       title,
       description: body?.description ? String(body.description).slice(0, 500) : null,
-      imageUrl: body?.imageUrl ? String(body.imageUrl).slice(0, 500) : null,
+      imageUrl: safeImageUrl,
       bunzCost,
-      fiatValue: body?.fiatValue != null ? Number(body.fiatValue) : null,
+      fiatValue,
       stockTotal,
       perUserLimit,
       validUntil: validUntil && !Number.isNaN(validUntil.getTime()) ? validUntil : null,
