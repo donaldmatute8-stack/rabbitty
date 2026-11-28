@@ -169,7 +169,7 @@ export default function FeedPage() {
   const [moodOpen, setMoodOpen] = useState(false);
   const bunzBalance = (user?.totalBunzEarned || 0) - (user?.totalBunzSpent || 0);
 
-  const { data: notifData } = useSWR<{ unreadCount?: number }>(
+  const { data: notifData, mutate: mutateNotif } = useSWR<{ unreadCount?: number }>(
     user?.id ? '/api/notifications/unread-count' : null,
     async (url: string) => {
       const headers = await PlatformBridge.getAuthHeaders();
@@ -744,7 +744,12 @@ export default function FeedPage() {
                 {/* Notification Bell */}
                 <Link 
                   href="/notifications" 
-                  onClick={() => PlatformBridge.hapticFeedback('light')}
+                  onClick={() => {
+                    PlatformBridge.hapticFeedback('light');
+                    // El badge se limpia al entrar a la bandeja; si quedaba
+                    // una notificación vieja ya no se ve "pegada".
+                    void mutateNotif({ unreadCount: 0 }, { revalidate: false });
+                  }}
                   className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.04)] active:scale-95 transition-transform" 
                   style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
                   aria-label={unreadNotifCount > 0 ? `${unreadNotifCount} notificaciones no leídas` : 'Notificaciones'}

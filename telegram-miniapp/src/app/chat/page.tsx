@@ -2020,7 +2020,7 @@ export default function ChatInboxPage() {
                   No se encontraron usuarios para &ldquo;{contactsSearch}&rdquo;
                 </p>
               ) : (
-                <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto hide-scrollbar">
+                <div className="flex flex-col gap-1.5 ">
                   {userSearchResults.map((usr) => (
                     <div
                       key={usr.id}
@@ -2066,7 +2066,7 @@ export default function ChatInboxPage() {
               <span className="text-[11px] font-bold text-[#10B981] uppercase tracking-wider px-1 flex items-center gap-1.5">
                 <UserCheck size={14} /> Amigos en Rabbitty ({matchedRabbittyContacts.length})
               </span>
-              <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto hide-scrollbar">
+              <div className="flex flex-col gap-1.5 ">
                 {matchedRabbittyContacts.map((c) => (
                   <div
                     key={c.id}
@@ -2106,7 +2106,7 @@ export default function ChatInboxPage() {
               <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
                 Contactos de tu agenda ({pickedContacts.length})
               </span>
-              <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto hide-scrollbar">
+              <div className="flex flex-col gap-1.5 ">
                 {pickedContacts.map((c, i) => (
                   <div
                     key={`${c.name}-${i}`}
@@ -2160,7 +2160,7 @@ export default function ChatInboxPage() {
             <span className="text-[11px] font-bold text-(--text-muted) uppercase tracking-wider px-1">
               Historial de Chats
             </span>
-            <div className="flex flex-col gap-1 max-h-52 overflow-y-auto hide-scrollbar">
+            <div className="flex flex-col gap-1 ">
               {filteredContacts.length === 0 ? (
                 <p className="text-center text-(--text-muted) text-[13px] py-4 m-0">
                   Sin conversaciones previas aún.

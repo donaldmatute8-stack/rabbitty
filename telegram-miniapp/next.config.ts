@@ -44,6 +44,10 @@ const nextConfig: NextConfig = {
               `script-src ${scriptSrc}`,
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
+              // Notas de voz: se reproducen desde blob: (descarga autenticada)
+              // y desde data: (audios históricos). Sin esta directiva caen en
+              // default-src y el navegador las bloquea ("Load failed").
+              "media-src 'self' blob: data:",
               "font-src 'self' data:",
               // MapLibre GL crea su worker desde un blob local (tiles vectoriales).
               "worker-src 'self' blob:",

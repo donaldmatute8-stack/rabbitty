@@ -174,6 +174,16 @@ export default function NotificationsPage() {
     }
   };
 
+  // Al abrir la bandeja se marcan como leídas (como cualquier inbox): el badge
+  // del home no puede quedarse pegado a un aviso que ya se vio.
+  useEffect(() => {
+    if (fetching) return;
+    if (!notifications.some((n) => !n.isRead)) return;
+    const t = setTimeout(() => { void markAllAsRead(); }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetching, notifications]);
+
   // ── Identidad visual unificada por tipo de notificación del ecosistema ──
   const getIcon = (type: string) => {
     switch (type) {
